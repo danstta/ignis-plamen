@@ -27,6 +27,25 @@ export function sessionSecret(): string {
   return "dev-only-insecure-secret-change-me";
 }
 
+/**
+ * Public, externally-reachable base URL of this app (no trailing slash), e.g.
+ * `https://app.example.com` or a tunnel host like `https://abc.trycloudflare.com`.
+ * Used to build webhook URLs that third parties (Notion) must reach. When unset,
+ * callers fall back to the incoming request host (fine for local browser use, but
+ * not reachable by external services).
+ */
+export function publicAppUrl(): string | undefined {
+  const v = process.env.PUBLIC_APP_URL?.trim();
+  if (!v) return undefined;
+  return v.replace(/\/+$/, "");
+}
+
 export const blobToken = () => process.env.BLOB_READ_WRITE_TOKEN;
 export const notionWebhookSecret = () => process.env.NOTION_WEBHOOK_SECRET;
 export const notionApiToken = () => process.env.NOTION_API_TOKEN;
+
+// --- Workflow node APIs ---
+/** OpenAI API key — used by the Rank Images node (GPT vision). */
+export const openaiApiKey = () => required("OPENAI_API_KEY");
+/** Google Maps Platform key — used by the Find Location Images node (Places API). */
+export const googleMapsApiKey = () => required("GOOGLE_MAPS_API_KEY");

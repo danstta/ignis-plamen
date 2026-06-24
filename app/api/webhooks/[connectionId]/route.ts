@@ -5,6 +5,8 @@ import {
   mergeConnectionConfig,
 } from "@/lib/connections/service";
 import { processEvent } from "@/lib/connections/pipeline";
+import { listActiveWorkflowsForConnection } from "@/lib/workflows/service";
+import { startRun } from "@/lib/workflows/engine";
 
 /**
  * Generic ingest endpoint. `connectionId` is a connection *instance* id. We load
@@ -59,6 +61,18 @@ export async function POST(
 
   // result.type === "event"
   try {
+    // Prefer workflows: if any active workflow is triggered by this connection,
+    // start a run for each. Otherwise fall back to the legacy binding pipeline.
+    const activeWorkflows = await listActiveWorkflowsForConnection(connectionId);
+    if (activeWorkflows.length > 0) {
+      const trigger = { recordId: result.recordId, fields: result.fields };
+      const runIds: string[] = [];
+      for (const wf of activeWorkflows) {
+        runIds.push(await startRun(wf.id, trigger));
+      }
+      return NextResponse.json({ ok: true, runs: runIds });
+    }
+
     const summary = await processEvent(connectionId, result.recordId, result.fields);
     return NextResponse.json({ ok: true, ...summary });
   } catch (err) {

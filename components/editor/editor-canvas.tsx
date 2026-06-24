@@ -61,19 +61,41 @@ export function EditorCanvas() {
   const viewerRef = useRef<InfiniteViewer>(null);
   const moveableRef = useRef<Moveable>(null);
   const selectoRef = useRef<Selecto>(null);
-  const viewportRef = useRef<HTMLDivElement>(null);
 
+  const [viewport, setViewport] = useState<HTMLDivElement | null>(null);
   const [targets, setTargets] = useState<(HTMLElement | SVGElement)[]>([]);
+  const [elementGuidelines, setElementGuidelines] = useState<Element[]>([]);
 
   // Resolve selected ids -> DOM nodes for Moveable.
   useEffect(() => {
-    const vp = viewportRef.current;
-    if (!vp) return;
-    const nodes = selectedIds
-      .map((id) => vp.querySelector<HTMLElement>(`[data-el-id="${id}"]`))
-      .filter((n): n is HTMLElement => n !== null);
-    setTargets(nodes);
-  }, [selectedIds, doc.elements]);
+    const raf = requestAnimationFrame(() => {
+      if (!viewport) {
+        setTargets([]);
+        return;
+      }
+      const nodes = selectedIds
+        .map((id) => viewport.querySelector<HTMLElement>(`[data-el-id="${id}"]`))
+        .filter((n): n is HTMLElement => n !== null);
+      setTargets(nodes);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [selectedIds, doc.elements, viewport]);
+
+  // Resolve snap guideline DOM nodes after the viewport/elements commit.
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      if (!viewport) {
+        setElementGuidelines([]);
+        return;
+      }
+      setElementGuidelines(
+        doc.elements
+          .map((el) => viewport.querySelector(`[data-el-id="${el.id}"]`))
+          .filter((n): n is Element => !!n),
+      );
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [doc.elements, viewport]);
 
   // Keep Moveable's control box aligned after layout/zoom changes.
   useEffect(() => {
@@ -125,7 +147,7 @@ export function EditorCanvas() {
         onPinch={(e) => setZoom(e.zoom)}
       >
         <div
-          ref={viewportRef}
+          ref={setViewport}
           className="da-viewport"
           style={{
             position: "relative",
@@ -155,7 +177,7 @@ export function EditorCanvas() {
         snapThreshold={6}
         // Snap to the artboard (main content box) edges + center, not just to
         // other elements. Guidelines are positions within the snapContainer.
-        snapContainer={viewportRef.current}
+        snapContainer={viewport ?? undefined}
         verticalGuidelines={[0, doc.width / 2, doc.width]}
         horizontalGuidelines={[0, doc.height / 2, doc.height]}
         snapDirections={{
@@ -174,11 +196,7 @@ export function EditorCanvas() {
           center: true,
           middle: true,
         }}
-        elementGuidelines={doc.elements
-          .map((el) =>
-            viewportRef.current?.querySelector(`[data-el-id="${el.id}"]`),
-          )
-          .filter((n): n is Element => !!n)}
+        elementGuidelines={elementGuidelines}
         // single-target handlers
         onDragStart={() => !isGroup && pushHistory()}
         onDrag={applyDrag}

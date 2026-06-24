@@ -34,12 +34,22 @@ export function ConnectionConfigForm({
     >
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="name">Connection name</Label>
-        <Input id="name" name="name" defaultValue={name} className="max-w-md" />
+        {/* These inputs are uncontrolled; `key` re-mounts them when the saved
+            value changes (e.g. after a save revalidates the page) so they reset
+            to server truth instead of warning about a changed defaultValue. */}
+        <Input
+          key={name}
+          id="name"
+          name="name"
+          defaultValue={name}
+          className="max-w-md"
+        />
       </div>
       {fields.map((f) => (
         <div key={f.name} className="flex flex-col gap-1.5">
           <Label htmlFor={f.name}>{f.label}</Label>
           <Input
+            key={values[f.name] ?? ""}
             id={f.name}
             name={f.name}
             type={f.type}

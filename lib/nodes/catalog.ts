@@ -1,0 +1,30 @@
+import type { NodeMeta } from "./types";
+import { notionTriggerMeta } from "./notion-trigger/meta";
+import { findLocationImagesMeta } from "./find-location-images/meta";
+import { rankImagesMeta } from "./rank-images/meta";
+import { manualReviewMeta } from "./manual-review/meta";
+import { renderTemplateMeta } from "./render-template/meta";
+
+/**
+ * Client-safe node catalog: metadata only (no run()), so the canvas palette,
+ * node renderer, config panel, and store can import it without dragging
+ * server-only modules (db, storage, renderer) into the browser bundle. The full
+ * server registry lives in ./registry.
+ */
+const catalog: NodeMeta[] = [
+  notionTriggerMeta as unknown as NodeMeta,
+  findLocationImagesMeta as unknown as NodeMeta,
+  rankImagesMeta as unknown as NodeMeta,
+  manualReviewMeta as unknown as NodeMeta,
+  renderTemplateMeta as unknown as NodeMeta,
+];
+
+const byId = new Map(catalog.map((m) => [m.id, m]));
+
+export function listNodeCatalog(): NodeMeta[] {
+  return catalog;
+}
+
+export function getNodeMeta(id: string): NodeMeta | undefined {
+  return byId.get(id);
+}

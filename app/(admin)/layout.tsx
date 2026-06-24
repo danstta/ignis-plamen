@@ -8,6 +8,8 @@ const NAV = [
   { href: "/templates", label: "Templates" },
   { href: "/brand", label: "Brand" },
   { href: "/connections", label: "Connections" },
+  { href: "/workflows", label: "Workflows" },
+  { href: "/plugins", label: "Plugins" },
 ];
 
 export default function AdminLayout({

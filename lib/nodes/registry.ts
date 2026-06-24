@@ -1,0 +1,29 @@
+import type { NodeDefinition } from "./types";
+import { notionTriggerNode } from "./notion-trigger";
+import { findLocationImagesNode } from "./find-location-images";
+import { rankImagesNode } from "./rank-images";
+import { manualReviewNode } from "./manual-review";
+import { renderTemplateNode } from "./render-template";
+
+/**
+ * Registry of available workflow node types. To add a node, implement a
+ * NodeDefinition and list it here — the canvas palette, config panel, and engine
+ * pick it up. Gating by enabled plugins happens in lib/plugins/service.
+ */
+const definitions: NodeDefinition[] = [
+  notionTriggerNode as unknown as NodeDefinition,
+  findLocationImagesNode as unknown as NodeDefinition,
+  rankImagesNode as unknown as NodeDefinition,
+  manualReviewNode as unknown as NodeDefinition,
+  renderTemplateNode as unknown as NodeDefinition,
+];
+
+const byId = new Map(definitions.map((d) => [d.id, d]));
+
+export function listNodeTypes(): NodeDefinition[] {
+  return definitions;
+}
+
+export function getNodeType(id: string): NodeDefinition | undefined {
+  return byId.get(id);
+}

@@ -15,6 +15,13 @@
       "when": 1782263979887,
       "tag": "0001_kind_slyde",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782308728961,
+      "tag": "0002_volatile_logan",
+      "breakpoints": true
     }
   ]
 }

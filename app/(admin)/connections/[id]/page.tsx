@@ -2,6 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { ArrowLeft, CheckCircle2, AlertCircle } from "lucide-react";
+import { publicAppUrl } from "@/lib/env";
 import { getConnection } from "@/lib/connections/service";
 import { getConnectionType } from "@/lib/connections/registry";
 import type { FieldDescriptor } from "@/lib/connections/types";
@@ -50,14 +51,21 @@ export default async function ConnectionDetailPage({
     string,
     string
   >;
-  const verified = Boolean(
-    (conn.config as Record<string, unknown>)?.verificationToken,
-  );
+  const verificationToken = (conn.config as Record<string, unknown>)
+    ?.verificationToken as string | undefined;
+  const verified = Boolean(verificationToken);
 
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
-  const proto = h.get("x-forwarded-proto") ?? "http";
-  const webhookUrl = `${proto}://${host}/api/webhooks/${id}`;
+  // Prefer an explicitly configured public base URL (reachable by Notion). Fall
+  // back to the request host, which only works for your own browser, not external
+  // services — see PUBLIC_APP_URL in .env.example.
+  let base = publicAppUrl();
+  if (!base) {
+    const h = await headers();
+    const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
+    const proto = h.get("x-forwarded-proto") ?? "http";
+    base = `${proto}://${host}`;
+  }
+  const webhookUrl = `${base}/api/webhooks/${id}`;
 
   let fields: FieldDescriptor[] = [];
   let fieldsError: string | null = null;
@@ -112,10 +120,29 @@ export default async function ConnectionDetailPage({
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold">Webhook URL</h2>
         <p className="text-sm text-muted-foreground">
-          Add this URL as a webhook subscription in Notion. The first request is a
-          verification handshake — once received, this connection shows “Verified”.
+          Add this URL as a webhook subscription in Notion. Notion must be able to
+          reach it over public HTTPS — in local dev, run a tunnel and set
+          PUBLIC_APP_URL (see .env.example). Notion then sends a one-time
+          verification request, captured below.
         </p>
         <CopyField value={webhookUrl} />
+
+        {verificationToken ? (
+          <div className="mt-2 flex flex-col gap-2">
+            <h3 className="text-sm font-semibold">Verification token</h3>
+            <p className="text-sm text-muted-foreground">
+              Notion’s handshake was received. Copy this token, paste it into the
+              Webhooks tab in your Notion integration, and click “Verify
+              subscription” to activate it.
+            </p>
+            <CopyField value={verificationToken} />
+          </div>
+        ) : (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Waiting for Notion’s verification request… create the subscription in
+            Notion, then reload this page to reveal the token to paste back.
+          </p>
+        )}
       </section>
 
       <Separator className="my-6" />

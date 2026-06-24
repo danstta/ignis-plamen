@@ -14,6 +14,20 @@ function clone<T>(value: T): T {
   return structuredClone(value);
 }
 
+function valuesEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (typeof a !== "object" || a === null || typeof b !== "object" || b === null) {
+    return false;
+  }
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function patchChangesElement(el: TemplateElement, patch: ElementPatch): boolean {
+  return Object.entries(patch).some(
+    ([key, value]) => !valuesEqual(el[key as keyof TemplateElement], value),
+  );
+}
+
 export type GeometryPatch = {
   id: string;
   x?: number;
@@ -163,18 +177,25 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   updateElement: (id, patch) =>
     set((s) => {
+      let changed = false;
       const elements = s.doc.elements.map((el) =>
-        el.id === id ? ({ ...el, ...patch } as TemplateElement) : el,
+        el.id === id && patchChangesElement(el, patch)
+          ? ((changed = true), ({ ...el, ...patch } as TemplateElement))
+          : el,
       );
+      if (!changed) return s;
       return commitDoc(s, { ...s.doc, elements }) as EditorState;
     }),
 
   updateGeometry: (patches) =>
     set((s) => {
       const byId = new Map(patches.map((p) => [p.id, p]));
+      let changed = false;
       const elements = s.doc.elements.map((el) => {
         const p = byId.get(el.id);
         if (!p) return el;
+        if (!patchChangesElement(el, p)) return el;
+        changed = true;
         return {
           ...el,
           ...(p.x !== undefined ? { x: p.x } : {}),
@@ -184,6 +205,7 @@ export const useEditor = create<EditorState>((set, get) => ({
           ...(p.rotation !== undefined ? { rotation: p.rotation } : {}),
         } as TemplateElement;
       });
+      if (!changed) return s;
       return commitDoc(s, { ...s.doc, elements }) as EditorState;
     }),
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useFormStatus } from "react-dom";
-import { updateConnectionConfigAction } from "@/app/(admin)/connections/actions";
+import { updateConnectionConfigAction } from "@/app/(admin)/settings/connections/actions";
 import type { ConfigField } from "@/lib/connections/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

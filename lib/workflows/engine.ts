@@ -3,6 +3,7 @@ import { isNodeTypeEnabled } from "@/lib/plugins/service";
 import { getWorkflow } from "./service";
 import { createRun, getRun, saveRunState } from "./runs-service";
 import { incomingEdges, topoOrder } from "./graph";
+import { resolveReferences } from "./references";
 import type { NodeOutputs, NodeRunState, WorkflowGraph } from "./types";
 import type { NodeRunContext, RunResult } from "@/lib/nodes/types";
 
@@ -91,7 +92,13 @@ async function execute(runId: string, graph: WorkflowGraph): Promise<void> {
 
     let result: RunResult;
     try {
-      const config = def.configSchema.parse(node.config);
+      // Substitute {{nodeId.path}} references from upstream outputs, then validate.
+      const resolvedConfig = resolveReferences(
+        node.config,
+        state.nodeOutputs,
+        trigger,
+      );
+      const config = def.configSchema.parse(resolvedConfig);
       const ctx: NodeRunContext = {
         config,
         inputs: resolveInputs(graph, node.id, state.nodeOutputs),
@@ -136,14 +143,25 @@ async function execute(runId: string, graph: WorkflowGraph): Promise<void> {
   await saveRunState(runId, { status: "success" });
 }
 
-/** Start a fresh run of a workflow with the given trigger payload. */
+/**
+ * Start a fresh run of a workflow with the given trigger payload. When
+ * `triggerNodeId` is given (a Webhook node), its outputs are pre-seeded from the
+ * payload and marked done, so downstream nodes resolve their inputs from it.
+ */
 export async function startRun(
   workflowId: string,
   trigger: Record<string, unknown>,
+  triggerNodeId?: string,
 ): Promise<string> {
   const workflow = await getWorkflow(workflowId);
   if (!workflow) throw new Error("Workflow not found");
   const run = await createRun(workflowId, trigger);
+  if (triggerNodeId) {
+    await saveRunState(run.id, {
+      nodeOutputs: { [triggerNodeId]: trigger as NodeOutputs },
+      nodeStates: { [triggerNodeId]: "done" },
+    });
+  }
   await execute(run.id, workflow.graph as WorkflowGraph);
   return run.id;
 }

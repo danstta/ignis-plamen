@@ -19,7 +19,8 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  // Match everything except: auth/webhook APIs, the login page, Next internals,
-  // and any path with a file extension (static assets, /uploads/*.png, etc.).
-  matcher: ["/((?!api/auth|api/webhooks|login|_next|.*\\..*).*)"],
+  // Match everything except: auth API, public webhook ingest (api/hooks), the
+  // login page, Next internals, and any path with a file extension (static
+  // assets, /uploads/*.png, etc.).
+  matcher: ["/((?!api/auth|api/hooks|login|_next|.*\\..*).*)"],
 };

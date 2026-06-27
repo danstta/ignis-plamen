@@ -35,6 +35,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import {
   ToggleGroup,
   ToggleGroupItem,
@@ -408,6 +409,8 @@ function ElementPanel({ element }: { element: TemplateElement }) {
   const duplicateSelected = useEditor((s) => s.duplicateSelected);
   const reorder = useEditor((s) => s.reorderSelected);
   const id = element.id;
+  // Auto-width text chips derive their width from content — show it as read-only.
+  const autoWidthText = element.type === "text" && !!element.autoWidth;
 
   return (
     <Panel>
@@ -438,10 +441,14 @@ function ElementPanel({ element }: { element: TemplateElement }) {
           <NumberInput value={Math.round(element.y)} onChange={(y) => update(id, { y })} />
         </Field>
         <Field label="Width">
-          <NumberInput
-            value={Math.round(element.width)}
-            onChange={(width) => update(id, { width })}
-          />
+          {autoWidthText ? (
+            <Input value="Auto" disabled className="h-8" aria-label="Width (auto)" />
+          ) : (
+            <NumberInput
+              value={Math.round(element.width)}
+              onChange={(width) => update(id, { width })}
+            />
+          )}
         </Field>
         <Field label="Height">
           <NumberInput
@@ -623,6 +630,59 @@ function TextProps({ element }: { element: TextElement }) {
       <Field label="Color">
         <ColorInput value={element.color} onChange={(color) => update(id, { color })} />
       </Field>
+
+      <Separator />
+      <SectionTitle>Box</SectionTitle>
+      <div className="flex items-center justify-between">
+        <Label className="text-xs text-muted-foreground">
+          Auto width (hug text)
+        </Label>
+        <Switch
+          checked={!!element.autoWidth}
+          onCheckedChange={(checked) => {
+            snapshot();
+            update(id, { autoWidth: checked || undefined });
+          }}
+        />
+      </div>
+      <div className="flex items-center justify-between">
+        <Label className="text-xs text-muted-foreground">Background</Label>
+        <Switch
+          checked={element.background !== undefined}
+          onCheckedChange={(checked) => {
+            snapshot();
+            update(id, { background: checked ? "#ffffff" : undefined });
+          }}
+        />
+      </div>
+      {element.background !== undefined ? (
+        <Field label="Background fill">
+          <FillInput
+            value={element.background}
+            onChange={(background) => update(id, { background })}
+          />
+        </Field>
+      ) : null}
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Padding X">
+          <NumberInput
+            value={element.paddingX ?? 0}
+            onChange={(paddingX) => update(id, { paddingX })}
+          />
+        </Field>
+        <Field label="Padding Y">
+          <NumberInput
+            value={element.paddingY ?? 0}
+            onChange={(paddingY) => update(id, { paddingY })}
+          />
+        </Field>
+        <Field label="Corner radius">
+          <NumberInput
+            value={element.borderRadius ?? 0}
+            onChange={(borderRadius) => update(id, { borderRadius })}
+          />
+        </Field>
+      </div>
     </>
   );
 }

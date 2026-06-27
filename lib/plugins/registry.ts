@@ -10,8 +10,8 @@ const definitions: PluginDefinition[] = [
     id: "core",
     name: "Core",
     description:
-      "Built-in workflow nodes: Notion trigger, manual review, and template rendering.",
-    nodeTypeIds: ["notion-trigger", "manual-review", "render-template"],
+      "Built-in workflow nodes: webhook trigger, manual review, and template rendering.",
+    nodeTypeIds: ["webhook", "manual-review", "render-template"],
     defaultEnabled: true,
   },
   {

@@ -35,25 +35,32 @@ export function fillToStyle(fill: Fill): CSSProperties {
     : { backgroundColor: fill };
 }
 
+/** A text element in "chip" mode hugs its text horizontally (intrinsic width). */
+function isAutoWidth(el: TemplateElement): el is TextElement {
+  return el.type === "text" && !!el.autoWidth;
+}
+
 export function baseStyle(el: TemplateElement): CSSProperties {
   // Note: Satori rejects `transform: undefined`, so only set keys that have values.
   const style: CSSProperties = {
     position: "absolute",
     left: el.x,
     top: el.y,
-    width: el.width,
     height: el.height,
     opacity: el.opacity ?? 1,
   };
+  // Auto-width text omits `width` so the layout engine sizes it to its content
+  // (left/top stay fixed → the box grows rightward).
+  if (!isAutoWidth(el)) style.width = el.width;
   if (el.rotation) style.transform = `rotate(${el.rotation}deg)`;
   return style;
 }
 
 export function textStyle(el: TextElement): CSSProperties {
-  return {
+  const style: CSSProperties = {
     display: "flex",
     flexDirection: "column",
-    justifyContent: "flex-start",
+    justifyContent: el.autoWidth ? "center" : "flex-start",
     textAlign: el.textAlign ?? "left",
     fontFamily: el.fontFamily,
     fontSize: el.fontSize,
@@ -62,10 +69,17 @@ export function textStyle(el: TextElement): CSSProperties {
     color: el.color,
     lineHeight: el.lineHeight ?? 1.2,
     letterSpacing: el.letterSpacing ?? 0,
-    whiteSpace: "pre-wrap",
+    // A chip stays on one line so its width hugs the text; normal text wraps.
+    whiteSpace: el.autoWidth ? "nowrap" : "pre-wrap",
     wordBreak: "break-word",
     overflow: "hidden",
   };
+  if (el.background !== undefined) Object.assign(style, fillToStyle(el.background));
+  if (el.paddingX || el.paddingY) {
+    style.padding = `${el.paddingY ?? 0}px ${el.paddingX ?? 0}px`;
+  }
+  if (el.borderRadius) style.borderRadius = el.borderRadius;
+  return style;
 }
 
 export function shapeStyle(el: ShapeElement): CSSProperties {

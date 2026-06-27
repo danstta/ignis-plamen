@@ -3,3 +3,17 @@
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
+
+# Project Snapshot
+This app is a minimal web GUI for making automations for any usacase, it's Canva and Zapier in one, in the future it should port all other usecases currently we are wokring on making design templates with placeholders with coneections for Google Drive and Notion API.
+
+This repository is a VERY EARLY WIP. Proposing sweeping changes that improve long-term maintainability is encouraged.
+
+# Core Priorities
+Performance first.
+Reliability first.
+Keep behavior predictable under load and during failures (session restarts, reconnects etc.).
+If a tradeoff is required, choose correctness and robustness over short-term convenience.
+
+# Maintainability
+Long term maintainability is a core priority. If you add new functionality, first check if there is shared logic that can be extracted to a separate module. Duplicate logic across multiple files is a code smell and should be avoided. Don't be afraid to change existing code. Don't take shortcuts by just adding local logic to solve a problem.

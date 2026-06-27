@@ -13,6 +13,11 @@ function required(name: string): string {
   return v;
 }
 
+/** Read a required env var by dynamic name (e.g. a provider's clientIdEnv). */
+export function requireEnv(name: string): string {
+  return required(name);
+}
+
 export const databaseUrl = () => required("DATABASE_URL");
 
 export const adminPassword = () => required("ADMIN_PASSWORD");
@@ -41,8 +46,6 @@ export function publicAppUrl(): string | undefined {
 }
 
 export const blobToken = () => process.env.BLOB_READ_WRITE_TOKEN;
-export const notionWebhookSecret = () => process.env.NOTION_WEBHOOK_SECRET;
-export const notionApiToken = () => process.env.NOTION_API_TOKEN;
 
 // --- Workflow node APIs ---
 /** OpenAI API key — used by the Rank Images node (GPT vision). */

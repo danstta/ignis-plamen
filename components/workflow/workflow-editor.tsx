@@ -2,19 +2,20 @@
 
 import "@xyflow/react/dist/style.css";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { toast } from "sonner";
 import { ListChecks } from "lucide-react";
 import { useWorkflowEditor } from "@/lib/workflows/store";
+import { useAutosave } from "@/lib/hooks/use-autosave";
 import type { WorkflowGraph } from "@/lib/workflows/types";
 import { NodePalette } from "./node-palette";
 import { NodeConfigPanel } from "./node-config-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
+import { SaveStatusDot } from "@/components/ui/save-status-dot";
 
 // The canvas pulls in @xyflow/react (touches window) — load it client-only.
 const WorkflowCanvas = dynamic(
@@ -23,81 +24,80 @@ const WorkflowCanvas = dynamic(
 );
 
 type Option = { id: string; name: string };
+type TemplateOption = {
+  id: string;
+  name: string;
+  placeholders: { key: string; kind: "text" | "image" }[];
+};
 
 export type WorkflowEditorInput = {
   id: string | null;
   name: string;
   active: boolean;
-  triggerConnectionId: string | null;
   graph: WorkflowGraph;
 };
-
-const selectClass =
-  "h-9 rounded-md border border-input bg-transparent px-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
 
 export function WorkflowEditor({
   workflow,
   connections,
   templates,
   enabledNodeTypeIds,
+  webhookBaseUrl,
 }: {
   workflow: WorkflowEditorInput;
   connections: Option[];
-  templates: Option[];
+  templates: TemplateOption[];
   enabledNodeTypeIds: string[];
+  webhookBaseUrl: string;
 }) {
   const load = useWorkflowEditor((s) => s.load);
   const name = useWorkflowEditor((s) => s.name);
   const active = useWorkflowEditor((s) => s.active);
-  const triggerConnectionId = useWorkflowEditor((s) => s.triggerConnectionId);
   const workflowId = useWorkflowEditor((s) => s.workflowId);
   const setName = useWorkflowEditor((s) => s.setName);
   const setActive = useWorkflowEditor((s) => s.setActive);
-  const setTriggerConnectionId = useWorkflowEditor(
-    (s) => s.setTriggerConnectionId,
-  );
-  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     load(workflow);
   }, [workflow, load]);
 
-  const save = useCallback(async () => {
+  const save = useCallback(async ({ auto }: { auto: boolean }) => {
+    const build = (s: ReturnType<typeof useWorkflowEditor.getState>) => ({
+      name: s.name,
+      active: s.active,
+      graph: s.toGraph(),
+    });
     const st = useWorkflowEditor.getState();
-    setSaving(true);
-    try {
-      const payload = {
-        name: st.name,
-        active: st.active,
-        triggerConnectionId: st.triggerConnectionId,
-        graph: st.toGraph(),
-      };
-      const res = st.workflowId
-        ? await fetch(`/api/workflows/${st.workflowId}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          })
-        : await fetch(`/api/workflows`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-      if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
-      const data = await res.json();
-      if (!st.workflowId && data?.id) {
-        useWorkflowEditor.getState().markSaved(data.id);
-        window.history.replaceState(null, "", `/workflows/${data.id}`);
-      } else {
-        useWorkflowEditor.getState().markSaved();
-      }
-      toast.success("Workflow saved");
-    } catch (err) {
-      toast.error("Failed to save", { description: String(err) });
-    } finally {
-      setSaving(false);
+    const payload = build(st);
+    const snapshot = JSON.stringify(payload);
+    const res = st.workflowId
+      ? await fetch(`/api/workflows/${st.workflowId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+      : await fetch(`/api/workflows`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+    if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+    const data = await res.json();
+    if (!st.workflowId && data?.id) {
+      useWorkflowEditor.setState({ workflowId: data.id });
+      window.history.replaceState(null, "", `/workflows/${data.id}`);
     }
+    // Only mark clean if nothing changed while the request was in flight,
+    // so edits made mid-save aren't dropped (a follow-up autosave catches them).
+    const after = useWorkflowEditor.getState();
+    if (JSON.stringify(build(after)) === snapshot) after.markSaved();
+    if (!auto) toast.success("Workflow saved");
   }, []);
+
+  const { status, saving, saveNow } = useAutosave({
+    store: useWorkflowEditor,
+    save,
+  });
 
   return (
     // Fit within the admin layout's p-8 (4rem vertical) padding without scroll.
@@ -108,24 +108,6 @@ export function WorkflowEditor({
           onChange={(e) => setName(e.target.value)}
           className="h-9 max-w-xs font-medium"
         />
-        <div className="flex items-center gap-2">
-          <Label htmlFor="trigger" className="text-xs text-muted-foreground">
-            Trigger
-          </Label>
-          <select
-            id="trigger"
-            className={selectClass}
-            value={triggerConnectionId ?? ""}
-            onChange={(e) => setTriggerConnectionId(e.target.value || null)}
-          >
-            <option value="">— no connection —</option>
-            {connections.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
         <div className="flex items-center gap-2">
           <Switch checked={active} onCheckedChange={(v) => setActive(v)} />
           <span className="text-sm">{active ? "Active" : "Inactive"}</span>
@@ -140,7 +122,8 @@ export function WorkflowEditor({
               <ListChecks className="size-4" /> Runs
             </Button>
           ) : null}
-          <Button onClick={save} disabled={saving} size="sm">
+          <SaveStatusDot status={status} />
+          <Button onClick={saveNow} disabled={saving} size="sm">
             {saving ? "Saving…" : "Save"}
           </Button>
         </div>
@@ -154,7 +137,11 @@ export function WorkflowEditor({
           <WorkflowCanvas />
         </div>
         <aside className="w-80 shrink-0 overflow-auto border-l bg-background">
-          <NodeConfigPanel connections={connections} templates={templates} />
+          <NodeConfigPanel
+            connections={connections}
+            templates={templates}
+            webhookBaseUrl={webhookBaseUrl}
+          />
         </aside>
       </div>
     </div>

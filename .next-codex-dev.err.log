@@ -1,0 +1,9 @@
+⚠ Port 3000 is in use by process 21972, using available port 3001 instead.
+⨯ Another next dev server is already running.
+
+- Local:        http://localhost:3000
+- PID:          21972
+- Dir:          C:\Users\danst\Dev\Projects\design-automations
+- Log:          .next\dev\logs\next-development.log
+
+Run taskkill /PID 21972 /F to stop it.

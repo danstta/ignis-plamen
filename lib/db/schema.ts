@@ -48,42 +48,21 @@ export const templates = pgTable("templates", {
     .notNull(),
 });
 
-/** Configured instances of a connection type (e.g. a Notion integration). */
+/**
+ * A connected account: a configured instance of a connection provider (e.g. a
+ * Notion integration token, or a Google Drive OAuth grant). Credentials/tokens
+ * live in `config`. Action nodes reference one of these to call external APIs.
+ */
 export const connections = pgTable("connections", {
   id: uuid("id").defaultRandom().primaryKey(),
-  /** Connection type id from the registry, e.g. "notion". */
+  /** Provider id from the registry, e.g. "notion" or "google-drive". */
   type: text("type").notNull(),
   name: text("name").notNull(),
-  /** Per-instance config (tokens/secrets). Encrypt sensitive values before storing. */
+  /** Per-account credentials: API keys/tokens, or OAuth tokens. Encrypt before storing. */
   config: jsonb("config")
     .$type<Record<string, unknown>>()
     .notNull()
     .default({}),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
-
-/** Maps a connection's incoming fields onto a template's placeholder keys. */
-export const bindings = pgTable("bindings", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  templateId: uuid("template_id")
-    .notNull()
-    .references(() => templates.id, { onDelete: "cascade" }),
-  connectionId: uuid("connection_id")
-    .notNull()
-    .references(() => connections.id, { onDelete: "cascade" }),
-  /** placeholderKey -> connection field name. */
-  fieldMap: jsonb("field_map")
-    .$type<Record<string, string>>()
-    .notNull()
-    .default({}),
-  /** placeholderKey -> default value when the field is missing. */
-  defaults: jsonb("defaults")
-    .$type<Record<string, string>>()
-    .notNull()
-    .default({}),
-  active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -132,11 +111,6 @@ export const workflows = pgTable("workflows", {
     .$type<WorkflowGraph>()
     .notNull()
     .default({ nodes: [], edges: [] }),
-  /** Connection whose webhook starts this workflow; looked up in the webhook route. */
-  triggerConnectionId: uuid("trigger_connection_id").references(
-    () => connections.id,
-    { onDelete: "set null" },
-  ),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -194,14 +168,33 @@ export const plugins = pgTable("plugins", {
     .notNull(),
 });
 
+/**
+ * Buffer of inbound payloads received by a Webhook trigger node, keyed by
+ * (workflowId, nodeId). The editor reads the latest row to "capture a sample
+ * event" and expose its fields to downstream nodes.
+ */
+export const webhookEvents = pgTable("webhook_events", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workflowId: uuid("workflow_id")
+    .notNull()
+    .references(() => workflows.id, { onDelete: "cascade" }),
+  nodeId: text("node_id").notNull(),
+  /** Normalized request payload: { body, headers, query }. */
+  payload: jsonb("payload")
+    .$type<Record<string, unknown>>()
+    .notNull()
+    .default({}),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
 export type BrandRow = typeof brands.$inferSelect;
 export type NewBrand = typeof brands.$inferInsert;
 export type Template = typeof templates.$inferSelect;
 export type NewTemplate = typeof templates.$inferInsert;
 export type Connection = typeof connections.$inferSelect;
 export type NewConnection = typeof connections.$inferInsert;
-export type Binding = typeof bindings.$inferSelect;
-export type NewBinding = typeof bindings.$inferInsert;
 export type RenderJob = typeof renderJobs.$inferSelect;
 export type Asset = typeof assets.$inferSelect;
 export type Workflow = typeof workflows.$inferSelect;
@@ -210,3 +203,5 @@ export type WorkflowRun = typeof workflowRuns.$inferSelect;
 export type NewWorkflowRun = typeof workflowRuns.$inferInsert;
 export type PluginRow = typeof plugins.$inferSelect;
 export type NewPluginRow = typeof plugins.$inferInsert;
+export type WebhookEvent = typeof webhookEvents.$inferSelect;
+export type NewWebhookEvent = typeof webhookEvents.$inferInsert;

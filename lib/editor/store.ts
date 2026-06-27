@@ -194,15 +194,19 @@ export const useEditor = create<EditorState>((set, get) => ({
       const elements = s.doc.elements.map((el) => {
         const p = byId.get(el.id);
         if (!p) return el;
-        if (!patchChangesElement(el, p)) return el;
+        // Auto-width text derives its width from content; Moveable reads back an
+        // empty inline width (→ 0), so never let geometry commits overwrite it.
+        const next: GeometryPatch = { ...p };
+        if (el.type === "text" && el.autoWidth) delete next.width;
+        if (!patchChangesElement(el, next)) return el;
         changed = true;
         return {
           ...el,
-          ...(p.x !== undefined ? { x: p.x } : {}),
-          ...(p.y !== undefined ? { y: p.y } : {}),
-          ...(p.width !== undefined ? { width: p.width } : {}),
-          ...(p.height !== undefined ? { height: p.height } : {}),
-          ...(p.rotation !== undefined ? { rotation: p.rotation } : {}),
+          ...(next.x !== undefined ? { x: next.x } : {}),
+          ...(next.y !== undefined ? { y: next.y } : {}),
+          ...(next.width !== undefined ? { width: next.width } : {}),
+          ...(next.height !== undefined ? { height: next.height } : {}),
+          ...(next.rotation !== undefined ? { rotation: next.rotation } : {}),
         } as TemplateElement;
       });
       if (!changed) return s;

@@ -1,12 +1,15 @@
 import type { ConnectionDefinition } from "./types";
 import { notionConnection } from "./notion";
+import { googleDriveConnection } from "./google-drive";
 
 /**
- * Registry of available connection types. To add a new integration, implement a
- * ConnectionDefinition and add it here — the webhook route and UI pick it up.
+ * Registry of available connection providers ("apps"). To add an integration,
+ * implement a ConnectionDefinition and add it here — the Settings → Connections
+ * UI and the OAuth routes pick it up generically.
  */
 const definitions: ConnectionDefinition[] = [
   notionConnection as unknown as ConnectionDefinition,
+  googleDriveConnection as unknown as ConnectionDefinition,
 ];
 
 const byId = new Map(definitions.map((d) => [d.id, d]));

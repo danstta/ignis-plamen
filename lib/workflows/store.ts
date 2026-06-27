@@ -4,8 +4,10 @@ import {
   applyEdgeChanges,
   applyNodeChanges,
   type Edge,
+  type EdgeChange,
   MarkerType,
   type Node,
+  type NodeChange,
   type OnConnect,
   type OnEdgesChange,
   type OnNodesChange,
@@ -20,6 +22,18 @@ export type WfNode = Node<WfNodeData>;
 const DEFAULT_NODE_POSITION = { x: 160, y: 80 };
 const DEFAULT_NODE_GAP_Y = 280;
 
+/**
+ * Whether a change actually alters the saved graph. Selection highlighting and
+ * measured dimensions are view-only state, so they must not flip `dirty` (which
+ * would otherwise trigger a no-op autosave on every node click).
+ */
+function nodeChangeIsPersistent(change: NodeChange<WfNode>): boolean {
+  return change.type !== "select" && change.type !== "dimensions";
+}
+function edgeChangeIsPersistent(change: EdgeChange): boolean {
+  return change.type !== "select";
+}
+
 function presentEdge(edge: Edge): Edge {
   return {
     ...edge,
@@ -32,7 +46,6 @@ export type WorkflowLoadInput = {
   id: string | null;
   name: string;
   active: boolean;
-  triggerConnectionId: string | null;
   graph: WorkflowGraph;
 };
 
@@ -40,7 +53,6 @@ interface WorkflowEditorState {
   workflowId: string | null;
   name: string;
   active: boolean;
-  triggerConnectionId: string | null;
   nodes: WfNode[];
   edges: Edge[];
   selectedNodeId: string | null;
@@ -49,8 +61,7 @@ interface WorkflowEditorState {
   load: (input: WorkflowLoadInput) => void;
   setName: (name: string) => void;
   setActive: (active: boolean) => void;
-  setTriggerConnectionId: (id: string | null) => void;
-  markSaved: (id?: string) => void;
+  markSaved: () => void;
 
   onNodesChange: OnNodesChange<WfNode>;
   onEdgesChange: OnEdgesChange;
@@ -58,6 +69,14 @@ interface WorkflowEditorState {
 
   addNode: (nodeTypeId: string, position: { x: number; y: number }) => void;
   updateNodeConfig: (nodeId: string, config: Record<string, unknown>) => void;
+  /** Map an upstream output port into an input port (replaces any existing edge there). */
+  setInputEdge: (
+    target: string,
+    targetHandle: string,
+    source: string,
+    sourceHandle: string,
+  ) => void;
+  clearInputEdge: (target: string, targetHandle: string) => void;
   selectNode: (id: string | null) => void;
   removeNode: (id: string) => void;
 
@@ -96,7 +115,6 @@ export const useWorkflowEditor = create<WorkflowEditorState>((set, get) => ({
   workflowId: null,
   name: "Untitled workflow",
   active: false,
-  triggerConnectionId: null,
   nodes: [],
   edges: [],
   selectedNodeId: null,
@@ -108,7 +126,6 @@ export const useWorkflowEditor = create<WorkflowEditorState>((set, get) => ({
       workflowId: input.id,
       name: input.name,
       active: input.active,
-      triggerConnectionId: input.triggerConnectionId,
       nodes,
       edges,
       selectedNodeId: null,
@@ -118,18 +135,18 @@ export const useWorkflowEditor = create<WorkflowEditorState>((set, get) => ({
 
   setName: (name) => set({ name, dirty: true }),
   setActive: (active) => set({ active, dirty: true }),
-  setTriggerConnectionId: (triggerConnectionId) =>
-    set({ triggerConnectionId, dirty: true }),
-  markSaved: (id) =>
-    set((s) => ({ dirty: false, workflowId: id ?? s.workflowId })),
+  markSaved: () => set({ dirty: false }),
 
   onNodesChange: (changes) =>
     set((s) => ({
       nodes: applyNodeChanges(changes, s.nodes),
-      dirty: true,
+      dirty: s.dirty || changes.some(nodeChangeIsPersistent),
     })),
   onEdgesChange: (changes) =>
-    set((s) => ({ edges: applyEdgeChanges(changes, s.edges), dirty: true })),
+    set((s) => ({
+      edges: applyEdgeChanges(changes, s.edges),
+      dirty: s.dirty || changes.some(edgeChangeIsPersistent),
+    })),
   onConnect: (connection) =>
     set((s) => ({
       edges: addEdge(
@@ -166,6 +183,29 @@ export const useWorkflowEditor = create<WorkflowEditorState>((set, get) => ({
     set((s) => ({
       nodes: s.nodes.map((n) =>
         n.id === nodeId ? { ...n, data: { ...n.data, config } } : n,
+      ),
+      dirty: true,
+    })),
+
+  setInputEdge: (target, targetHandle, source, sourceHandle) =>
+    set((s) => {
+      const kept = s.edges.filter(
+        (e) => !(e.target === target && (e.targetHandle ?? null) === targetHandle),
+      );
+      const edge = presentEdge({
+        id: crypto.randomUUID(),
+        source,
+        target,
+        sourceHandle,
+        targetHandle,
+      });
+      return { edges: [...kept, edge], dirty: true };
+    }),
+
+  clearInputEdge: (target, targetHandle) =>
+    set((s) => ({
+      edges: s.edges.filter(
+        (e) => !(e.target === target && (e.targetHandle ?? null) === targetHandle),
       ),
       dirty: true,
     })),

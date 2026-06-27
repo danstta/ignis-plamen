@@ -1,5 +1,5 @@
 import type { NodeMeta } from "./types";
-import { notionTriggerMeta } from "./notion-trigger/meta";
+import { webhookMeta } from "./webhook/meta";
 import { findLocationImagesMeta } from "./find-location-images/meta";
 import { rankImagesMeta } from "./rank-images/meta";
 import { manualReviewMeta } from "./manual-review/meta";
@@ -12,7 +12,7 @@ import { renderTemplateMeta } from "./render-template/meta";
  * server registry lives in ./registry.
  */
 const catalog: NodeMeta[] = [
-  notionTriggerMeta as unknown as NodeMeta,
+  webhookMeta as unknown as NodeMeta,
   findLocationImagesMeta as unknown as NodeMeta,
   rankImagesMeta as unknown as NodeMeta,
   manualReviewMeta as unknown as NodeMeta,

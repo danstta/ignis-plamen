@@ -2,7 +2,6 @@
 
 import { memo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { ArrowDownToLine, ArrowUpFromLine, GitBranch } from "lucide-react";
 import { getNodeMeta } from "@/lib/nodes/catalog";
 import type { NodePort } from "@/lib/nodes/types";
 import { cn } from "@/lib/utils";
@@ -21,54 +20,33 @@ const PORT_KIND_CLASS: Record<NodePort["kind"], string> = {
   text: "border-amber-500 bg-amber-500",
 };
 
+/** A slim port row: just a labelled handle dot anchored to the node's edge. */
 function PortRow({
   port,
   direction,
-  branchable,
 }: {
   port: NodePort;
-  direction: "import" | "export";
-  branchable?: boolean;
+  direction: "in" | "out";
 }) {
-  const isImport = direction === "import";
-  const Icon = isImport ? ArrowDownToLine : ArrowUpFromLine;
-
+  const isInput = direction === "in";
   return (
     <div
       className={cn(
-        "group relative flex h-9 items-center gap-2 rounded-sm border bg-muted/20 px-2 text-xs",
-        isImport ? "pl-4" : "pr-4",
+        "relative flex h-6 items-center px-3 text-xs text-muted-foreground",
+        isInput ? "justify-start" : "justify-end",
       )}
     >
       <Handle
         id={port.id}
-        type={isImport ? "target" : "source"}
-        position={isImport ? Position.Left : Position.Right}
+        type={isInput ? "target" : "source"}
+        position={isInput ? Position.Left : Position.Right}
         className={cn(
-          "!h-3 !w-3 !rounded-full !border-2 !border-background shadow-sm",
+          "!size-2.5 !rounded-full !border-2 !border-background shadow-sm",
           PORT_KIND_CLASS[port.kind],
         )}
         style={{ top: "50%" }}
       />
-      <span
-        className={cn(
-          "flex size-5 shrink-0 items-center justify-center rounded-sm border bg-background text-muted-foreground",
-          isImport ? "order-first" : "order-last",
-        )}
-      >
-        <Icon className="size-3.5" />
-      </span>
-      <span className="min-w-0 flex-1 truncate text-muted-foreground">
-        {port.label}
-      </span>
-      {branchable ? (
-        <span
-          className="flex size-5 shrink-0 items-center justify-center rounded-sm bg-background text-muted-foreground"
-          title="Can branch into multiple downstream nodes"
-        >
-          <GitBranch className="size-3.5" />
-        </span>
-      ) : null}
+      <span className="truncate">{port.label}</span>
     </div>
   );
 }
@@ -84,16 +62,16 @@ function WorkflowNodeImpl({ type, selected }: NodeProps) {
     );
   }
 
-  const branchableExports = def.outputs.length > 1;
-
   return (
     <div
       className={cn(
-        "min-w-52 rounded-md border bg-background shadow-sm transition-colors",
-        selected ? "border-foreground/40 ring-1 ring-foreground/20" : "border-border",
+        "min-w-44 rounded-md border bg-background shadow-sm transition-colors",
+        selected
+          ? "border-foreground/40 ring-1 ring-foreground/20"
+          : "border-border",
       )}
     >
-      <div className="flex items-center gap-2 border-b px-3 py-2">
+      <div className="flex items-center gap-2 px-3 py-2">
         <span
           className={cn(
             "size-2 shrink-0 rounded-full",
@@ -103,42 +81,16 @@ function WorkflowNodeImpl({ type, selected }: NodeProps) {
         <span className="truncate text-sm font-medium">{def.label}</span>
       </div>
 
-      <div className="space-y-2 p-2">
-        <div className="space-y-1">
-          <div className="px-1 text-[10px] font-medium uppercase tracking-normal text-muted-foreground">
-            Import
-          </div>
-          {def.inputs.length ? (
-            def.inputs.map((port) => (
-              <PortRow key={port.id} port={port} direction="import" />
-            ))
-          ) : (
-            <div className="rounded-sm border border-dashed px-2 py-1.5 text-xs text-muted-foreground">
-              Starts here
-            </div>
-          )}
+      {def.inputs.length || def.outputs.length ? (
+        <div className="border-t py-1.5">
+          {def.inputs.map((port) => (
+            <PortRow key={port.id} port={port} direction="in" />
+          ))}
+          {def.outputs.map((port) => (
+            <PortRow key={port.id} port={port} direction="out" />
+          ))}
         </div>
-
-        <div className="space-y-1">
-          <div className="px-1 text-[10px] font-medium uppercase tracking-normal text-muted-foreground">
-            Export
-          </div>
-          {def.outputs.length ? (
-            def.outputs.map((port) => (
-              <PortRow
-                key={port.id}
-                port={port}
-                direction="export"
-                branchable={branchableExports}
-              />
-            ))
-          ) : (
-            <div className="rounded-sm border border-dashed px-2 py-1.5 text-xs text-muted-foreground">
-              Ends here
-            </div>
-          )}
-        </div>
-      </div>
+      ) : null}
     </div>
   );
 }

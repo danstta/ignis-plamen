@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { workflows } from "@/lib/db/schema";
 import type { WorkflowGraph } from "./types";
@@ -6,7 +6,6 @@ import type { WorkflowGraph } from "./types";
 export type WorkflowInput = {
   name: string;
   active: boolean;
-  triggerConnectionId: string | null;
   graph: WorkflowGraph;
 };
 
@@ -16,7 +15,6 @@ export async function listWorkflows() {
       id: workflows.id,
       name: workflows.name,
       active: workflows.active,
-      triggerConnectionId: workflows.triggerConnectionId,
       updatedAt: workflows.updatedAt,
     })
     .from(workflows)
@@ -48,17 +46,4 @@ export async function updateWorkflow(id: string, input: WorkflowInput) {
 
 export async function deleteWorkflow(id: string) {
   await db().delete(workflows).where(eq(workflows.id, id));
-}
-
-/** Active workflows triggered by a given connection (used by the webhook route). */
-export async function listActiveWorkflowsForConnection(connectionId: string) {
-  return db()
-    .select()
-    .from(workflows)
-    .where(
-      and(
-        eq(workflows.triggerConnectionId, connectionId),
-        eq(workflows.active, true),
-      ),
-    );
 }

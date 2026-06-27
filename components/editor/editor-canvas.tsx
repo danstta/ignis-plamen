@@ -121,6 +121,14 @@ export function EditorCanvas() {
 
   const isGroup = targets.length > 1;
 
+  // A lone auto-width text "chip" derives its width from content, so only expose
+  // vertical resize handles (width handles would do nothing — see store guard).
+  const onlyAutoWidth = useMemo(() => {
+    if (selectedIds.length !== 1) return false;
+    const el = doc.elements.find((e) => e.id === selectedIds[0]);
+    return el?.type === "text" && !!el.autoWidth;
+  }, [selectedIds, doc.elements]);
+
   const changeZoom = useCallback(
     (next: number) => {
       const v = viewerRef.current;
@@ -168,6 +176,9 @@ export function EditorCanvas() {
         target={targets}
         draggable
         resizable
+        renderDirections={
+          onlyAutoWidth ? ["n", "s"] : ["nw", "n", "ne", "w", "e", "sw", "s", "se"]
+        }
         rotatable
         origin={false}
         throttleDrag={0}

@@ -22,6 +22,20 @@
       "when": 1782308728961,
       "tag": "0002_volatile_logan",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1782331339912,
+      "tag": "0003_powerful_longshot",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1782331369783,
+      "tag": "0004_spicy_vindicator",
+      "breakpoints": true
     }
   ]
 }

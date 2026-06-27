@@ -37,6 +37,40 @@ export function createText(
   };
 }
 
+/**
+ * A "text chip": text that hugs its content with a rounded background (a pill).
+ * `autoWidth` makes the box size to the resolved text on every render path, so it
+ * fits whatever value fills the placeholder. The stored `width` is unused while
+ * auto-width is on but kept to satisfy the element model.
+ */
+export function createTextChip(
+  doc: TemplateDoc,
+  opts?: { placeholderKey?: string },
+): TextElement {
+  const width = 320;
+  const height = 72;
+  return {
+    id: crypto.randomUUID(),
+    type: "text",
+    ...center(doc, width, height),
+    width,
+    height,
+    text: opts?.placeholderKey ? "" : "Label",
+    placeholderKey: opts?.placeholderKey,
+    fontFamily: DEFAULT_FONT,
+    fontSize: 36,
+    fontWeight: 600,
+    color: "#111111",
+    textAlign: "center",
+    lineHeight: 1.2,
+    autoWidth: true,
+    background: "#ffffff",
+    paddingX: 28,
+    paddingY: 14,
+    borderRadius: 999,
+  };
+}
+
 export function createImage(
   doc: TemplateDoc,
   opts?: { placeholderKey?: string; src?: string },

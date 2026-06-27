@@ -16,7 +16,6 @@ export async function POST(req: Request) {
   const row = await createWorkflow({
     name: parsed.data.name,
     active: parsed.data.active,
-    triggerConnectionId: parsed.data.triggerConnectionId ?? null,
     graph: parsed.data.graph,
   });
   return NextResponse.json(row);

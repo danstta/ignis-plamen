@@ -1,44 +1,36 @@
-import Link from "next/link";
-import { logoutAction } from "@/lib/auth/actions";
-import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { AppSidebar } from "@/components/layout/app-sidebar";
+import { listTemplates } from "@/lib/templates/service";
+import { listWorkflows } from "@/lib/workflows/service";
 
-const NAV = [
-  { href: "/", label: "Dashboard" },
-  { href: "/templates", label: "Templates" },
-  { href: "/brand", label: "Brand" },
-  { href: "/connections", label: "Connections" },
-  { href: "/workflows", label: "Workflows" },
-  { href: "/plugins", label: "Plugins" },
-];
+export const dynamic = "force-dynamic";
 
-export default function AdminLayout({
+export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // The sidebar lists templates and workflows. Fall back to empty lists when
+  // the database isn't reachable so the shell still renders (pages surface the
+  // detailed "database not reachable" hint).
+  let templates: Awaited<ReturnType<typeof listTemplates>> = [];
+  let workflows: Awaited<ReturnType<typeof listWorkflows>> = [];
+  try {
+    templates = await listTemplates();
+  } catch {}
+  try {
+    workflows = await listWorkflows();
+  } catch {}
+
   return (
-    <div className="flex min-h-svh">
-      <aside className="flex w-56 shrink-0 flex-col gap-1 border-r bg-sidebar p-4">
-        <div className="px-2 py-3 text-sm font-semibold">Design Automations</div>
-        <nav className="flex flex-1 flex-col gap-1">
-          {NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-        <ThemeToggle />
-        <form action={logoutAction}>
-          <Button type="submit" variant="ghost" size="sm" className="w-full justify-start">
-            Sign out
-          </Button>
-        </form>
-      </aside>
+    <div className="flex h-svh overflow-hidden">
+      <AppSidebar
+        templates={templates.map((t) => ({ id: t.id, name: t.name }))}
+        workflows={workflows.map((w) => ({
+          id: w.id,
+          name: w.name,
+          active: w.active,
+        }))}
+      />
       <main className="flex-1 overflow-auto p-8">{children}</main>
     </div>
   );

@@ -1,5 +1,5 @@
 import type { NodeDefinition } from "./types";
-import { notionTriggerNode } from "./notion-trigger";
+import { webhookNode } from "./webhook";
 import { findLocationImagesNode } from "./find-location-images";
 import { rankImagesNode } from "./rank-images";
 import { manualReviewNode } from "./manual-review";
@@ -11,7 +11,7 @@ import { renderTemplateNode } from "./render-template";
  * pick it up. Gating by enabled plugins happens in lib/plugins/service.
  */
 const definitions: NodeDefinition[] = [
-  notionTriggerNode as unknown as NodeDefinition,
+  webhookNode as unknown as NodeDefinition,
   findLocationImagesNode as unknown as NodeDefinition,
   rankImagesNode as unknown as NodeDefinition,
   manualReviewNode as unknown as NodeDefinition,

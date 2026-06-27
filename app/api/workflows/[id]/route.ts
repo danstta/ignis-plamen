@@ -29,7 +29,6 @@ export async function PUT(
   const row = await updateWorkflow(id, {
     name: parsed.data.name,
     active: parsed.data.active,
-    triggerConnectionId: parsed.data.triggerConnectionId ?? null,
     graph: parsed.data.graph,
   });
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });

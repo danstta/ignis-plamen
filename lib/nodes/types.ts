@@ -64,7 +64,7 @@ export interface NodeRunContext<C = Record<string, unknown>> {
  * drags server-only modules (db, storage, renderer) into the client bundle.
  */
 export interface NodeMeta<C extends Record<string, unknown> = Record<string, unknown>> {
-  /** Stable type id stored on graph nodes, e.g. "notion-trigger". */
+  /** Stable type id stored on graph nodes, e.g. "webhook". */
   id: string;
   label: string;
   description: string;

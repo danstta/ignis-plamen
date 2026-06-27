@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
 import { useEditor } from "@/lib/editor/store";
+import { useAutosave } from "@/lib/hooks/use-autosave";
 import type { TemplateDoc } from "@/lib/editor/types";
 import type { Brand } from "@/lib/brand/types";
 import { EditorToolbar } from "./editor-toolbar";
@@ -30,7 +31,6 @@ export function Editor({
 }) {
   const load = useEditor((s) => s.load);
   const setBrands = useEditor((s) => s.setBrands);
-  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     load(template);
@@ -40,41 +40,41 @@ export function Editor({
     setBrands(brands);
   }, [brands, setBrands]);
 
-  const save = useCallback(async () => {
+  const save = useCallback(async ({ auto }: { auto: boolean }) => {
+    const build = (s: ReturnType<typeof useEditor.getState>) => ({
+      name: s.name,
+      width: s.doc.width,
+      height: s.doc.height,
+      doc: s.doc,
+    });
     const st = useEditor.getState();
-    setSaving(true);
-    try {
-      const payload = {
-        name: st.name,
-        width: st.doc.width,
-        height: st.doc.height,
-        doc: st.doc,
-      };
-      const res = st.templateId
-        ? await fetch(`/api/templates/${st.templateId}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          })
-        : await fetch(`/api/templates`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-      if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
-      const data = await res.json();
-      if (!st.templateId && data?.id) {
-        useEditor.setState({ templateId: data.id });
-        window.history.replaceState(null, "", `/editor/${data.id}`);
-      }
-      useEditor.getState().markSaved();
-      toast.success("Template saved");
-    } catch (err) {
-      toast.error("Failed to save", { description: String(err) });
-    } finally {
-      setSaving(false);
+    const payload = build(st);
+    const snapshot = JSON.stringify(payload);
+    const res = st.templateId
+      ? await fetch(`/api/templates/${st.templateId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+      : await fetch(`/api/templates`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+    if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+    const data = await res.json();
+    if (!st.templateId && data?.id) {
+      useEditor.setState({ templateId: data.id });
+      window.history.replaceState(null, "", `/editor/${data.id}`);
     }
+    // Only mark clean if nothing changed while the request was in flight,
+    // so edits made mid-save aren't dropped (a follow-up autosave catches them).
+    const after = useEditor.getState();
+    if (JSON.stringify(build(after)) === snapshot) after.markSaved();
+    if (!auto) toast.success("Template saved");
   }, []);
+
+  const { status, saveNow } = useAutosave({ store: useEditor, save });
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -99,7 +99,7 @@ export function Editor({
       }
       if (meta && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        void save();
+        saveNow();
         return;
       }
       if (meta && e.key.toLowerCase() === "d") {
@@ -138,11 +138,11 @@ export function Editor({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [save]);
+  }, [saveNow]);
 
   return (
     <div className="flex h-svh flex-col">
-      <EditorToolbar onSave={save} saving={saving} />
+      <EditorToolbar onSave={saveNow} status={status} />
       <div className="flex min-h-0 flex-1">
         <div className="relative min-w-0 flex-1">
           <EditorCanvas />

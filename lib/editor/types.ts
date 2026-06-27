@@ -80,6 +80,21 @@ export interface TextElement extends BaseElement {
   textAlign?: "left" | "center" | "right";
   lineHeight?: number;
   letterSpacing?: number;
+  /**
+   * "Text chip" mode: the box hugs its text horizontally (left edge fixed, width
+   * grows rightward). Width becomes intrinsic, so the layout engine sizes it to
+   * the resolved text on every render path — including the Satori PNG with real
+   * placeholder data. The `width` field is ignored while this is on.
+   */
+  autoWidth?: boolean;
+  /** Background fill painted behind the text (the "pill"); solid or gradient. */
+  background?: Fill;
+  /** Horizontal padding around the text (px). */
+  paddingX?: number;
+  /** Vertical padding around the text (px). */
+  paddingY?: number;
+  /** Rounded corners for the background (px). */
+  borderRadius?: number;
 }
 
 export interface ImageElement extends BaseElement {

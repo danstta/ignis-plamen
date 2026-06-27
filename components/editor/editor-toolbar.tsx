@@ -10,6 +10,7 @@ import {
   Square,
   Circle,
   Braces,
+  Tag,
   Sparkles,
   Undo2,
   Redo2,
@@ -18,7 +19,12 @@ import {
   Download,
 } from "lucide-react";
 import { activeBrand, useEditor } from "@/lib/editor/store";
-import { createImage, createShape, createText } from "@/lib/editor/factory";
+import {
+  createImage,
+  createShape,
+  createText,
+  createTextChip,
+} from "@/lib/editor/factory";
 import { CANVAS_PRESETS, type CanvasPreset } from "@/lib/editor/types";
 import { generateReactComponent } from "@/lib/codegen/react";
 import { generateHtml } from "@/lib/codegen/html";
@@ -26,6 +32,8 @@ import { toComponentName } from "@/lib/codegen/serialize";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { SaveStatusDot } from "@/components/ui/save-status-dot";
+import type { SaveStatus } from "@/lib/hooks/use-autosave";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,14 +53,14 @@ import {
 
 export function EditorToolbar({
   onSave,
-  saving,
+  status,
 }: {
   onSave: () => void;
-  saving: boolean;
+  status: SaveStatus;
 }) {
+  const saving = status === "saving";
   const name = useEditor((s) => s.name);
   const setName = useEditor((s) => s.setName);
-  const dirty = useEditor((s) => s.dirty);
   const undo = useEditor((s) => s.undo);
   const redo = useEditor((s) => s.redo);
   const canUndo = useEditor((s) => s.past.length > 0);
@@ -141,6 +149,17 @@ export function EditorToolbar({
     state.select([el.id]);
   }
 
+  function addTextChip() {
+    const key = window.prompt(
+      'Name the chip placeholder (e.g. "location") — leave blank for fixed text',
+    );
+    if (key === null) return;
+    const state = useEditor.getState();
+    const el = createTextChip(state.doc, { placeholderKey: key || undefined });
+    state.addElement(el);
+    state.select([el.id]);
+  }
+
   function addPlaceholder(kind: "text" | "image") {
     const key = window.prompt(
       `Name the ${kind} placeholder (e.g. "title", "background")`,
@@ -218,6 +237,9 @@ export function EditorToolbar({
             <DropdownMenuItem onClick={() => addPlaceholder("image")}>
               <Braces className="size-4" /> Image placeholder
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={addTextChip}>
+              <Tag className="size-4" /> Text chip (auto width)
+            </DropdownMenuItem>
           </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -271,9 +293,6 @@ export function EditorToolbar({
       </Select>
 
       <div className="ml-auto flex items-center gap-2">
-        {dirty ? (
-          <span className="text-xs text-muted-foreground">Unsaved changes</span>
-        ) : null}
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -296,6 +315,7 @@ export function EditorToolbar({
             <DropdownMenuItem onClick={exportHtml}>HTML (.html)</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <SaveStatusDot status={status} />
         <Button size="sm" className="h-8 gap-1" onClick={onSave} disabled={saving}>
           <Save className="size-4" />
           {saving ? "Saving…" : "Save"}

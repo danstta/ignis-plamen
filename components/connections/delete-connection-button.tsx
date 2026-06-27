@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { Trash2 } from "lucide-react";
-import { deleteConnectionAction } from "@/app/(admin)/connections/actions";
+import { deleteConnectionAction } from "@/app/(admin)/settings/connections/actions";
 import { Button } from "@/components/ui/button";
 
 export function DeleteConnectionButton({

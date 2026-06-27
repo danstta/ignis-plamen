@@ -47,6 +47,26 @@ export function publicAppUrl(): string | undefined {
 
 export const blobToken = () => process.env.BLOB_READ_WRITE_TOKEN;
 
+// --- Supabase Storage (asset library) ---------------------------------------
+/**
+ * Asset uploads (the design-mode Assets library) are stored in Supabase Storage,
+ * separate from render outputs (which stay on Vercel Blob). These accessors are
+ * non-throwing so importing the storage module never fails at load time — only
+ * the asset code path throws when a var is missing.
+ */
+export const supabaseUrl = () => process.env.SUPABASE_URL?.trim() || undefined;
+/** Service-role key — server-only, never exposed to the client. */
+export const supabaseServiceRoleKey = () =>
+  process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || undefined;
+/** Storage bucket holding uploaded assets. Defaults to "assets". */
+export const supabaseAssetsBucket = () =>
+  process.env.SUPABASE_ASSETS_BUCKET?.trim() || "assets";
+
+/** True when both Supabase Storage credentials are present. */
+export function hasSupabaseStorage(): boolean {
+  return Boolean(supabaseUrl() && supabaseServiceRoleKey());
+}
+
 // --- Background queue (Inngest) ---
 /**
  * Inngest event key used by the client to send events. Non-throwing (like

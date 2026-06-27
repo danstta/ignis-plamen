@@ -32,6 +32,7 @@ import { toComponentName } from "@/lib/codegen/serialize";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { AssetsPanel } from "./assets-panel";
 import { SaveStatusDot } from "@/components/ui/save-status-dot";
 import type { SaveStatus } from "@/lib/hooks/use-autosave";
 import {
@@ -243,6 +244,8 @@ export function EditorToolbar({
           </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <AssetsPanel />
 
       <Button
         variant="ghost"

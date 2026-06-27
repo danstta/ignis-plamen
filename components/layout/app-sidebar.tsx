@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Blocks,
   CircleUser,
+  Images,
   LayoutTemplate,
   Palette,
   PanelLeftClose,
@@ -38,6 +39,7 @@ function inferMode(pathname: string): Mode | null {
   if (
     pathname.startsWith("/templates") ||
     pathname.startsWith("/brand") ||
+    pathname.startsWith("/assets") ||
     pathname.startsWith("/editor")
   ) {
     return "design";
@@ -163,13 +165,20 @@ function MainSidebar({
                 <Plus /> New template
               </Button>
 
-              <div className="mt-2">
+              <div className="mt-2 flex flex-col gap-0.5">
                 <SidebarLink
                   href="/brand"
                   active={isActive("/brand")}
                   icon={<Palette className="size-4 shrink-0" />}
                 >
                   Brand
+                </SidebarLink>
+                <SidebarLink
+                  href="/assets"
+                  active={isActive("/assets")}
+                  icon={<Images className="size-4 shrink-0" />}
+                >
+                  Assets
                 </SidebarLink>
               </div>
 
@@ -300,12 +309,20 @@ function CollapsedRail({
           icon={<Plus className="size-4" />}
         />
         {mode === "design" ? (
-          <RailLink
-            href="/brand"
-            active={isActive("/brand")}
-            title="Brand"
-            icon={<Palette className="size-4" />}
-          />
+          <>
+            <RailLink
+              href="/brand"
+              active={isActive("/brand")}
+              title="Brand"
+              icon={<Palette className="size-4" />}
+            />
+            <RailLink
+              href="/assets"
+              active={isActive("/assets")}
+              title="Assets"
+              icon={<Images className="size-4" />}
+            />
+          </>
         ) : (
           <RailLink
             href="/plugins"

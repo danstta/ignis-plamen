@@ -93,9 +93,23 @@ export const renderJobs = pgTable("render_jobs", {
 export const assets = pgTable("assets", {
   id: uuid("id").defaultRandom().primaryKey(),
   kind: text("kind", { enum: ["upload", "source", "render"] }).notNull(),
+  /** Display/file name shown in the Assets library. */
+  name: text("name").notNull().default(""),
   url: text("url").notNull(),
+  /**
+   * Object path within the storage backend (e.g. "assets/<uuid>.svg"). Kept so the
+   * underlying file can be deleted when the asset row is removed.
+   */
+  storageKey: text("storage_key"),
+  /** MIME type, e.g. "image/svg+xml" or "image/png". */
+  contentType: text("content_type"),
+  /** File size in bytes. */
+  bytes: integer("bytes"),
   meta: jsonb("meta").$type<Record<string, unknown>>().notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
 });

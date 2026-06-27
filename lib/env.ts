@@ -47,6 +47,15 @@ export function publicAppUrl(): string | undefined {
 
 export const blobToken = () => process.env.BLOB_READ_WRITE_TOKEN;
 
+// --- Background queue (Inngest) ---
+/**
+ * Inngest event key used by the client to send events. Non-throwing (like
+ * `blobToken`) so importing the client at module load never fails — it's absent in
+ * local dev (the dev server needs no key). The serve endpoint's signing key
+ * (`INNGEST_SIGNING_KEY`) is read by the SDK directly, so it needs no accessor here.
+ */
+export const inngestEventKey = () => process.env.INNGEST_EVENT_KEY;
+
 // --- Workflow node APIs ---
 /** OpenAI API key — used by the Rank Images node (GPT vision). */
 export const openaiApiKey = () => required("OPENAI_API_KEY");

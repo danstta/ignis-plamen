@@ -8,6 +8,7 @@ import type { WorkflowGraph } from "@/lib/workflows/types";
 import { RunStatusBadge } from "@/components/workflow/run-status-badge";
 import { ManualReviewPicker } from "@/components/workflow/manual-review-picker";
 import { Button } from "@/components/ui/button";
+import { RunLive } from "./run-live";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,12 @@ export default async function RunDetailPage({
 
   return (
     <div className="mx-auto max-w-3xl">
+      {/* Polls + refreshes this server page while the run is live (execution is async). */}
+      <RunLive
+        runId={run.id}
+        status={run.status}
+        updatedAt={run.updatedAt.toISOString()}
+      />
       <Button
         variant="ghost"
         size="sm"

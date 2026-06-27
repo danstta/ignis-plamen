@@ -54,7 +54,7 @@
 
 - **Framework:** Next.js 16 (App Router, React 19)
 - **Database:** PostgreSQL via [Drizzle ORM](https://orm.drizzle.team/)
-- **Storage:** Vercel Blob (falls back to `./public/uploads` in development)
+- **Storage:** Vercel Blob for render/export outputs; Supabase Storage for the Assets library (both fall back to `./public/uploads` in development)
 - **Job Queue:** Inngest
 - **Rendering:** Satori
 - **UI:** Tailwind CSS 4, shadcn/ui, Lucide icons, Zustand
@@ -111,7 +111,11 @@ SESSION_SECRET=a-long-random-secret-string
 PUBLIC_APP_URL=https://your-domain.com
 
 # Storage (optional in dev — falls back to ./public/uploads)
+# Vercel Blob backs render/export outputs; Supabase Storage backs the Assets library.
 BLOB_READ_WRITE_TOKEN=
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+SUPABASE_ASSETS_BUCKET=assets
 
 # Inngest (required in production)
 INNGEST_EVENT_KEY=

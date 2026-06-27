@@ -36,6 +36,13 @@
       "when": 1782331369783,
       "tag": "0004_spicy_vindicator",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1782583733790,
+      "tag": "0005_add_asset_library_fields",
+      "breakpoints": true
     }
   ]
 }

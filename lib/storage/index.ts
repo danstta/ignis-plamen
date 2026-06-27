@@ -1,13 +1,16 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { put } from "@vercel/blob";
-import { blobToken } from "@/lib/env";
+import { blobToken, hasSupabaseStorage } from "@/lib/env";
+import { SupabaseStorage } from "./supabase";
 
 export type StorageData = Buffer | Uint8Array | ArrayBuffer;
 
 export interface StorageAdapter {
   /** Store bytes under `key`, returning a public URL. */
   put(key: string, data: StorageData, contentType: string): Promise<{ url: string }>;
+  /** Delete the object at `key`. Optional: not every backend supports removal. */
+  remove?(key: string): Promise<void>;
 }
 
 function toBuffer(data: StorageData): Buffer {
@@ -34,10 +37,18 @@ class VercelBlobStorage implements StorageAdapter {
 class LocalStorage implements StorageAdapter {
   async put(key: string, data: StorageData, contentType: string) {
     void contentType;
-    const filePath = path.join(process.cwd(), "public", "uploads", key);
+    const filePath = this.pathFor(key);
     await fs.mkdir(path.dirname(filePath), { recursive: true });
     await fs.writeFile(filePath, toBuffer(data));
     return { url: `/uploads/${key.split(path.sep).join("/")}` };
+  }
+
+  async remove(key: string) {
+    await fs.rm(this.pathFor(key), { force: true });
+  }
+
+  private pathFor(key: string) {
+    return path.join(process.cwd(), "public", "uploads", key);
   }
 }
 
@@ -57,4 +68,26 @@ export function storage(): StorageAdapter {
     _storage = new LocalStorage();
   }
   return _storage;
+}
+
+let _assetStorage: StorageAdapter | null = null;
+
+/**
+ * Storage backend for the Assets library: Supabase Storage when configured,
+ * otherwise the local filesystem (dev only). Kept separate from `storage()` so
+ * render outputs (Vercel Blob) and curated assets (Supabase) don't share a
+ * backend — each can be swapped independently.
+ */
+export function assetStorage(): StorageAdapter {
+  if (_assetStorage) return _assetStorage;
+  if (hasSupabaseStorage()) {
+    _assetStorage = new SupabaseStorage();
+  } else if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "Supabase Storage is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.",
+    );
+  } else {
+    _assetStorage = new LocalStorage();
+  }
+  return _assetStorage;
 }

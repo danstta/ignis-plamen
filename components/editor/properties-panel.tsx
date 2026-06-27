@@ -29,6 +29,7 @@ import {
   toSolid,
 } from "@/lib/editor/types";
 import { fillToStyle } from "@/lib/render/element-style";
+import { FONT_FAMILIES, FONTS } from "@/lib/render/font-registry";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -48,10 +49,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// M2 ships a single Satori-registered font so editor preview matches the PNG
-// exactly. The font registry (lib/render/fonts.ts) is where more get added later.
+// Fonts the renderer can actually embed, so editor preview matches the PNG.
+// Driven by the shared registry (lib/render/font-registry.ts) — add fonts there.
 // Brand fonts are merged in on top of this base (see TextProps).
-const BASE_FONTS = ["Inter"];
+const BASE_FONTS = FONT_FAMILIES;
 
 // Stable empty references so brand selectors don't return a fresh array each render.
 const NO_COLORS: BrandColor[] = [];
@@ -506,7 +507,7 @@ function TextProps({ element }: { element: TextElement }) {
   const brandFonts = useEditor((s) => activeBrand(s)?.fonts ?? NO_FONTS);
   const id = element.id;
 
-  // Inter (the only Satori-rendered face) + brand fonts + whatever this element
+  // Registry fonts (Satori-rendered) + brand fonts + whatever this element
   // already uses, de-duplicated.
   const fontOptions = useMemo(
     () => [
@@ -518,7 +519,7 @@ function TextProps({ element }: { element: TextElement }) {
     ],
     [brandFonts, element.fontFamily],
   );
-  const customFont = element.fontFamily !== "Inter";
+  const customFont = !FONTS[element.fontFamily];
 
   return (
     <>

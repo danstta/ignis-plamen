@@ -1,16 +1,26 @@
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import type { PlaceholderData, TemplateDoc } from "@/lib/editor/types";
+import {
+  FALLBACK_FAMILY,
+  FONTS,
+  normalizeWeight,
+  type FontDef,
+  type FontWeight,
+} from "./font-registry";
 
 /**
  * Satori needs fonts supplied as raw bytes (and only reads ttf/otf/woff — not
- * woff2). We pull Inter WOFF subsets from jsDelivr (Fontsource) and cache them in
- * memory. Both the `latin` and `latin-ext` subsets are loaded so Latin-Extended
- * glyphs (e.g. Balkan č/ć/š/ž/đ) render via Satori's glyph fallback.
+ * woff2). This module turns the font registry (./font-registry) into those bytes
+ * for whatever a document uses, caching results in memory.
  *
- * Trade-off: an outbound request on a cold cache. To go fully offline, bundle the
- * same .woff files and read them from disk here instead.
+ * Fontsource families are pulled as WOFF subsets from jsDelivr (one outbound
+ * request per face on a cold cache). Local families are read from public/fonts/.
+ * To go fully offline, convert the Fontsource entries to local ones and bundle
+ * the .woff files.
  */
 
-export type FontWeight = 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900;
+export type { FontWeight } from "./font-registry";
 
 export type SatoriFont = {
   name: string;
@@ -19,21 +29,9 @@ export type SatoriFont = {
   style: "normal" | "italic";
 };
 
-const FAMILY = "Inter";
-const FONTSOURCE = "https://cdn.jsdelivr.net/npm/@fontsource/inter@4.5.15/files";
-const SUBSETS = ["latin", "latin-ext"] as const;
-const WEIGHTS: FontWeight[] = [100, 200, 300, 400, 500, 600, 700, 800, 900];
-
 const cache = new Map<string, ArrayBuffer | null>();
 
-function normalizeWeight(w: number): FontWeight {
-  return WEIGHTS.reduce((best, cur) =>
-    Math.abs(cur - w) < Math.abs(best - w) ? cur : best,
-  );
-}
-
-async function fetchWoff(subset: string, weight: FontWeight): Promise<ArrayBuffer | null> {
-  const url = `${FONTSOURCE}/inter-${subset}-${weight}-normal.woff`;
+async function fetchBytes(url: string): Promise<ArrayBuffer | null> {
   if (cache.has(url)) return cache.get(url) ?? null;
   try {
     const res = await fetch(url);
@@ -50,38 +48,80 @@ async function fetchWoff(subset: string, weight: FontWeight): Promise<ArrayBuffe
   }
 }
 
-/** Load the (latin + latin-ext) Inter faces for every weight a document uses. */
+async function readLocal(file: string): Promise<ArrayBuffer | null> {
+  const key = `local:${file}`;
+  if (cache.has(key)) return cache.get(key) ?? null;
+  try {
+    const buf = await fs.readFile(path.join(process.cwd(), "public", "fonts", file));
+    const data = buf.buffer.slice(
+      buf.byteOffset,
+      buf.byteOffset + buf.byteLength,
+    ) as ArrayBuffer;
+    cache.set(key, data);
+    return data;
+  } catch {
+    cache.set(key, null);
+    return null;
+  }
+}
+
+/** Load every face (one per weight, plus subsets for Fontsource) for a font. */
+async function loadFaces(
+  def: FontDef,
+  weights: Set<FontWeight>,
+): Promise<SatoriFont[]> {
+  const jobs: Promise<SatoriFont | null>[] = [];
+  const toFont = (data: ArrayBuffer | null, weight: FontWeight) =>
+    data ? { name: def.family, data, weight, style: "normal" as const } : null;
+
+  for (const weight of weights) {
+    if (def.kind === "fontsource") {
+      for (const subset of def.subsets) {
+        const url = `https://cdn.jsdelivr.net/npm/${def.pkg}/files/${def.slug}-${subset}-${weight}-normal.woff`;
+        jobs.push(fetchBytes(url).then((d) => toFont(d, weight)));
+      }
+    } else {
+      jobs.push(readLocal(def.file(weight)).then((d) => toFont(d, weight)));
+    }
+  }
+
+  return (await Promise.all(jobs)).filter((f): f is SatoriFont => f !== null);
+}
+
+/** Load the faces every text element in a document needs. */
 export async function loadFontsForDoc(
   doc: TemplateDoc,
   _data?: PlaceholderData,
 ): Promise<SatoriFont[]> {
-  const weights = new Set<FontWeight>();
+  // Group text elements by family, collecting the weights each one uses.
+  // Unknown families (e.g. unwired brand fonts) map to Inter, preserving the
+  // "previews custom, renders as Inter" behavior.
+  const wanted = new Map<string, Set<FontWeight>>();
+  const request = (family: string, rawWeight: number) => {
+    const def = FONTS[family] ?? FONTS[FALLBACK_FAMILY];
+    const set = wanted.get(def.family) ?? new Set<FontWeight>();
+    set.add(normalizeWeight(def, rawWeight));
+    wanted.set(def.family, set);
+  };
+
   for (const el of doc.elements) {
-    if (el.type === "text") weights.add(normalizeWeight(el.fontWeight ?? 400));
-  }
-  if (weights.size === 0) weights.add(400);
-
-  const jobs: Promise<SatoriFont | null>[] = [];
-  for (const weight of weights) {
-    for (const subset of SUBSETS) {
-      jobs.push(
-        fetchWoff(subset, weight).then((data) =>
-          data ? { name: FAMILY, data, weight, style: "normal" as const } : null,
-        ),
-      );
-    }
+    if (el.type === "text") request(el.fontFamily, el.fontWeight ?? 400);
   }
 
-  const fonts = (await Promise.all(jobs)).filter(
-    (f): f is SatoriFont => f !== null,
+  // Always keep Inter loaded as the ultimate layout/glyph fallback.
+  if (!wanted.has(FALLBACK_FAMILY)) request(FALLBACK_FAMILY, 400);
+
+  const batches = await Promise.all(
+    [...wanted].map(([family, weights]) => loadFaces(FONTS[family], weights)),
   );
+  const fonts = batches.flat();
 
-  // Guarantee at least one font so Satori can compute layout.
+  // Guarantee at least one font so Satori can compute layout, even if every
+  // lookup above failed (e.g. offline with only local fonts missing).
   if (fonts.length === 0) {
-    const fallback = await fetchWoff("latin", 400);
-    if (fallback) {
-      fonts.push({ name: FAMILY, data: fallback, weight: 400, style: "normal" });
-    }
+    fonts.push(
+      ...(await loadFaces(FONTS[FALLBACK_FAMILY], new Set<FontWeight>([400]))),
+    );
   }
   return fonts;
 }

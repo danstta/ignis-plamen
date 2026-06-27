@@ -21,7 +21,7 @@ export const runStart = inngest.createFunction(
   {
     id: "workflow-run-start",
     retries: 4,
-    concurrency: { limit: 10 },
+    concurrency: { limit: 5 },
     triggers: [{ event: runStartEvent }],
   },
   async ({ event, step }) => {
@@ -42,7 +42,7 @@ export const runResume = inngest.createFunction(
   {
     id: "workflow-run-resume",
     retries: 4,
-    concurrency: { limit: 10 },
+    concurrency: { limit: 5 },
     triggers: [{ event: runResumeEvent }],
   },
   async ({ event, step }) => {

@@ -43,9 +43,18 @@ class LocalStorage implements StorageAdapter {
 
 let _storage: StorageAdapter | null = null;
 
-/** Vercel Blob when a token is present, otherwise local filesystem. */
+/** Vercel Blob when a token is present, otherwise local filesystem (dev only). */
 export function storage(): StorageAdapter {
   if (_storage) return _storage;
-  _storage = blobToken() ? new VercelBlobStorage() : new LocalStorage();
+  const token = blobToken();
+  if (token) {
+    _storage = new VercelBlobStorage();
+  } else if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "BLOB_READ_WRITE_TOKEN is not set. Add it to your Vercel environment variables."
+    );
+  } else {
+    _storage = new LocalStorage();
+  }
   return _storage;
 }

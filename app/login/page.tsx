@@ -28,8 +28,10 @@ export default function LoginPage({
     <main className="flex min-h-svh items-center justify-center p-6">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>Design Automations</CardTitle>
-          <CardDescription>Enter the admin password to continue.</CardDescription>
+          <CardTitle>Ignis</CardTitle>
+          <CardDescription>
+            Enter the admin password to continue.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form action={action} className="flex flex-col gap-4">

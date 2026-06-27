@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Design Automations",
+  title: "Ignis",
   description: "Automate Instagram template generation from your data sources.",
 };
 

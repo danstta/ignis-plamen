@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getWorkflow } from "@/lib/workflows/service";
 import { recordWebhookEvent } from "@/lib/workflows/webhook-events";
-import { startRun } from "@/lib/workflows/engine";
+import { inngest, runStartEvent } from "@/lib/inngest/client";
 import type { WorkflowGraph } from "@/lib/workflows/types";
 import { isUuid } from "@/lib/utils";
 
@@ -88,17 +88,26 @@ export async function POST(
   }
 
   if (workflow.active) {
-    try {
-      const runId = await startRun(workflowId, payload, nodeId);
-      console.log(`[hook ${workflowId}/${nodeId}] started run ${runId}`);
-      return NextResponse.json({ ok: true, run: runId });
-    } catch (err) {
-      console.error(`[hook ${workflowId}/${nodeId}] run error:`, err);
-      return NextResponse.json(
-        { error: err instanceof Error ? err.message : String(err) },
-        { status: 500 },
-      );
-    }
+    // Enqueue a durable background run and ack fast, instead of running the whole
+    // (10s+) automation inline while the sender's request hangs. Dedupe by a stable
+    // delivery header when one exists, so a sender's timeout-retry of the same
+    // delivery starts exactly one run. We deliberately don't fall back to a random
+    // id (that would never dedupe) nor a function-level idempotency expression
+    // (that would collapse all header-less events into a single run).
+    const deliveryId =
+      headers["x-idempotency-key"] ??
+      headers["x-github-delivery"] ??
+      headers["x-request-id"];
+    // Let a send failure propagate to a 500 so the sender retries — the sample was
+    // already captured above, so there is no data loss.
+    await inngest.send(
+      runStartEvent.create(
+        { workflowId, triggerNodeId: nodeId, payload },
+        deliveryId ? { id: `${workflowId}:${nodeId}:${deliveryId}` } : undefined,
+      ),
+    );
+    console.log(`[hook ${workflowId}/${nodeId}] queued run.start`);
+    return NextResponse.json({ ok: true, queued: true }, { status: 202 });
   }
 
   // Inactive workflow: payload captured for sampling, but no run started.

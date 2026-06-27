@@ -20,7 +20,8 @@ export async function proxy(req: NextRequest) {
 
 export const config = {
   // Match everything except: auth API, public webhook ingest (api/hooks), the
-  // login page, Next internals, and any path with a file extension (static
-  // assets, /uploads/*.png, etc.).
-  matcher: ["/((?!api/auth|api/hooks|login|_next|.*\\..*).*)"],
+  // Inngest serve endpoint (api/inngest — Cloud/the dev server POST/PUT here with
+  // no session cookie and verify their own signing key), the login page, Next
+  // internals, and any path with a file extension (static assets, /uploads/*.png).
+  matcher: ["/((?!api/auth|api/hooks|api/inngest|login|_next|.*\\..*).*)"],
 };

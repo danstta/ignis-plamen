@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useTransition } from "react";
 import { toast } from "sonner";
 import { Pencil, Trash2 } from "lucide-react";
 import { deleteTemplateAction } from "@/app/(admin)/templates/actions";
 import { Button } from "@/components/ui/button";
+import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 import {
   Card,
   CardFooter,
@@ -25,8 +25,6 @@ export function TemplateCard({
   size: string;
   updated: string;
 }) {
-  const [pending, start] = useTransition();
-
   return (
     <Card>
       <CardHeader>
@@ -43,20 +41,23 @@ export function TemplateCard({
         >
           <Pencil className="size-4" /> Edit
         </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={pending}
-          onClick={() => {
-            if (!window.confirm(`Delete "${name}"?`)) return;
-            start(async () => {
+        <ConfirmDeleteDialog
+          itemLabel="template"
+          itemName={name}
+          onConfirm={async () => {
+            try {
               await deleteTemplateAction(id);
               toast.success("Template deleted");
-            });
+            } catch (err) {
+              toast.error("Delete failed", { description: String(err) });
+              throw err;
+            }
           }}
         >
-          <Trash2 className="size-4" />
-        </Button>
+          <Button size="sm" variant="ghost">
+            <Trash2 className="size-4" />
+          </Button>
+        </ConfirmDeleteDialog>
       </CardFooter>
     </Card>
   );

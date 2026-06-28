@@ -1,13 +1,8 @@
 import Link from "next/link";
-import { Workflow as WorkflowIcon, Plus, CircleDot } from "lucide-react";
+import { Workflow as WorkflowIcon, Plus } from "lucide-react";
 import { listWorkflows } from "@/lib/workflows/service";
+import { WorkflowCard } from "@/components/workflow/workflow-card";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 
 export const dynamic = "force-dynamic";
 
@@ -52,28 +47,13 @@ export default async function WorkflowsPage() {
       ) : (
         <div className="mt-6 grid gap-4 sm:grid-cols-2">
           {rows.map((w) => (
-            <Link key={w.id} href={`/workflows/${w.id}`}>
-              <Card className="h-full transition-colors hover:border-foreground/20">
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    <span className="truncate">{w.name}</span>
-                    <span
-                      className={
-                        w.active
-                          ? "flex items-center gap-1 text-xs font-normal text-green-600"
-                          : "flex items-center gap-1 text-xs font-normal text-muted-foreground"
-                      }
-                    >
-                      <CircleDot className="size-3.5" />
-                      {w.active ? "Active" : "Inactive"}
-                    </span>
-                  </CardTitle>
-                  <CardDescription>
-                    Updated {new Date(w.updatedAt).toLocaleString()}
-                  </CardDescription>
-                </CardHeader>
-              </Card>
-            </Link>
+            <WorkflowCard
+              key={w.id}
+              id={w.id}
+              name={w.name}
+              active={w.active}
+              updated={new Date(w.updatedAt).toLocaleString()}
+            />
           ))}
         </div>
       )}

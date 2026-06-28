@@ -24,7 +24,12 @@ export const renderTemplateMeta: NodeMeta<RenderTemplateConfig> = {
   // engine also orders this node after any node it references (referencedNodeIds),
   // so the wire is about ordering/clarity rather than carrying the bound data.
   inputs: [{ id: "in", label: "In", kind: "data" }],
-  outputs: [{ id: "renderUrl", label: "Render URL", kind: "image" }],
+  outputs: [
+    // First page, kept for single-image consumers and backward compatibility.
+    { id: "renderUrl", label: "Render URL", kind: "image" },
+    // Every rendered page, in order (one entry per design page).
+    { id: "renderUrls", label: "Render URLs (all pages)", kind: "data" },
+  ],
   // The template select is generic; the per-placeholder binding rows are
   // rendered specially by the config panel (they depend on the chosen template).
   configFields: [

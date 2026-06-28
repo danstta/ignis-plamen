@@ -1,4 +1,5 @@
 import type {
+  Page,
   PlaceholderData,
   TemplateDoc,
   TemplateElement,
@@ -43,17 +44,24 @@ function elementHtml(el: TemplateElement, data?: PlaceholderData): string {
   return `<div style="${style}"></div>`;
 }
 
-export function generateHtml(doc: TemplateDoc, data?: PlaceholderData): string {
+/** One page rendered as a self-contained canvas `<div>` (the design's size). */
+function pageHtml(doc: TemplateDoc, page: Page, data?: PlaceholderData): string {
   const canvasStyle = styleToInlineCss({
     position: "relative",
     width: doc.width,
     height: doc.height,
-    ...fillToStyle(doc.background),
+    ...fillToStyle(page.background),
     overflow: "hidden",
   });
-  const body = doc.elements
-    .map((el) => `      ${elementHtml(el, data)}`)
+  const body = page.elements
+    .map((el) => `        ${elementHtml(el, data)}`)
     .join("\n");
+  return `    <div style="${canvasStyle}">\n${body}\n    </div>`;
+}
+
+export function generateHtml(doc: TemplateDoc, data?: PlaceholderData): string {
+  // Each page is a sibling canvas; multiple pages stack vertically with a gap.
+  const pages = doc.pages.map((p) => pageHtml(doc, p, data)).join("\n");
 
   return `<!doctype html>
 <html>
@@ -62,12 +70,11 @@ export function generateHtml(doc: TemplateDoc, data?: PlaceholderData): string {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
       * { margin: 0; box-sizing: border-box; }
+      body { display: flex; flex-direction: column; gap: 24px; align-items: flex-start; }
     </style>
   </head>
   <body>
-    <div style="${canvasStyle}">
-${body}
-    </div>
+${pages}
   </body>
 </html>
 `;

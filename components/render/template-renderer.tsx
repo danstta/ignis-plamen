@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import type {
+  CanvasView,
   PlaceholderData,
-  TemplateDoc,
   TemplateElement,
 } from "@/lib/editor/types";
 import {
@@ -84,15 +84,15 @@ function ImagePlaceholderBox({ label }: { label?: string }) {
 }
 
 /**
- * Renders a whole template document at its native pixel size. The caller scales
+ * Renders a single canvas (one page) at its native pixel size. The caller scales
  * it (editor zoom) or rasterizes it (Satori). Elements paint in array order.
  */
 export function TemplateRenderer({
-  doc,
+  canvas,
   data,
   interactive = false,
 }: {
-  doc: TemplateDoc;
+  canvas: CanvasView;
   data?: PlaceholderData;
   interactive?: boolean;
 }) {
@@ -100,14 +100,14 @@ export function TemplateRenderer({
     <div
       style={{
         position: "relative",
-        width: doc.width,
-        height: doc.height,
-        ...fillToStyle(doc.background),
+        width: canvas.width,
+        height: canvas.height,
+        ...fillToStyle(canvas.background),
         overflow: "hidden",
         display: "flex",
       }}
     >
-      {doc.elements.map((el) => (
+      {canvas.elements.map((el) => (
         <ElementView
           key={el.id}
           el={el}

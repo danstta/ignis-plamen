@@ -14,7 +14,7 @@ import {
   Plus,
   X,
 } from "lucide-react";
-import { activeBrand, useEditor } from "@/lib/editor/store";
+import { activeBrand, currentPage, useEditor } from "@/lib/editor/store";
 import type { BrandColor, BrandFont } from "@/lib/brand/types";
 import {
   type Fill,
@@ -320,7 +320,7 @@ export function PropertiesPanel() {
   const selectedIds = useEditor((s) => s.selectedIds);
   const element = useEditor((s) =>
     s.selectedIds.length === 1
-      ? s.doc.elements.find((e) => e.id === s.selectedIds[0])
+      ? currentPage(s).elements.find((e) => e.id === s.selectedIds[0])
       : undefined,
   );
 
@@ -331,6 +331,7 @@ export function PropertiesPanel() {
 
 function CanvasPanel() {
   const doc = useEditor((s) => s.doc);
+  const background = useEditor((s) => currentPage(s).background);
   const setBackground = useEditor((s) => s.setBackground);
   const setCanvasSize = useEditor((s) => s.setCanvasSize);
   const brands = useEditor((s) => s.brands);
@@ -362,8 +363,8 @@ function CanvasPanel() {
           </Select>
         </Field>
       ) : null}
-      <Field label="Background">
-        <FillInput value={doc.background} onChange={setBackground} />
+      <Field label="Page background">
+        <FillInput value={background} onChange={setBackground} />
       </Field>
       <div className="grid grid-cols-2 gap-2">
         <Field label="Width">
@@ -380,7 +381,7 @@ function CanvasPanel() {
         </Field>
       </div>
       <p className="text-xs text-muted-foreground">
-        Select an element to edit its properties.
+        Size applies to every page. Select an element to edit its properties.
       </p>
     </Panel>
   );

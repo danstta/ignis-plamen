@@ -1,4 +1,4 @@
-import type { TemplateDoc, TemplateElement } from "@/lib/editor/types";
+import type { Page, TemplateDoc, TemplateElement } from "@/lib/editor/types";
 import {
   baseStyle,
   fillToStyle,
@@ -43,22 +43,36 @@ function elementJsx(el: TemplateElement): string {
   return `<div style={${style}} />`;
 }
 
+/** One page rendered as a self-contained canvas `<div>` (the design's size). */
+function pageJsx(doc: TemplateDoc, page: Page, indent: string): string {
+  const canvasStyle = styleToObjectLiteral({
+    position: "relative",
+    width: doc.width,
+    height: doc.height,
+    ...fillToStyle(page.background),
+    overflow: "hidden",
+    display: "flex",
+  });
+  const children = page.elements
+    .map((el) => `${indent}  ${elementJsx(el)}`)
+    .join("\n");
+  return `<div style={${canvasStyle}}>\n${children}\n${indent}</div>`;
+}
+
 export function generateReactComponent(
   doc: TemplateDoc,
   name: string,
 ): string {
   const componentName = toComponentName(name);
-  const canvasStyle = styleToObjectLiteral({
-    position: "relative",
-    width: doc.width,
-    height: doc.height,
-    ...fillToStyle(doc.background),
-    overflow: "hidden",
-    display: "flex",
-  });
-  const children = doc.elements
-    .map((el) => `      ${elementJsx(el)}`)
-    .join("\n");
+
+  // A single-page design exports as one canvas div (unchanged). Multi-page designs
+  // wrap their page canvases in a vertical stack so every page is emitted.
+  const body =
+    doc.pages.length === 1
+      ? pageJsx(doc, doc.pages[0], "    ")
+      : `<div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+${doc.pages.map((p) => `      ${pageJsx(doc, p, "      ")}`).join("\n")}
+    </div>`;
 
   return `import React from "react";
 
@@ -66,9 +80,7 @@ export type TemplateData = Record<string, string>;
 
 export function ${componentName}({ data = {} }: { data?: TemplateData }) {
   return (
-    <div style={${canvasStyle}}>
-${children}
-    </div>
+    ${body}
   );
 }
 

@@ -8,7 +8,7 @@ import { TemplatePreview } from "@/components/render/template-preview";
 import { Button } from "@/components/ui/button";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import type { TemplateDoc } from "@/lib/editor/types";
+import { pageView, type TemplateDoc } from "@/lib/editor/types";
 
 export function TemplateCard({
   id,
@@ -23,6 +23,7 @@ export function TemplateCard({
   updated: string;
   doc: TemplateDoc;
 }) {
+  const pageCount = doc.pages.length;
   return (
     <Card>
       <div className="relative -mt-(--card-spacing)">
@@ -31,8 +32,18 @@ export function TemplateCard({
           className="block aspect-[4/5] w-full overflow-hidden border-b bg-muted outline-none -outline-offset-2 focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={`Open ${name} in editor`}
         >
-          <TemplatePreview doc={doc} className="h-full w-full" />
+          {/* The first page stands in for the whole design. */}
+          <TemplatePreview
+            canvas={pageView(doc, doc.pages[0])}
+            className="h-full w-full"
+          />
         </Link>
+
+        {pageCount > 1 ? (
+          <span className="pointer-events-none absolute left-2 top-2 rounded-full bg-background/85 px-2 py-0.5 text-xs font-medium tabular-nums shadow-sm backdrop-blur">
+            {pageCount} pages
+          </span>
+        ) : null}
 
         {/* Edit / delete reveal on hover (or keyboard focus); icon-only to keep
             the card minimal. Siblings of the link so they never trigger it. */}

@@ -3,11 +3,12 @@
 import { useCallback, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
-import { useEditor } from "@/lib/editor/store";
+import { currentPage, useEditor } from "@/lib/editor/store";
 import { useAutosave } from "@/lib/hooks/use-autosave";
 import type { TemplateDoc } from "@/lib/editor/types";
 import type { Brand } from "@/lib/brand/types";
 import { EditorToolbar } from "./editor-toolbar";
+import { PageStrip } from "./page-strip";
 import { PropertiesPanel } from "./properties-panel";
 
 // The canvas pulls in Moveable/Selecto/InfiniteViewer — load it client-only.
@@ -128,9 +129,10 @@ export function Editor({
         const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
         const dy = e.key === "ArrowUp" ? -step : e.key === "ArrowDown" ? step : 0;
         st.pushHistory();
+        const els = currentPage(st).elements;
         st.updateGeometry(
           st.selectedIds.map((id) => {
-            const el = st.doc.elements.find((x) => x.id === id)!;
+            const el = els.find((x) => x.id === id)!;
             return { id, x: el.x + dx, y: el.y + dy };
           }),
         );
@@ -144,8 +146,11 @@ export function Editor({
     <div className="flex h-svh flex-col">
       <EditorToolbar onSave={saveNow} status={status} />
       <div className="flex min-h-0 flex-1">
-        <div className="relative min-w-0 flex-1">
-          <EditorCanvas />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="relative min-h-0 flex-1">
+            <EditorCanvas />
+          </div>
+          <PageStrip />
         </div>
         <aside className="w-72 shrink-0 overflow-auto border-l bg-background">
           <PropertiesPanel />

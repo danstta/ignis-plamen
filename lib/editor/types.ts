@@ -128,13 +128,56 @@ export type ElementPatch = Partial<TextElement> &
   Partial<ImageElement> &
   Partial<ShapeElement>;
 
+/**
+ * A single page within a design. Holds its own background and elements; the page
+ * dimensions are shared by the whole document (see {@link TemplateDoc}), matching
+ * Canva — every page of a design is the same size.
+ */
+export interface Page {
+  id: string;
+  /** Page background: solid CSS color or gradient. */
+  background: Fill;
+  elements: TemplateElement[];
+}
+
+/**
+ * One renderable canvas: a page projected to the paint-ready fields the renderer,
+ * codegen, and font loader operate on. This is the unit a single PNG is produced
+ * from. Build one with {@link pageView}.
+ */
+export interface CanvasView {
+  width: number;
+  height: number;
+  background: Fill;
+  elements: TemplateElement[];
+}
+
+/**
+ * A multi-page design document (the current model). Pages share `width`/`height`;
+ * each page carries its own background + elements. Legacy single-canvas documents
+ * are `version: 1` (see {@link TemplateDocV1}) and upgraded by {@link migrateDoc}.
+ */
 export interface TemplateDoc {
+  version: 2;
+  /** Shared page size — every page renders at these dimensions. */
+  width: number;
+  height: number;
+  /** Active brand identity (brands row id); drives color-picker swatches + fonts. */
+  brandId?: string;
+  /** Ordered pages; always at least one. */
+  pages: Page[];
+}
+
+/**
+ * The original single-canvas document. Still present in the database for designs
+ * authored before multi-page support; never written anew. {@link migrateDoc}
+ * wraps one of these into a one-page {@link TemplateDoc} on read.
+ */
+export interface TemplateDocV1 {
   version: 1;
   width: number;
   height: number;
-  /** Canvas background: solid CSS color or gradient. */
   background: Fill;
-  /** Active brand identity (brands row id); drives color-picker swatches + fonts. */
   brandId?: string;
   elements: TemplateElement[];
 }
@@ -151,8 +194,42 @@ export type CanvasPreset = keyof typeof CANVAS_PRESETS;
 /** Resolved values that fill placeholders at render time: key -> text or image URL. */
 export type PlaceholderData = Record<string, string>;
 
+/** A fresh empty page with the given background. */
+export function createPage(background: Fill = "#ffffff"): Page {
+  return { id: crypto.randomUUID(), background, elements: [] };
+}
+
 export function emptyDoc(width = 1080, height = 1080): TemplateDoc {
-  return { version: 1, width, height, background: "#ffffff", elements: [] };
+  return { version: 2, width, height, pages: [createPage()] };
+}
+
+/** Project a document page to the renderable canvas (page background + shared size). */
+export function pageView(doc: TemplateDoc, page: Page): CanvasView {
+  return {
+    width: doc.width,
+    height: doc.height,
+    background: page.background,
+    elements: page.elements,
+  };
+}
+
+/**
+ * Normalize any stored document to the current ({@link TemplateDoc}) shape. v2
+ * docs pass through; a legacy v1 doc is wrapped into a single page. This is the
+ * single migration chokepoint — call it at every read boundary so the rest of the
+ * code only ever sees v2, and old single-page designs keep working untouched.
+ */
+export function migrateDoc(raw: TemplateDoc | TemplateDocV1): TemplateDoc {
+  if (raw.version === 2) return raw;
+  return {
+    version: 2,
+    width: raw.width,
+    height: raw.height,
+    ...(raw.brandId ? { brandId: raw.brandId } : {}),
+    pages: [
+      { id: crypto.randomUUID(), background: raw.background, elements: raw.elements },
+    ],
+  };
 }
 
 /** Collect the placeholder keys declared by a template, with their kind. */
@@ -160,10 +237,12 @@ export function collectPlaceholders(
   doc: TemplateDoc,
 ): { key: string; kind: "text" | "image" }[] {
   const seen = new Map<string, "text" | "image">();
-  for (const el of doc.elements) {
-    if ((el.type === "text" || el.type === "image") && el.placeholderKey) {
-      if (!seen.has(el.placeholderKey)) {
-        seen.set(el.placeholderKey, el.type);
+  for (const page of doc.pages) {
+    for (const el of page.elements) {
+      if ((el.type === "text" || el.type === "image") && el.placeholderKey) {
+        if (!seen.has(el.placeholderKey)) {
+          seen.set(el.placeholderKey, el.type);
+        }
       }
     }
   }

@@ -1,25 +1,25 @@
 "use client";
 
 import { useLayoutEffect, useRef, useState } from "react";
-import type { PlaceholderData, TemplateDoc } from "@/lib/editor/types";
+import type { CanvasView, PlaceholderData } from "@/lib/editor/types";
 import { TemplateRenderer } from "@/components/render/template-renderer";
 import { cn } from "@/lib/utils";
 
 /**
- * Renders a non-interactive, contained preview of a template document.
+ * Renders a non-interactive, contained preview of a single canvas (one page).
  *
- * The shared <TemplateRenderer> always paints at the document's native pixel
- * size; this wrapper measures its own (parent-sized) box and applies a single
- * CSS `scale()` so the artboard fits inside without cropping — like
+ * The shared <TemplateRenderer> always paints at the canvas's native pixel size;
+ * this wrapper measures its own (parent-sized) box and applies a single CSS
+ * `scale()` so the artboard fits inside without cropping — like
  * `object-fit: contain`. No rasterization or network round-trip: it's the same
  * DOM the editor draws. The parent is responsible for sizing the box.
  */
 export function TemplatePreview({
-  doc,
+  canvas,
   data,
   className,
 }: {
-  doc: TemplateDoc;
+  canvas: CanvasView;
   data?: PlaceholderData;
   className?: string;
 }) {
@@ -31,8 +31,8 @@ export function TemplatePreview({
     if (!el) return;
     const update = () => {
       const fit = Math.min(
-        el.clientWidth / doc.width,
-        el.clientHeight / doc.height,
+        el.clientWidth / canvas.width,
+        el.clientHeight / canvas.height,
       );
       setScale(Number.isFinite(fit) ? fit : 0);
     };
@@ -40,7 +40,7 @@ export function TemplatePreview({
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [doc.width, doc.height]);
+  }, [canvas.width, canvas.height]);
 
   return (
     <div
@@ -57,7 +57,7 @@ export function TemplatePreview({
             transform: `translate(-50%, -50%) scale(${scale})`,
           }}
         >
-          <TemplateRenderer doc={doc} data={data} />
+          <TemplateRenderer canvas={canvas} data={data} />
         </div>
       )}
     </div>

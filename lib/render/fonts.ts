@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import type { PlaceholderData, TemplateDoc } from "@/lib/editor/types";
+import type { CanvasView, PlaceholderData } from "@/lib/editor/types";
 import {
   FALLBACK_FAMILY,
   FONTS,
@@ -88,9 +88,9 @@ async function loadFaces(
   return (await Promise.all(jobs)).filter((f): f is SatoriFont => f !== null);
 }
 
-/** Load the faces every text element in a document needs. */
-export async function loadFontsForDoc(
-  doc: TemplateDoc,
+/** Load the faces every text element on a canvas (one page) needs. */
+export async function loadFontsForCanvas(
+  canvas: CanvasView,
   _data?: PlaceholderData,
 ): Promise<SatoriFont[]> {
   // Group text elements by family, collecting the weights each one uses.
@@ -104,7 +104,7 @@ export async function loadFontsForDoc(
     wanted.set(def.family, set);
   };
 
-  for (const el of doc.elements) {
+  for (const el of canvas.elements) {
     if (el.type === "text") request(el.fontFamily, el.fontWeight ?? 400);
   }
 

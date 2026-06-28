@@ -20,12 +20,19 @@ const STATE_LABEL: Record<string, string> = {
   waiting: "Waiting",
 };
 
-function findRenderUrl(outputs: Record<string, Record<string, unknown>>): string | null {
+function findRenderUrls(outputs: Record<string, Record<string, unknown>>): string[] {
+  const urls: string[] = [];
   for (const out of Object.values(outputs)) {
-    const url = out?.renderUrl;
-    if (typeof url === "string" && url) return url;
+    // Prefer the full per-page list; fall back to the single-page `renderUrl`.
+    const many = out?.renderUrls;
+    if (Array.isArray(many)) {
+      for (const u of many) if (typeof u === "string" && u) urls.push(u);
+      continue;
+    }
+    const one = out?.renderUrl;
+    if (typeof one === "string" && one) urls.push(one);
   }
-  return null;
+  return urls;
 }
 
 export default async function RunDetailPage({
@@ -40,7 +47,7 @@ export default async function RunDetailPage({
   if (!workflow) notFound();
 
   const graph = workflow.graph as WorkflowGraph;
-  const renderUrl = findRenderUrl(run.nodeOutputs);
+  const renderUrls = findRenderUrls(run.nodeOutputs);
 
   const waitingCandidates =
     run.status === "waiting" && run.waitingNodeId
@@ -93,15 +100,22 @@ export default async function RunDetailPage({
         </section>
       ) : null}
 
-      {renderUrl ? (
+      {renderUrls.length > 0 ? (
         <section className="mt-6">
-          <h2 className="text-sm font-semibold">Rendered output</h2>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={renderUrl}
-            alt="Rendered output"
-            className="mt-2 max-w-sm rounded-lg border"
-          />
+          <h2 className="text-sm font-semibold">
+            Rendered output{renderUrls.length > 1 ? ` (${renderUrls.length} pages)` : ""}
+          </h2>
+          <div className="mt-2 flex flex-wrap gap-3">
+            {renderUrls.map((url, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={url}
+                src={url}
+                alt={`Rendered page ${i + 1}`}
+                className="max-w-sm rounded-lg border"
+              />
+            ))}
+          </div>
         </section>
       ) : null}
 

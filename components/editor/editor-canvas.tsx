@@ -12,7 +12,7 @@ import Moveable, {
 } from "react-moveable";
 import Selecto from "react-selecto";
 import { Minus, Plus, Maximize } from "lucide-react";
-import { useEditor, type GeometryPatch } from "@/lib/editor/store";
+import { currentPage, useEditor, type GeometryPatch } from "@/lib/editor/store";
 import { ElementView } from "@/components/render/template-renderer";
 import { fillToStyle } from "@/lib/render/element-style";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,7 @@ function applyRotate(e: OnRotate) {
 
 export function EditorCanvas() {
   const doc = useEditor((s) => s.doc);
+  const page = useEditor(currentPage);
   const selectedIds = useEditor((s) => s.selectedIds);
   const zoom = useEditor((s) => s.zoom);
   const select = useEditor((s) => s.select);
@@ -79,7 +80,7 @@ export function EditorCanvas() {
       setTargets(nodes);
     });
     return () => cancelAnimationFrame(raf);
-  }, [selectedIds, doc.elements, viewport]);
+  }, [selectedIds, page.elements, viewport]);
 
   // Resolve snap guideline DOM nodes after the viewport/elements commit.
   useEffect(() => {
@@ -89,19 +90,19 @@ export function EditorCanvas() {
         return;
       }
       setElementGuidelines(
-        doc.elements
+        page.elements
           .map((el) => viewport.querySelector(`[data-el-id="${el.id}"]`))
           .filter((n): n is Element => !!n),
       );
     });
     return () => cancelAnimationFrame(raf);
-  }, [doc.elements, viewport]);
+  }, [page.elements, viewport]);
 
-  // Keep Moveable's control box aligned after layout/zoom changes.
+  // Keep Moveable's control box aligned after layout/zoom/page changes.
   useEffect(() => {
     const raf = requestAnimationFrame(() => moveableRef.current?.updateRect());
     return () => cancelAnimationFrame(raf);
-  }, [doc, zoom, targets]);
+  }, [doc, page, zoom, targets]);
 
   // Center the canvas once on mount.
   useEffect(() => {
@@ -125,9 +126,9 @@ export function EditorCanvas() {
   // vertical resize handles (width handles would do nothing — see store guard).
   const onlyAutoWidth = useMemo(() => {
     if (selectedIds.length !== 1) return false;
-    const el = doc.elements.find((e) => e.id === selectedIds[0]);
+    const el = page.elements.find((e) => e.id === selectedIds[0]);
     return el?.type === "text" && !!el.autoWidth;
-  }, [selectedIds, doc.elements]);
+  }, [selectedIds, page.elements]);
 
   const changeZoom = useCallback(
     (next: number) => {
@@ -161,11 +162,11 @@ export function EditorCanvas() {
             position: "relative",
             width: doc.width,
             height: doc.height,
-            ...fillToStyle(doc.background),
+            ...fillToStyle(page.background),
             boxShadow: "0 0 0 1px rgba(0,0,0,0.08), 0 10px 40px rgba(0,0,0,0.12)",
           }}
         >
-          {doc.elements.map((el) => (
+          {page.elements.map((el) => (
             <ElementView key={el.id} el={el} interactive />
           ))}
         </div>

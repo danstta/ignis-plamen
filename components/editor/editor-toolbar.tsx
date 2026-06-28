@@ -73,24 +73,29 @@ export function EditorToolbar({
 
   async function exportPng() {
     const st = useEditor.getState();
+    const base = st.name || "template";
+    const count = st.doc.pages.length;
     setExporting(true);
     try {
-      const res = await fetch("/api/render", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ doc: st.doc }),
-      });
-      if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${st.name || "template"}.png`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      toast.success("Exported PNG");
+      // One PNG per page (each page is rendered server-side by index).
+      for (let i = 0; i < count; i++) {
+        const res = await fetch("/api/render", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ doc: st.doc, page: i }),
+        });
+        if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = count === 1 ? `${base}.png` : `${base}-${i + 1}.png`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+      toast.success(count === 1 ? "Exported PNG" : `Exported ${count} PNGs`);
     } catch (err) {
       toast.error("Export failed", { description: String(err) });
     } finally {

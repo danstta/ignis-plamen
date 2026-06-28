@@ -1,4 +1,6 @@
-import opentype from "opentype.js";
+// opentype.js v2 is ESM with named exports only (no default) — importing the
+// default breaks the Turbopack/Vercel build, which resolves the .mjs entry.
+import { type Font, parse } from "opentype.js";
 import type {
   CanvasView,
   PlaceholderData,
@@ -18,23 +20,20 @@ import { loadFontBytes } from "./fonts";
  */
 
 // Parsed fonts are reused across renders (and across the deduped preload below).
-const fontCache = new Map<string, opentype.Font | null>();
+const fontCache = new Map<string, Font | null>();
 
 function cacheKey(family: string, weight: number): string {
   return `${family}@${weight}`;
 }
 
-async function loadFont(
-  family: string,
-  weight: number,
-): Promise<opentype.Font | null> {
+async function loadFont(family: string, weight: number): Promise<Font | null> {
   const key = cacheKey(family, weight);
   const cached = fontCache.get(key);
   if (cached !== undefined) return cached;
-  let font: opentype.Font | null = null;
+  let font: Font | null = null;
   try {
     const bytes = await loadFontBytes(family, weight);
-    if (bytes) font = opentype.parse(bytes);
+    if (bytes) font = parse(bytes);
   } catch {
     font = null;
   }
@@ -43,7 +42,7 @@ async function loadFont(
 }
 
 /** A {@link LineMeasurer} from a parsed font; rough estimate when unavailable. */
-function measurerFor(font: opentype.Font | null): LineMeasurer {
+function measurerFor(font: Font | null): LineMeasurer {
   if (!font) return (text, fontSize) => text.length * fontSize * 0.5;
   return (text, fontSize) => font.getAdvanceWidth(text, fontSize);
 }

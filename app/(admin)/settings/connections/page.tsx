@@ -72,7 +72,7 @@ export default async function SettingsConnectionsPage() {
           <p className="font-medium">Database not reachable</p>
           <p className="mt-1 text-muted-foreground">
             Set <code>DATABASE_URL</code> in <code>.env.local</code> and run{" "}
-            <code>npm run db:migrate</code> to manage connections.
+            <code>bun run db:migrate</code> to manage connections.
           </p>
         </div>
       ) : rows.length === 0 ? (

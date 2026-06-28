@@ -3,6 +3,7 @@ import { Plus } from "lucide-react";
 import { listTemplates } from "@/lib/templates/service";
 import { TemplateCard } from "@/components/templates/template-card";
 import { Button } from "@/components/ui/button";
+import type { TemplateDoc } from "@/lib/editor/types";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ export default async function TemplatesPage() {
           <p className="font-medium">Database not reachable</p>
           <p className="mt-1 text-muted-foreground">
             Set <code>DATABASE_URL</code> in <code>.env.local</code> and run{" "}
-            <code>npm run db:migrate</code>. You can still design at{" "}
+            <code>bun run db:migrate</code>. You can still design at{" "}
             <Link href="/editor/new" className="underline">
               /editor/new
             </Link>{" "}
@@ -57,6 +58,7 @@ export default async function TemplatesPage() {
               name={t.name}
               size={`${t.width}×${t.height}`}
               updated={new Date(t.updatedAt).toLocaleDateString()}
+              doc={t.doc as TemplateDoc}
             />
           ))}
         </div>

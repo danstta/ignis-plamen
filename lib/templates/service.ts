@@ -17,6 +17,7 @@ export async function listTemplates() {
       name: templates.name,
       width: templates.width,
       height: templates.height,
+      doc: templates.doc,
       updatedAt: templates.updatedAt,
     })
     .from(templates)

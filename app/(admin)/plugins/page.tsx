@@ -35,7 +35,7 @@ export default async function PluginsPage() {
           <p className="font-medium">Database not reachable</p>
           <p className="mt-1 text-muted-foreground">
             Set <code>DATABASE_URL</code> in <code>.env.local</code> and run{" "}
-            <code>npm run db:migrate</code>.
+            <code>bun run db:migrate</code>.
           </p>
         </div>
       ) : (

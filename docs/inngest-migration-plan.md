@@ -193,7 +193,7 @@ matcher: ["/((?!api/auth|api/hooks|api/inngest|login|_next|.*\\..*).*)"],
 
 ## Config / setup
 
-- `package.json`: add `inngest` (`npm i inngest`). v3 supports Next 16 App Router via `inngest/next`.
+- `package.json`: add `inngest` (`bun add inngest`). v3 supports Next 16 App Router via `inngest/next`.
 - `.env.example`: add a `# --- Background queue (Inngest) ---` block documenting
   `INNGEST_EVENT_KEY=` and `INNGEST_SIGNING_KEY=` (both blank locally).
 - **Inngest account/app**: create the app (`id: design-automations`); copy the Event Key + Signing
@@ -206,8 +206,8 @@ matcher: ["/((?!api/auth|api/hooks|api/inngest|login|_next|.*\\..*).*)"],
 
 ## Verification (end-to-end, local)
 
-1. `npm i inngest` (no env keys needed for dev).
-2. Terminal A: `npm run dev`. Terminal B: `npx inngest-cli@latest dev -u http://localhost:3000/api/inngest`
+1. `bun add inngest` (no env keys needed for dev).
+2. Terminal A: `bun run dev`. Terminal B: `bunx inngest-cli@latest dev -u http://localhost:3000/api/inngest`
    (dashboard at `http://localhost:8288`, auto-discovers + syncs `runStart`/`runResume`).
 3. Mark a workflow **active**, copy its webhook URL:
    `curl -i -X POST http://localhost:3000/api/hooks/<wf>/<node> -H 'content-type: application/json' -d '{"name":"Test"}'`

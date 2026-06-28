@@ -149,30 +149,30 @@ git clone https://github.com/danstta/ignis.git
 cd ignis
 
 # Install dependencies
-npm install
+bun install
 
 # Set up environment variables
 cp .env.example .env.local
 # Edit .env.local with your values
 
 # Run database migrations
-npm run db:migrate
+bun run db:migrate
 
 # Start the development server
-npm run dev
+bun run dev
 ```
 
 For production builds:
 
 ```bash
-npm run build
-npm run start
+bun run build
+bun run start
 ```
 
 In a local development environment, start the Inngest dev server in a separate terminal to run workflows:
 
 ```bash
-npx inngest-cli@latest dev
+bunx inngest-cli@latest dev
 ```
 
 ### Database migrations
@@ -180,13 +180,13 @@ npx inngest-cli@latest dev
 Run migrations against your database whenever you pull new changes:
 
 ```bash
-npm run db:migrate
+bun run db:migrate
 ```
 
 To inspect your database via a local GUI:
 
 ```bash
-npm run db:studio
+bun run db:studio
 ```
 
 ---

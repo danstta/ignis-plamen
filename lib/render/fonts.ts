@@ -88,6 +88,26 @@ async function loadFaces(
   return (await Promise.all(jobs)).filter((f): f is SatoriFont => f !== null);
 }
 
+/**
+ * Load the raw bytes of a single representative face (one subset/file) for a
+ * family + weight. Enough for server-side text measurement (opentype.js) — which
+ * only needs glyph advances, not every subset. Unknown families fall back to
+ * Inter, mirroring the renderer. Returns null only when even the fallback face
+ * can't be read (e.g. offline with the local file missing).
+ */
+export async function loadFontBytes(
+  family: string,
+  rawWeight: number,
+): Promise<ArrayBuffer | null> {
+  const def = FONTS[family] ?? FONTS[FALLBACK_FAMILY];
+  const weight = normalizeWeight(def, rawWeight);
+  if (def.kind === "fontsource") {
+    const url = `https://cdn.jsdelivr.net/npm/${def.pkg}/files/${def.slug}-${def.subsets[0]}-${weight}-normal.woff`;
+    return fetchBytes(url);
+  }
+  return readLocal(def.file(weight));
+}
+
 /** Load the faces every text element on a canvas (one page) needs. */
 export async function loadFontsForCanvas(
   canvas: CanvasView,

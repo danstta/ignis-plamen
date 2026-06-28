@@ -1,8 +1,10 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CanvasView, PlaceholderData } from "@/lib/editor/types";
 import { TemplateRenderer } from "@/components/render/template-renderer";
+import { resolveAutoFitElements } from "@/lib/render/measure-client";
+import { useFontsReady } from "@/lib/hooks/use-fonts-ready";
 import { cn } from "@/lib/utils";
 
 /**
@@ -25,6 +27,18 @@ export function TemplatePreview({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0);
+
+  // Resolve auto-fit text to a concrete font size for this data, re-fitting when
+  // fonts load (measurement needs the real font).
+  const fontsReady = useFontsReady();
+  const resolved = useMemo(
+    () => ({
+      ...canvas,
+      elements: resolveAutoFitElements(canvas.elements, data),
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [canvas, data, fontsReady],
+  );
 
   useLayoutEffect(() => {
     const el = containerRef.current;
@@ -57,7 +71,7 @@ export function TemplatePreview({
             transform: `translate(-50%, -50%) scale(${scale})`,
           }}
         >
-          <TemplateRenderer canvas={canvas} data={data} />
+          <TemplateRenderer canvas={resolved} data={data} />
         </div>
       )}
     </div>

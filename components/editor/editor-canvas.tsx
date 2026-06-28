@@ -15,6 +15,8 @@ import { Minus, Plus, Maximize } from "lucide-react";
 import { currentPage, useEditor, type GeometryPatch } from "@/lib/editor/store";
 import { ElementView } from "@/components/render/template-renderer";
 import { fillToStyle } from "@/lib/render/element-style";
+import { resolveAutoFitElements } from "@/lib/render/measure-client";
+import { useFontsReady } from "@/lib/hooks/use-fonts-ready";
 import { Button } from "@/components/ui/button";
 
 /** Read an element's committed geometry back out of its (imperatively-updated) DOM. */
@@ -143,6 +145,16 @@ export function EditorCanvas() {
 
   const zoomPct = useMemo(() => Math.round(zoom * 100), [zoom]);
 
+  // Auto-fit text derives its font size from its (fixed) box; resolve it here so
+  // the canvas shows the fitted size live. Re-runs when fonts load (measurement
+  // depends on the real font) — see useFontsReady.
+  const fontsReady = useFontsReady();
+  const renderElements = useMemo(
+    () => resolveAutoFitElements(page.elements),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [page.elements, fontsReady],
+  );
+
   return (
     <div className="relative h-full w-full overflow-hidden bg-muted/40">
       <InfiniteViewer
@@ -166,7 +178,7 @@ export function EditorCanvas() {
             boxShadow: "0 0 0 1px rgba(0,0,0,0.08), 0 10px 40px rgba(0,0,0,0.12)",
           }}
         >
-          {page.elements.map((el) => (
+          {renderElements.map((el) => (
             <ElementView key={el.id} el={el} interactive />
           ))}
         </div>

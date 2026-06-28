@@ -87,6 +87,25 @@ export interface TextElement extends BaseElement {
    * placeholder data. The `width` field is ignored while this is on.
    */
   autoWidth?: boolean;
+  /**
+   * "Fit to box" mode: the inverse of {@link autoWidth}. The box stays fixed
+   * (width × height) and the FONT SIZE is computed so the wrapping text fills it
+   * as large as possible, within [{@link minFontSize}, {@link maxFontSize}].
+   *
+   * The fit is recomputed from the *resolved* text on every render path (editor
+   * preview, Satori PNG, code export) — so the PNG sizes to the real placeholder
+   * value, not the sample typed in the editor. See {@link resolveFontSize} in
+   * `lib/render/fit-text.ts`. While this is on, the stored `fontSize` is ignored
+   * for rendering (kept so toggling the mode off restores the manual size).
+   *
+   * Mutually exclusive with {@link autoWidth} — auto-width needs an intrinsic
+   * width, but fitting needs a fixed box to fit into. The editor enforces this.
+   */
+  autoFit?: boolean;
+  /** Lower bound (px) for the auto-fit font size. Defaults to FIT_MIN_FONT_SIZE. */
+  minFontSize?: number;
+  /** Upper bound (px) for the auto-fit font size. Defaults to FIT_MAX_FONT_SIZE. */
+  maxFontSize?: number;
   /** Background fill painted behind the text (the "pill"); solid or gradient. */
   background?: Fill;
   /** Horizontal padding around the text (px). */

@@ -13,6 +13,8 @@ import {
   shapeStyle,
   textStyle,
 } from "@/lib/render/element-style";
+import { FIT_MAX_FONT_SIZE, FIT_MIN_FONT_SIZE } from "@/lib/render/fit-text";
+import { FIT_HTML_SCRIPT, docHasAutoFit } from "./fit-runtime";
 import { escapeHtml, styleToInlineCss } from "./serialize";
 
 /**
@@ -22,7 +24,15 @@ import { escapeHtml, styleToInlineCss } from "./serialize";
 function elementHtml(el: TemplateElement, data?: PlaceholderData): string {
   if (el.type === "text") {
     const style = styleToInlineCss({ ...baseStyle(el), ...textStyle(el) });
-    return `<div style="${style}">${escapeHtml(resolveText(el, data))}</div>`;
+    const content = escapeHtml(resolveText(el, data));
+    // Fit-to-box text is tagged for the runtime fitter (see FIT_HTML_SCRIPT),
+    // which sizes the font to the box after layout.
+    if (el.autoFit) {
+      const min = el.minFontSize ?? FIT_MIN_FONT_SIZE;
+      const max = el.maxFontSize ?? FIT_MAX_FONT_SIZE;
+      return `<div style="${style}" data-fit data-fit-min="${min}" data-fit-max="${max}">${content}</div>`;
+    }
+    return `<div style="${style}">${content}</div>`;
   }
 
   if (el.type === "image") {
@@ -62,6 +72,7 @@ function pageHtml(doc: TemplateDoc, page: Page, data?: PlaceholderData): string 
 export function generateHtml(doc: TemplateDoc, data?: PlaceholderData): string {
   // Each page is a sibling canvas; multiple pages stack vertically with a gap.
   const pages = doc.pages.map((p) => pageHtml(doc, p, data)).join("\n");
+  const script = docHasAutoFit(doc) ? `\n${FIT_HTML_SCRIPT}` : "";
 
   return `<!doctype html>
 <html>
@@ -74,7 +85,7 @@ export function generateHtml(doc: TemplateDoc, data?: PlaceholderData): string {
     </style>
   </head>
   <body>
-${pages}
+${pages}${script}
   </body>
 </html>
 `;

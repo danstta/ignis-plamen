@@ -6,6 +6,11 @@ import {
   shapeStyle,
   textStyle,
 } from "@/lib/render/element-style";
+import { FIT_MAX_FONT_SIZE, FIT_MIN_FONT_SIZE } from "@/lib/render/fit-text";
+import {
+  FIT_TEXT_COMPONENT_SOURCE,
+  docHasAutoFit,
+} from "./fit-runtime";
 import { styleToObjectLiteral, toComponentName } from "./serialize";
 
 /**
@@ -19,6 +24,13 @@ function elementJsx(el: TemplateElement): string {
     const content = el.placeholderKey
       ? `{data[${JSON.stringify(el.placeholderKey)}] ?? ${JSON.stringify(el.text)}}`
       : `{${JSON.stringify(el.text)}}`;
+    // Fit-to-box text re-sizes its font at runtime to fill the box for whatever
+    // data fills it; everything else is a plain div with a fixed font size.
+    if (el.autoFit) {
+      const min = el.minFontSize ?? FIT_MIN_FONT_SIZE;
+      const max = el.maxFontSize ?? FIT_MAX_FONT_SIZE;
+      return `<FitText style={${style}} min={${min}} max={${max}}>${content}</FitText>`;
+    }
     return `<div style={${style}}>${content}</div>`;
   }
 
@@ -74,10 +86,16 @@ export function generateReactComponent(
 ${doc.pages.map((p) => `      ${pageJsx(doc, p, "      ")}`).join("\n")}
     </div>`;
 
-  return `import React from "react";
+  // Fit-to-box text needs a runtime <FitText> (a client component, so the file
+  // opts into "use client"); plain designs stay server-renderable as before.
+  const hasAutoFit = docHasAutoFit(doc);
+  const directive = hasAutoFit ? `"use client";\n\n` : "";
+  const helper = hasAutoFit ? `\n${FIT_TEXT_COMPONENT_SOURCE}\n` : "";
+
+  return `${directive}import React from "react";
 
 export type TemplateData = Record<string, string>;
-
+${helper}
 export function ${componentName}({ data = {} }: { data?: TemplateData }) {
   return (
     ${body}

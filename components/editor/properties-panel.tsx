@@ -29,6 +29,7 @@ import {
   toSolid,
 } from "@/lib/editor/types";
 import { fillToStyle } from "@/lib/render/element-style";
+import { FIT_MAX_FONT_SIZE, FIT_MIN_FONT_SIZE } from "@/lib/render/fit-text";
 import { FONT_FAMILIES, FONTS } from "@/lib/render/font-registry";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -566,10 +567,14 @@ function TextProps({ element }: { element: TextElement }) {
           </Select>
         </Field>
         <Field label="Size">
-          <NumberInput
-            value={element.fontSize}
-            onChange={(fontSize) => update(id, { fontSize })}
-          />
+          {element.autoFit ? (
+            <Input value="Auto" disabled className="h-8" aria-label="Size (auto-fit)" />
+          ) : (
+            <NumberInput
+              value={element.fontSize}
+              onChange={(fontSize) => update(id, { fontSize })}
+            />
+          )}
         </Field>
         <Field label="Weight">
           <Select
@@ -643,10 +648,52 @@ function TextProps({ element }: { element: TextElement }) {
           checked={!!element.autoWidth}
           onCheckedChange={(checked) => {
             snapshot();
-            update(id, { autoWidth: checked || undefined });
+            // Auto width and fit-to-box are mutually exclusive: one sizes the box
+            // to the text, the other sizes the text to the box.
+            update(id, {
+              autoWidth: checked || undefined,
+              ...(checked ? { autoFit: undefined } : {}),
+            });
           }}
         />
       </div>
+      <div className="flex items-center justify-between">
+        <Label className="text-xs text-muted-foreground">
+          Fit to box (auto size)
+        </Label>
+        <Switch
+          checked={!!element.autoFit}
+          onCheckedChange={(checked) => {
+            snapshot();
+            update(id, {
+              autoFit: checked || undefined,
+              ...(checked ? { autoWidth: undefined } : {}),
+            });
+          }}
+        />
+      </div>
+      {element.autoFit ? (
+        <>
+          <p className="text-xs text-muted-foreground">
+            Font size grows or shrinks so the text fills this box. Resize the box
+            to change it.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Min size">
+              <NumberInput
+                value={element.minFontSize ?? FIT_MIN_FONT_SIZE}
+                onChange={(minFontSize) => update(id, { minFontSize })}
+              />
+            </Field>
+            <Field label="Max size">
+              <NumberInput
+                value={element.maxFontSize ?? FIT_MAX_FONT_SIZE}
+                onChange={(maxFontSize) => update(id, { maxFontSize })}
+              />
+            </Field>
+          </div>
+        </>
+      ) : null}
       <div className="flex items-center justify-between">
         <Label className="text-xs text-muted-foreground">Background</Label>
         <Switch

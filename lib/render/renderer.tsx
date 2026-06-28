@@ -7,6 +7,7 @@ import {
 } from "@/lib/editor/types";
 import { TemplateRenderer } from "@/components/render/template-renderer";
 import { loadFontsForCanvas } from "./fonts";
+import { resolveAutoFitCanvas } from "./measure-server";
 
 export type RenderInput = {
   /** One renderable canvas (a single page projected via {@link pageView}). */
@@ -25,12 +26,15 @@ export interface Renderer {
  */
 class SatoriRenderer implements Renderer {
   async render({ canvas, data }: RenderInput): Promise<ArrayBuffer> {
-    const fonts = await loadFontsForCanvas(canvas, data);
+    // Auto-fit text needs a concrete font size before Satori lays it out (Satori
+    // can't size text to a box itself); resolve it against the real data first.
+    const resolved = await resolveAutoFitCanvas(canvas, data);
+    const fonts = await loadFontsForCanvas(resolved, data);
     const image = new ImageResponse(
-      <TemplateRenderer canvas={canvas} data={data} />,
+      <TemplateRenderer canvas={resolved} data={data} />,
       {
-        width: canvas.width,
-        height: canvas.height,
+        width: resolved.width,
+        height: resolved.height,
         fonts: fonts.map((f) => ({
           name: f.name,
           data: f.data,

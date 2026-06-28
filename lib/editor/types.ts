@@ -30,6 +30,21 @@ export interface Gradient {
 /** A paint value: either a solid CSS color string or a gradient. */
 export type Fill = string | Gradient;
 
+/** Line style for an element border (maps to CSS `border-style`). */
+export type BorderStyle = "solid" | "dashed" | "dotted";
+
+/**
+ * Border fields shared by shapes and images. A border is painted only when both
+ * {@link borderWidth} and {@link borderColor} are set (see `borderToStyle`);
+ * {@link borderStyle} defaults to "solid". Dashed/dotted may rasterize as solid
+ * in the Satori PNG.
+ */
+export interface Bordered {
+  borderColor?: string;
+  borderWidth?: number;
+  borderStyle?: BorderStyle;
+}
+
 export function isGradient(fill: Fill): fill is Gradient {
   return typeof fill === "object" && fill !== null;
 }
@@ -116,24 +131,29 @@ export interface TextElement extends BaseElement {
   borderRadius?: number;
 }
 
-export interface ImageElement extends BaseElement {
+export interface ImageElement extends BaseElement, Bordered {
   type: "image";
   /** Literal image URL shown when no placeholder value is bound. */
   src?: string;
   /** When set, this element is an IMAGE placeholder filled by connection data. */
   placeholderKey?: string;
   objectFit?: "cover" | "contain" | "fill";
+  /**
+   * Frame shape. "ellipse" clips the image to an ellipse (a circle when the box
+   * is square); "rect" (the default when unset) uses {@link borderRadius} for
+   * its corners. Mirrors {@link ShapeElement}'s `shape`.
+   */
+  shape?: "rect" | "ellipse";
+  /** Rounded corners (px) — only applies to the "rect" shape. */
   borderRadius?: number;
 }
 
-export interface ShapeElement extends BaseElement {
+export interface ShapeElement extends BaseElement, Bordered {
   type: "shape";
   shape: "rect" | "ellipse";
   /** Solid color or gradient. */
   fill: Fill;
   borderRadius?: number;
-  borderColor?: string;
-  borderWidth?: number;
 }
 
 export type TemplateElement = TextElement | ImageElement | ShapeElement;

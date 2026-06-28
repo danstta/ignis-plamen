@@ -17,6 +17,7 @@ import {
 import { activeBrand, currentPage, useEditor } from "@/lib/editor/store";
 import type { BrandColor, BrandFont } from "@/lib/brand/types";
 import {
+  type BorderStyle,
   type Fill,
   type Gradient,
   type GradientStop,
@@ -739,6 +740,7 @@ function TextProps({ element }: { element: TextElement }) {
 function ImageProps({ element }: { element: ImageElement }) {
   const update = useEditor((s) => s.updateElement);
   const id = element.id;
+  const shape = element.shape ?? "rect";
   return (
     <>
       <Field label="Placeholder key (leave empty for fixed image)">
@@ -781,13 +783,38 @@ function ImageProps({ element }: { element: ImageElement }) {
             </SelectContent>
           </Select>
         </Field>
-        <Field label="Corner radius">
-          <NumberInput
-            value={element.borderRadius ?? 0}
-            onChange={(borderRadius) => update(id, { borderRadius })}
-          />
+        <Field label="Shape">
+          <Select
+            value={shape}
+            onValueChange={(v) => {
+              if (!v) return;
+              snapshot();
+              update(id, { shape: v as ImageElement["shape"] });
+            }}
+          >
+            <SelectTrigger size="sm" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="rect">Rectangle</SelectItem>
+              <SelectItem value="ellipse">Circle / Ellipse</SelectItem>
+            </SelectContent>
+          </Select>
         </Field>
+        {/* Corner radius is meaningless once the box is clipped to an ellipse. */}
+        {shape === "rect" ? (
+          <Field label="Corner radius">
+            <NumberInput
+              value={element.borderRadius ?? 0}
+              onChange={(borderRadius) => update(id, { borderRadius })}
+            />
+          </Field>
+        ) : null}
       </div>
+
+      <Separator />
+      <SectionTitle>Border</SectionTitle>
+      <BorderControls element={element} />
     </>
   );
 }
@@ -808,20 +835,57 @@ function ShapeProps({ element }: { element: ShapeElement }) {
           />
         </Field>
       ) : null}
+
+      <Separator />
+      <SectionTitle>Border</SectionTitle>
+      <BorderControls element={element} />
+    </>
+  );
+}
+
+/** Border width + style + color. Shared by image and shape elements. */
+function BorderControls({
+  element,
+}: {
+  element: ImageElement | ShapeElement;
+}) {
+  const update = useEditor((s) => s.updateElement);
+  const id = element.id;
+  return (
+    <>
       <div className="grid grid-cols-2 gap-2">
-        <Field label="Border width">
+        <Field label="Width">
           <NumberInput
             value={element.borderWidth ?? 0}
             onChange={(borderWidth) => update(id, { borderWidth })}
           />
         </Field>
-        <Field label="Border color">
-          <ColorInput
-            value={element.borderColor ?? "#000000"}
-            onChange={(borderColor) => update(id, { borderColor })}
-          />
+        <Field label="Style">
+          <Select
+            value={element.borderStyle ?? "solid"}
+            onValueChange={(v) => {
+              if (!v) return;
+              snapshot();
+              update(id, { borderStyle: v as BorderStyle });
+            }}
+          >
+            <SelectTrigger size="sm" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="solid">Solid</SelectItem>
+              <SelectItem value="dashed">Dashed</SelectItem>
+              <SelectItem value="dotted">Dotted</SelectItem>
+            </SelectContent>
+          </Select>
         </Field>
       </div>
+      <Field label="Color">
+        <ColorInput
+          value={element.borderColor ?? "#000000"}
+          onChange={(borderColor) => update(id, { borderColor })}
+        />
+      </Field>
     </>
   );
 }

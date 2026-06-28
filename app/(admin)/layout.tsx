@@ -1,4 +1,5 @@
 import { AppSidebar } from "@/components/layout/app-sidebar";
+import { CommandPalette } from "@/components/command/command-palette";
 import { listTemplates } from "@/lib/templates/service";
 import { listWorkflows } from "@/lib/workflows/service";
 
@@ -32,6 +33,10 @@ export default async function AdminLayout({
         }))}
       />
       <main className="flex-1 overflow-auto p-8">{children}</main>
+      <CommandPalette
+        templates={templates.map((t) => ({ id: t.id, name: t.name }))}
+        workflows={workflows.map((w) => ({ id: w.id, name: w.name }))}
+      />
     </div>
   );
 }

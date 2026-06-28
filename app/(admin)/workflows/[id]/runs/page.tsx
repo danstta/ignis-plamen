@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { getWorkflow } from "@/lib/workflows/service";
 import { listRuns } from "@/lib/workflows/runs-service";
-import { RunStatusBadge } from "@/components/workflow/run-status-badge";
+import { RunListItem } from "@/components/workflow/run-list-item";
+import { RunsLive } from "@/components/workflow/runs-live";
 import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,7 @@ export default async function WorkflowRunsPage({
 
   return (
     <div className="mx-auto max-w-3xl">
+      <RunsLive />
       <Button
         variant="ghost"
         size="sm"
@@ -37,21 +39,13 @@ export default async function WorkflowRunsPage({
       ) : (
         <div className="mt-6 divide-y rounded-lg border">
           {runs.map((r) => (
-            <Link
+            <RunListItem
               key={r.id}
-              href={`/workflows/${id}/runs/${r.id}`}
-              className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-accent"
-            >
-              <div className="min-w-0">
-                <p className="truncate font-mono text-xs text-muted-foreground">
-                  {r.id}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {new Date(r.createdAt).toLocaleString()}
-                </p>
-              </div>
-              <RunStatusBadge status={r.status} />
-            </Link>
+              runId={r.id}
+              workflowId={id}
+              status={r.status}
+              createdAt={r.createdAt}
+            />
           ))}
         </div>
       )}

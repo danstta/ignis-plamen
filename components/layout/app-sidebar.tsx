@@ -8,7 +8,6 @@ import {
   ArrowLeft,
   Blocks,
   CircleUser,
-  Flame,
   Images,
   LayoutDashboard,
   LayoutTemplate,
@@ -17,7 +16,6 @@ import {
   PanelLeftOpen,
   Plug,
   Plus,
-  Search,
   Settings,
   SunMoon,
   Workflow,
@@ -26,7 +24,6 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { openCommandPalette } from "@/components/command/command-palette";
 
 type Mode = "design" | "workflows";
 
@@ -144,33 +141,7 @@ function MainSidebar({
 
   return (
     <aside className="flex h-svh w-64 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground">
-      <div className="flex items-center gap-2 px-4 pt-4 pb-1">
-        <Flame className="size-5 shrink-0 text-orange-500" />
-        <span className="font-heading text-base font-semibold">Ignis</span>
-      </div>
-
-      <div className="flex flex-col gap-0.5 px-3 pt-2">
-        <button
-          type="button"
-          onClick={openCommandPalette}
-          className="flex w-full items-center gap-2 rounded-md border border-input bg-transparent px-2.5 py-1.5 text-sm text-muted-foreground outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring dark:bg-input/30"
-        >
-          <Search className="size-4 shrink-0" />
-          <span className="flex-1 text-left">Search…</span>
-          <kbd className="rounded border bg-muted px-1 font-sans text-[10px] text-muted-foreground">
-            ⌘K
-          </kbd>
-        </button>
-        <SidebarLink
-          href="/"
-          active={isDashboard}
-          icon={<LayoutDashboard className="size-4 shrink-0" />}
-        >
-          Dashboard
-        </SidebarLink>
-      </div>
-
-      <div className="px-3 pt-3">
+      <div className="px-3 pt-4">
         <div className="flex gap-1 rounded-lg bg-muted">
           <ModeButton
             active={mode === "design"}
@@ -187,6 +158,16 @@ function MainSidebar({
             Workflows
           </ModeButton>
         </div>
+      </div>
+
+      <div className="flex flex-col gap-0.5 px-3 pt-2">
+        <SidebarLink
+          href="/"
+          active={isDashboard}
+          icon={<LayoutDashboard className="size-4 shrink-0" />}
+        >
+          Dashboard
+        </SidebarLink>
       </div>
 
       <ScrollArea className="min-h-0 flex-1">
@@ -330,17 +311,6 @@ function CollapsedRail({
 }) {
   return (
     <aside className="flex h-svh w-14 shrink-0 flex-col items-center border-r bg-sidebar py-4 text-sidebar-foreground">
-      <div className="flex flex-col items-center gap-1">
-        <RailLink href="/" active={isDashboard} title="Dashboard" icon={<Flame className="size-5 text-orange-500" />} />
-        <RailButton
-          title="Search (⌘K)"
-          onClick={openCommandPalette}
-          icon={<Search className="size-4" />}
-        />
-      </div>
-
-      <div className="my-2 h-px w-6 bg-border" />
-
       <div className="flex flex-col gap-1">
         <RailButton
           title="Design"
@@ -353,6 +323,17 @@ function CollapsedRail({
           active={mode === "workflows"}
           onClick={() => setMode("workflows")}
           icon={<Workflow className="size-4" />}
+        />
+      </div>
+
+      <div className="my-2 h-px w-6 bg-border" />
+
+      <div className="flex flex-col items-center gap-1">
+        <RailLink
+          href="/"
+          active={isDashboard}
+          title="Dashboard"
+          icon={<LayoutDashboard className="size-4" />}
         />
       </div>
 

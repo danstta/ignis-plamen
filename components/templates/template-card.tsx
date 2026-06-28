@@ -7,21 +7,7 @@ import { deleteTemplateAction } from "@/app/(admin)/templates/actions";
 import { TemplatePreview } from "@/components/render/template-preview";
 import { Button } from "@/components/ui/button";
 import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
-import {
-  Card,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import type { TemplateDoc } from "@/lib/editor/types";
 
 export function TemplateCard({
@@ -39,29 +25,45 @@ export function TemplateCard({
 }) {
   return (
     <Card>
-      <Dialog>
-        <DialogTrigger
-          render={
-            <button
-              type="button"
-              className="-mt-(--card-spacing) flex h-48 w-full cursor-zoom-in items-center justify-center border-b bg-muted outline-none -outline-offset-2 focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label={`Preview ${name}`}
-            />
-          }
+      <div className="relative -mt-(--card-spacing)">
+        <Link
+          href={`/editor/${id}`}
+          className="block aspect-[4/5] w-full overflow-hidden border-b bg-muted outline-none -outline-offset-2 focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={`Open ${name} in editor`}
         >
           <TemplatePreview doc={doc} className="h-full w-full" />
-        </DialogTrigger>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="truncate">{name}</DialogTitle>
-            <DialogDescription>{size}</DialogDescription>
-          </DialogHeader>
-          <TemplatePreview
-            doc={doc}
-            className="h-[70vh] w-full rounded-lg ring-1 ring-foreground/10"
-          />
-        </DialogContent>
-      </Dialog>
+        </Link>
+
+        {/* Edit / delete reveal on hover (or keyboard focus); icon-only to keep
+            the card minimal. Siblings of the link so they never trigger it. */}
+        <div className="absolute top-2 right-2 flex gap-1 opacity-0 transition-opacity group-hover/card:opacity-100 focus-within:opacity-100">
+          <Button
+            size="icon-sm"
+            variant="secondary"
+            aria-label={`Edit ${name}`}
+            render={<Link href={`/editor/${id}`} />}
+          >
+            <Pencil />
+          </Button>
+          <ConfirmDeleteDialog
+            itemLabel="template"
+            itemName={name}
+            onConfirm={async () => {
+              try {
+                await deleteTemplateAction(id);
+                toast.success("Template deleted");
+              } catch (err) {
+                toast.error("Delete failed", { description: String(err) });
+                throw err;
+              }
+            }}
+          >
+            <Button size="icon-sm" variant="secondary" aria-label={`Delete ${name}`}>
+              <Trash2 />
+            </Button>
+          </ConfirmDeleteDialog>
+        </div>
+      </div>
 
       <CardHeader>
         <CardTitle className="truncate">{name}</CardTitle>
@@ -69,32 +71,6 @@ export function TemplateCard({
           {size} · updated {updated}
         </CardDescription>
       </CardHeader>
-      <CardFooter className="gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          render={<Link href={`/editor/${id}`} />}
-        >
-          <Pencil className="size-4" /> Edit
-        </Button>
-        <ConfirmDeleteDialog
-          itemLabel="template"
-          itemName={name}
-          onConfirm={async () => {
-            try {
-              await deleteTemplateAction(id);
-              toast.success("Template deleted");
-            } catch (err) {
-              toast.error("Delete failed", { description: String(err) });
-              throw err;
-            }
-          }}
-        >
-          <Button size="sm" variant="ghost">
-            <Trash2 className="size-4" />
-          </Button>
-        </ConfirmDeleteDialog>
-      </CardFooter>
     </Card>
   );
 }

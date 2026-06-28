@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import {
+  type Bordered,
   type Fill,
   type Gradient,
   type ImageElement,
@@ -82,23 +83,36 @@ export function textStyle(el: TextElement): CSSProperties {
   return style;
 }
 
+/**
+ * The CSS `border` for any {@link Bordered} element. Painted only when both a
+ * width and color are present; `borderStyle` defaults to "solid". Shared by
+ * shapes and images so their borders stay identical across every render path.
+ */
+export function borderToStyle(el: Bordered): CSSProperties {
+  if (el.borderWidth && el.borderColor) {
+    return {
+      border: `${el.borderWidth}px ${el.borderStyle ?? "solid"} ${el.borderColor}`,
+    };
+  }
+  return {};
+}
+
 export function shapeStyle(el: ShapeElement): CSSProperties {
-  const style: CSSProperties = {
+  return {
     display: "flex",
     ...fillToStyle(el.fill),
     borderRadius: el.shape === "ellipse" ? "50%" : (el.borderRadius ?? 0),
+    ...borderToStyle(el),
   };
-  if (el.borderWidth && el.borderColor) {
-    style.border = `${el.borderWidth}px solid ${el.borderColor}`;
-  }
-  return style;
 }
 
 export function imageContainerStyle(el: ImageElement): CSSProperties {
   return {
     display: "flex",
     overflow: "hidden",
-    borderRadius: el.borderRadius ?? 0,
+    // "ellipse" clips to an ellipse; "rect" (default) uses the corner radius.
+    borderRadius: el.shape === "ellipse" ? "50%" : (el.borderRadius ?? 0),
+    ...borderToStyle(el),
   };
 }
 

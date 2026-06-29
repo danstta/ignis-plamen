@@ -4,6 +4,9 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
+# Tooling
+This project uses **Bun**, not npm. Use `bun install`, `bun run <script>` (e.g. `bun run dev`, `bun run build`, `bun run lint`), and `bunx <pkg>` instead of `npx`. Don't run `npm`/`npx` or create a `package-lock.json` — Bun manages dependencies via `bun.lock`.
+
 # Project Snapshot
 This app is a minimal web GUI for making automations for any usacase, it's Canva and Zapier in one, in the future it should port all other usecases currently we are wokring on making design templates with placeholders with coneections for Google Drive and Notion API.
 

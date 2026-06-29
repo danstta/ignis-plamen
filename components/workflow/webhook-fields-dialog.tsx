@@ -250,7 +250,7 @@ export function WebhookFieldsDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="tree">
+        <Tabs defaultValue="tree" className="min-w-0">
           <div className="flex items-center justify-between gap-2">
             <TabsList>
               <TabsTrigger value="tree">Tree</TabsTrigger>
@@ -272,7 +272,7 @@ export function WebhookFieldsDialog({
             </div>
           </div>
 
-          <TabsContent value="tree">
+          <TabsContent value="tree" className="min-w-0">
             <div className="max-h-[55vh] min-h-0 overflow-auto rounded-md border p-1">
               {roots.length ? (
                 roots.map(([k, v]) => (
@@ -296,7 +296,7 @@ export function WebhookFieldsDialog({
             </div>
           </TabsContent>
 
-          <TabsContent value="raw">
+          <TabsContent value="raw" className="min-w-0">
             <pre className="max-h-[55vh] overflow-auto rounded-md border bg-muted/30 p-3 font-mono text-xs">
               {JSON.stringify(sample ?? {}, null, 2)}
             </pre>

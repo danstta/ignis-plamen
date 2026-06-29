@@ -68,10 +68,7 @@ function SelectButton({
   return (
     <button
       type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
+      onClick={onClick}
       className={cn(
         "ml-auto flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium transition",
         selected
@@ -113,47 +110,31 @@ function TreeRow({
   return (
     <>
       <div
-        role="button"
-        tabIndex={0}
-        aria-pressed={isSel}
-        onClick={() => toggleSelect(path)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            toggleSelect(path);
-          }
-        }}
         className={cn(
-          "group flex cursor-pointer items-center gap-1.5 rounded py-1 pr-1.5 text-xs outline-none hover:bg-accent/50 focus-visible:ring-1 focus-visible:ring-ring",
+          "group flex items-center gap-1.5 rounded py-1 pr-1.5 text-xs hover:bg-accent/50",
           isSel && "bg-accent",
         )}
         style={{ paddingLeft: depth * INDENT + 6 }}
       >
         {container ? (
-          <div className="flex min-w-0 flex-1 items-center gap-1.5">
-            <button
-              type="button"
-              aria-label={isOpen ? "Collapse" : "Expand"}
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleExpand(path);
-              }}
-              className="-m-0.5 flex shrink-0 items-center rounded p-0.5 hover:bg-accent"
-            >
-              <ChevronRight
-                className={cn(
-                  "size-3.5 text-muted-foreground transition-transform",
-                  isOpen && "rotate-90",
-                )}
-              />
-            </button>
+          <button
+            type="button"
+            onClick={() => toggleExpand(path)}
+            className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+          >
+            <ChevronRight
+              className={cn(
+                "size-3.5 shrink-0 text-muted-foreground transition-transform",
+                isOpen && "rotate-90",
+              )}
+            />
             <code className="min-w-0 truncate font-mono font-medium" title={label}>
               {label}
             </code>
             <span className="shrink-0 text-muted-foreground/70">
               {Array.isArray(value) ? `[${children.length}]` : `{${children.length}}`}
             </span>
-          </div>
+          </button>
         ) : (
           <div className="flex min-w-0 flex-1 items-center gap-1.5">
             <span className="inline-block w-3.5 shrink-0" />

@@ -97,24 +97,6 @@ export async function listRunsWithWorkflow(
     .limit(opts.limit ?? 200);
 }
 
-/**
- * Cheap "did anything change?" signal for live-refreshing run lists. A change in
- * either the row count (a new run appeared) or the latest update timestamp (a run
- * advanced) flips the signature the client compares against.
- */
-export async function getRunsActivity(): Promise<{
-  count: number;
-  latest: string | null;
-}> {
-  const rows = await db()
-    .select({
-      count: sql<number>`count(*)::int`,
-      latest: sql<string | null>`max(${workflowRuns.updatedAt})::text`,
-    })
-    .from(workflowRuns);
-  return { count: rows[0]?.count ?? 0, latest: rows[0]?.latest ?? null };
-}
-
 export type RunStatePatch = Partial<{
   status: RunStatus;
   nodeOutputs: Record<string, NodeOutputs>;

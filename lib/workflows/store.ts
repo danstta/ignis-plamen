@@ -13,14 +13,47 @@ import {
   type OnNodesChange,
 } from "@xyflow/react";
 import { getNodeMeta } from "@/lib/nodes/catalog";
-import type { WorkflowGraph } from "./types";
+import { topoOrder } from "./graph";
+import type { WorkflowGraph, WorkflowNode } from "./types";
 
 /** xyflow node data: just the node-type config (the type id lives on node.type). */
 export type WfNodeData = { config: Record<string, unknown> };
 export type WfNode = Node<WfNodeData>;
 
-const DEFAULT_NODE_POSITION = { x: 160, y: 80 };
-const DEFAULT_NODE_GAP_Y = 280;
+/**
+ * The canvas is a single vertical column of steps (no free dragging). A node's
+ * array index *is* its step number (the trigger is pinned to index 0 = Step 0),
+ * and its on-canvas position is derived from that index, never hand-placed.
+ * COLUMN_X is constant for now; branch layout (parallel columns) will vary it.
+ */
+const COLUMN_X = 0;
+const ROW_GAP_Y = 110;
+
+/** A trigger node (e.g. Webhook) starts a workflow and is always Step 0. */
+function isTriggerType(type: string | undefined): boolean {
+  return !!type && getNodeMeta(type)?.category === "trigger";
+}
+
+/** Position every node down a single column in array order, so index = step. */
+function relayout(nodes: WfNode[]): WfNode[] {
+  return nodes.map((n, i) => ({
+    ...n,
+    position: { x: COLUMN_X, y: i * ROW_GAP_Y },
+  }));
+}
+
+/**
+ * The step order for a loaded graph: trigger(s) first, then the remaining nodes
+ * in execution (topological) order, so the visible Step numbers match the order
+ * the engine actually runs them. Falls back to stored order if the graph has a
+ * cycle (which the engine rejects anyway).
+ */
+function orderGraphNodes(graph: WorkflowGraph): WorkflowNode[] {
+  const order = topoOrder(graph) ?? graph.nodes;
+  const triggers = order.filter((n) => isTriggerType(n.type));
+  const rest = order.filter((n) => !isTriggerType(n.type));
+  return [...triggers, ...rest];
+}
 
 /**
  * Whether a change actually alters the saved graph. Selection highlighting and
@@ -67,7 +100,10 @@ interface WorkflowEditorState {
   onEdgesChange: OnEdgesChange;
   onConnect: OnConnect;
 
-  addNode: (nodeTypeId: string, position: { x: number; y: number }) => void;
+  /** Append a step (or pin a trigger to the top). One trigger max. */
+  addNode: (nodeTypeId: string) => void;
+  /** Reorder a step one slot up/down; the trigger stays pinned at Step 0. */
+  moveNode: (id: string, direction: "up" | "down") => void;
   updateNodeConfig: (nodeId: string, config: Record<string, unknown>) => void;
   /** Map an upstream output port into an input port (replaces any existing edge there). */
   setInputEdge: (
@@ -121,12 +157,16 @@ export const useWorkflowEditor = create<WorkflowEditorState>((set, get) => ({
   dirty: false,
 
   load: (input) => {
-    const { nodes, edges } = graphToFlow(input.graph);
+    const ordered = orderGraphNodes(input.graph);
+    const { nodes, edges } = graphToFlow({
+      nodes: ordered,
+      edges: input.graph.edges,
+    });
     set({
       workflowId: input.id,
       name: input.name,
       active: input.active,
-      nodes,
+      nodes: relayout(nodes),
       edges,
       selectedNodeId: null,
       dirty: false,
@@ -138,10 +178,15 @@ export const useWorkflowEditor = create<WorkflowEditorState>((set, get) => ({
   markSaved: () => set({ dirty: false }),
 
   onNodesChange: (changes) =>
-    set((s) => ({
-      nodes: applyNodeChanges(changes, s.nodes),
-      dirty: s.dirty || changes.some(nodeChangeIsPersistent),
-    })),
+    set((s) => {
+      // Removal is handled by removeNode (it also prunes edges and relayouts the
+      // column), so drop xyflow's own remove changes to avoid double-handling.
+      const applicable = changes.filter((c) => c.type !== "remove");
+      return {
+        nodes: applyNodeChanges(applicable, s.nodes),
+        dirty: s.dirty || applicable.some(nodeChangeIsPersistent),
+      };
+    }),
   onEdgesChange: (changes) =>
     set((s) => ({
       edges: applyEdgeChanges(changes, s.edges),
@@ -159,24 +204,35 @@ export const useWorkflowEditor = create<WorkflowEditorState>((set, get) => ({
       dirty: true,
     })),
 
-  addNode: (nodeTypeId, position) =>
+  addNode: (nodeTypeId) =>
     set((s) => {
-      const nextPosition =
-        s.nodes.length === 0
-          ? position
-          : {
-              x: s.nodes[0]?.position.x ?? DEFAULT_NODE_POSITION.x,
-              y:
-                Math.max(...s.nodes.map((n) => n.position.y)) +
-                DEFAULT_NODE_GAP_Y,
-            };
+      const trigger = isTriggerType(nodeTypeId);
+      // A workflow has at most one trigger; ignore a second one.
+      if (trigger && s.nodes.some((n) => isTriggerType(n.type))) return {};
       const node: WfNode = {
         id: crypto.randomUUID(),
         type: nodeTypeId,
-        position: nextPosition,
+        position: { x: COLUMN_X, y: 0 },
         data: { config: defaultConfig(nodeTypeId) },
       };
-      return { nodes: [...s.nodes, node], selectedNodeId: node.id, dirty: true };
+      // Trigger pins to the top (Step 0); every other node appends below.
+      const nodes = trigger ? [node, ...s.nodes] : [...s.nodes, node];
+      return { nodes: relayout(nodes), selectedNodeId: node.id, dirty: true };
+    }),
+
+  moveNode: (id, direction) =>
+    set((s) => {
+      const i = s.nodes.findIndex((n) => n.id === id);
+      if (i < 0) return {};
+      const j = direction === "up" ? i - 1 : i + 1;
+      if (j < 0 || j >= s.nodes.length) return {};
+      // Keep the trigger pinned: it never moves, and no step may cross above it.
+      if (isTriggerType(s.nodes[i].type) || isTriggerType(s.nodes[j].type)) {
+        return {};
+      }
+      const next = [...s.nodes];
+      [next[i], next[j]] = [next[j], next[i]];
+      return { nodes: relayout(next), dirty: true };
     }),
 
   updateNodeConfig: (nodeId, config) =>
@@ -214,7 +270,7 @@ export const useWorkflowEditor = create<WorkflowEditorState>((set, get) => ({
 
   removeNode: (id) =>
     set((s) => ({
-      nodes: s.nodes.filter((n) => n.id !== id),
+      nodes: relayout(s.nodes.filter((n) => n.id !== id)),
       edges: s.edges.filter((e) => e.source !== id && e.target !== id),
       selectedNodeId: s.selectedNodeId === id ? null : s.selectedNodeId,
       dirty: true,

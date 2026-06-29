@@ -5,8 +5,7 @@ import { isUuid } from "@/lib/utils";
 import { listRunsWithWorkflow } from "@/lib/workflows/runs-service";
 import { listWorkflows } from "@/lib/workflows/service";
 import type { RunStatus } from "@/lib/workflows/types";
-import { RunListItem } from "@/components/workflow/run-list-item";
-import { RunsLive } from "@/components/workflow/runs-live";
+import { RunsLiveList } from "@/components/workflow/runs-live-list";
 import { RunsFilters } from "./runs-filters";
 
 export const dynamic = "force-dynamic";
@@ -44,8 +43,6 @@ export default async function RunsPage({
 
   return (
     <div className="mx-auto max-w-3xl">
-      <RunsLive />
-
       <div className="flex items-center gap-2">
         <Activity className="size-5" />
         <h1 className="text-2xl font-semibold">Runs</h1>
@@ -73,34 +70,32 @@ export default async function RunsPage({
             />
           </div>
 
-          {runs.length === 0 ? (
-            <div className="mt-6 rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
-              {filtered ? (
-                "No runs match these filters."
-              ) : (
-                <>
-                  No runs yet. Trigger a workflow from its{" "}
-                  <Link href="/workflows" className="underline">
-                    connection webhook
-                  </Link>
-                  .
-                </>
-              )}
-            </div>
-          ) : (
-            <div className="mt-4 divide-y rounded-lg border">
-              {runs.map((r) => (
-                <RunListItem
-                  key={r.id}
-                  runId={r.id}
-                  workflowId={r.workflowId}
-                  workflowName={r.workflowName}
-                  status={r.status}
-                  createdAt={r.createdAt}
-                />
-              ))}
-            </div>
-          )}
+          <RunsLiveList
+            key={`${status ?? ""}|${workflowId ?? ""}|${q ?? ""}`}
+            className="mt-4"
+            initialRuns={runs}
+            showWorkflowName
+            workflowId={workflowId}
+            status={status}
+            q={q}
+            pollLimit={50}
+            maxRows={200}
+            emptyState={
+              <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
+                {filtered ? (
+                  "No runs match these filters."
+                ) : (
+                  <>
+                    No runs yet. Trigger a workflow from its{" "}
+                    <Link href="/workflows" className="underline">
+                      connection webhook
+                    </Link>
+                    .
+                  </>
+                )}
+              </div>
+            }
+          />
         </>
       )}
     </div>

@@ -7,6 +7,7 @@ import type {
 import {
   baseStyle,
   fillToStyle,
+  imageClipStyle,
   imageContainerStyle,
   resolveImageSrc,
   resolveText,
@@ -56,6 +57,7 @@ export function ElementView({
               height: "100%",
               objectFit: el.objectFit ?? "cover",
               display: "block",
+              ...imageClipStyle(el),
             }}
           />
         ) : (

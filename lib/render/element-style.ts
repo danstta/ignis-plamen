@@ -107,14 +107,32 @@ export function shapeStyle(el: ShapeElement): CSSProperties {
   };
 }
 
+/**
+ * The corner radius that clips an image to its shape: a full circle/ellipse for
+ * "ellipse", otherwise the rect corner radius. Lives in one place so the
+ * container and the `<img>` itself always agree.
+ */
+export function imageBorderRadius(el: ImageElement): string | number {
+  return el.shape === "ellipse" ? "50%" : (el.borderRadius ?? 0);
+}
+
 export function imageContainerStyle(el: ImageElement): CSSProperties {
   return {
     display: "flex",
     overflow: "hidden",
-    // "ellipse" clips to an ellipse; "rect" (default) uses the corner radius.
-    borderRadius: el.shape === "ellipse" ? "50%" : (el.borderRadius ?? 0),
+    borderRadius: imageBorderRadius(el),
     ...borderToStyle(el),
   };
+}
+
+/**
+ * Clip applied directly to the `<img>`. Browsers clip the image to the
+ * container's `border-radius` + `overflow: hidden`, but Satori (next/og) does
+ * not clip `<img>` children that way — so the radius must also live on the
+ * image element itself for the exported PNG to match the editor.
+ */
+export function imageClipStyle(el: ImageElement): CSSProperties {
+  return { borderRadius: imageBorderRadius(el) };
 }
 
 /** Resolve the text shown for a text element given (optional) placeholder data. */

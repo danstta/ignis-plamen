@@ -11,8 +11,7 @@ import { getDashboardStats } from "@/lib/dashboard/stats";
 import { listRunsWithWorkflow } from "@/lib/workflows/runs-service";
 import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/dashboard/stat-card";
-import { RunListItem } from "@/components/workflow/run-list-item";
-import { RunsLive } from "@/components/workflow/runs-live";
+import { RunsLiveList } from "@/components/workflow/runs-live-list";
 
 export const dynamic = "force-dynamic";
 
@@ -31,8 +30,6 @@ export default async function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      <RunsLive />
-
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Dashboard</h1>
@@ -110,24 +107,18 @@ export default async function DashboardPage() {
               </Link>
             </div>
 
-            {recentRuns.length === 0 ? (
-              <div className="mt-3 rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
-                No runs yet. Activate a workflow to see executions here.
-              </div>
-            ) : (
-              <div className="mt-3 divide-y rounded-lg border">
-                {recentRuns.map((r) => (
-                  <RunListItem
-                    key={r.id}
-                    runId={r.id}
-                    workflowId={r.workflowId}
-                    workflowName={r.workflowName}
-                    status={r.status}
-                    createdAt={r.createdAt}
-                  />
-                ))}
-              </div>
-            )}
+            <RunsLiveList
+              className="mt-3"
+              initialRuns={recentRuns}
+              showWorkflowName
+              pollLimit={6}
+              maxRows={6}
+              emptyState={
+                <div className="rounded-lg border border-dashed p-10 text-center text-sm text-muted-foreground">
+                  No runs yet. Activate a workflow to see executions here.
+                </div>
+              }
+            />
           </div>
         </>
       ) : null}

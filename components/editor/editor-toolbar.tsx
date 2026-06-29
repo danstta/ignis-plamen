@@ -9,6 +9,13 @@ import {
   Image as ImageIcon,
   Square,
   Circle,
+  Triangle,
+  Diamond,
+  Hexagon,
+  Star,
+  ArrowRight,
+  Minus,
+  Shapes as ShapesIcon,
   Braces,
   Tag,
   Sparkles,
@@ -17,15 +24,22 @@ import {
   Plus,
   Save,
   Download,
+  type LucideIcon,
 } from "lucide-react";
 import { activeBrand, useEditor } from "@/lib/editor/store";
 import {
   createImage,
+  createLine,
   createShape,
   createText,
   createTextChip,
 } from "@/lib/editor/factory";
-import { CANVAS_PRESETS, type CanvasPreset } from "@/lib/editor/types";
+import {
+  CANVAS_PRESETS,
+  type CanvasPreset,
+  type TemplateDoc,
+  type TemplateElement,
+} from "@/lib/editor/types";
 import { generateReactComponent } from "@/lib/codegen/react";
 import { generateHtml } from "@/lib/codegen/html";
 import { toComponentName } from "@/lib/codegen/serialize";
@@ -38,10 +52,7 @@ import type { SaveStatus } from "@/lib/hooks/use-autosave";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -51,6 +62,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
+/**
+ * The "Shapes" menu, as data so the dropdown is a single map. Each item builds
+ * its element from the active doc; "Line" is a rect preset (see {@link createLine}),
+ * everything else is a {@link createShape} kind.
+ */
+const SHAPE_ITEMS: {
+  label: string;
+  icon: LucideIcon;
+  make: (doc: TemplateDoc) => TemplateElement;
+}[] = [
+  { label: "Rectangle", icon: Square, make: (d) => createShape(d, "rect") },
+  { label: "Ellipse", icon: Circle, make: (d) => createShape(d, "ellipse") },
+  { label: "Triangle", icon: Triangle, make: (d) => createShape(d, "triangle") },
+  { label: "Line", icon: Minus, make: createLine },
+  { label: "Diamond", icon: Diamond, make: (d) => createShape(d, "diamond") },
+  { label: "Hexagon", icon: Hexagon, make: (d) => createShape(d, "hexagon") },
+  { label: "Star", icon: Star, make: (d) => createShape(d, "star") },
+  { label: "Arrow", icon: ArrowRight, make: (d) => createShape(d, "arrow") },
+];
 
 export function EditorToolbar({
   onSave,
@@ -134,23 +165,10 @@ export function EditorToolbar({
     toast.success("Exported HTML");
   }
 
-  function add(kind: "text" | "image" | "shape-rect" | "shape-ellipse") {
+  /** Build an element from the active doc, add it, and select it. */
+  function insert(make: (doc: TemplateDoc) => TemplateElement) {
     const state = useEditor.getState();
-    const d = state.doc;
-    const el =
-      kind === "text"
-        ? createText(d)
-        : kind === "image"
-          ? createImage(d)
-          : createShape(d, kind === "shape-ellipse" ? "ellipse" : "rect");
-    state.addElement(el);
-    state.select([el.id]);
-  }
-
-  function addBrandLogo() {
-    if (!brandLogoUrl) return;
-    const state = useEditor.getState();
-    const el = createImage(state.doc, { src: brandLogoUrl });
+    const el = make(state.doc);
     state.addElement(el);
     state.select([el.id]);
   }
@@ -160,10 +178,7 @@ export function EditorToolbar({
       'Name the chip placeholder (e.g. "location") — leave blank for fixed text',
     );
     if (key === null) return;
-    const state = useEditor.getState();
-    const el = createTextChip(state.doc, { placeholderKey: key || undefined });
-    state.addElement(el);
-    state.select([el.id]);
+    insert((d) => createTextChip(d, { placeholderKey: key || undefined }));
   }
 
   function addPlaceholder(kind: "text" | "image") {
@@ -171,14 +186,11 @@ export function EditorToolbar({
       `Name the ${kind} placeholder (e.g. "title", "background")`,
     );
     if (!key) return;
-    const state = useEditor.getState();
-    const d = state.doc;
-    const el =
+    insert((d) =>
       kind === "text"
         ? createText(d, { placeholderKey: key })
-        : createImage(d, { placeholderKey: key });
-    state.addElement(el);
-    state.select([el.id]);
+        : createImage(d, { placeholderKey: key }),
+    );
   }
 
   const currentPreset = (Object.keys(CANVAS_PRESETS) as CanvasPreset[]).find(
@@ -211,42 +223,56 @@ export function EditorToolbar({
         <DropdownMenuTrigger
           render={<Button variant="outline" size="sm" className="h-8 gap-1" />}
         >
-          <Plus className="size-4" /> Add
+          <ShapesIcon className="size-4" /> Shapes
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>Elements</DropdownMenuLabel>
-            <DropdownMenuItem onClick={() => add("text")}>
-              <Type className="size-4" /> Text
+          {SHAPE_ITEMS.map(({ label, icon: Icon, make }) => (
+            <DropdownMenuItem key={label} onClick={() => insert(make)}>
+              <Icon className="size-4" /> {label}
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => add("image")}>
-              <ImageIcon className="size-4" /> Image
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={<Button variant="outline" size="sm" className="h-8 gap-1" />}
+        >
+          <Plus className="size-4" /> Elements
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuItem onClick={() => insert(createText)}>
+            <Type className="size-4" /> Text
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => insert(createImage)}>
+            <ImageIcon className="size-4" /> Image
+          </DropdownMenuItem>
+          {brandLogoUrl ? (
+            <DropdownMenuItem
+              onClick={() => insert((d) => createImage(d, { src: brandLogoUrl }))}
+            >
+              <Sparkles className="size-4" /> Brand logo
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => add("shape-rect")}>
-              <Square className="size-4" /> Rectangle
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => add("shape-ellipse")}>
-              <Circle className="size-4" /> Ellipse
-            </DropdownMenuItem>
-            {brandLogoUrl ? (
-              <DropdownMenuItem onClick={addBrandLogo}>
-                <Sparkles className="size-4" /> Brand logo
-              </DropdownMenuItem>
-            ) : null}
-          </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>Placeholders</DropdownMenuLabel>
-            <DropdownMenuItem onClick={() => addPlaceholder("text")}>
-              <Braces className="size-4" /> Text placeholder
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => addPlaceholder("image")}>
-              <Braces className="size-4" /> Image placeholder
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={addTextChip}>
-              <Tag className="size-4" /> Text chip (auto width)
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={<Button variant="outline" size="sm" className="h-8 gap-1" />}
+        >
+          <Braces className="size-4" /> Placeholders
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuItem onClick={() => addPlaceholder("text")}>
+            <Braces className="size-4" /> Text placeholder
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => addPlaceholder("image")}>
+            <Braces className="size-4" /> Image placeholder
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={addTextChip}>
+            <Tag className="size-4" /> Text chip (auto width)
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 

@@ -29,6 +29,7 @@ import {
   toGradient,
   toSolid,
 } from "@/lib/editor/types";
+import { isPolygonShape } from "@/lib/editor/shapes";
 import { fillToStyle } from "@/lib/render/element-style";
 import { FIT_MAX_FONT_SIZE, FIT_MIN_FONT_SIZE } from "@/lib/render/fit-text";
 import { FONT_FAMILIES, FONTS } from "@/lib/render/font-registry";
@@ -822,6 +823,9 @@ function ImageProps({ element }: { element: ImageElement }) {
 function ShapeProps({ element }: { element: ShapeElement }) {
   const update = useEditor((s) => s.updateElement);
   const id = element.id;
+  // Polygon shapes (triangle, star, …) are clipped: a CSS border is sliced by the
+  // clip and corner radius is a no-op, so hide both controls for them.
+  const polygon = isPolygonShape(element.shape);
   return (
     <>
       <Field label="Fill">
@@ -836,9 +840,13 @@ function ShapeProps({ element }: { element: ShapeElement }) {
         </Field>
       ) : null}
 
-      <Separator />
-      <SectionTitle>Border</SectionTitle>
-      <BorderControls element={element} />
+      {polygon ? null : (
+        <>
+          <Separator />
+          <SectionTitle>Border</SectionTitle>
+          <BorderControls element={element} />
+        </>
+      )}
     </>
   );
 }

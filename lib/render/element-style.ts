@@ -10,6 +10,7 @@ import {
   type TextElement,
   isGradient,
 } from "@/lib/editor/types";
+import { shapeGeometryStyle } from "@/lib/editor/shapes";
 
 /**
  * Pure element -> CSS helpers shared by the editor canvas and the Satori renderer.
@@ -101,7 +102,7 @@ export function shapeStyle(el: ShapeElement): CSSProperties {
   return {
     display: "flex",
     ...fillToStyle(el.fill),
-    borderRadius: el.shape === "ellipse" ? "50%" : (el.borderRadius ?? 0),
+    ...shapeGeometryStyle(el.shape, el.borderRadius),
     ...borderToStyle(el),
   };
 }

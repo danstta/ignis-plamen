@@ -4,14 +4,9 @@ import { getTemplate } from "@/lib/templates/service";
 import { renderDocPages } from "@/lib/render/renderer";
 import { storage } from "@/lib/storage";
 import { collectPlaceholders, type PlaceholderData } from "@/lib/editor/types";
+import { valueToText } from "@/lib/workflows/references";
 import type { NodeDefinition } from "../types";
 import { renderTemplateMeta, type RenderTemplateConfig } from "./meta";
-
-/** Coerce a resolved binding value to the string a placeholder expects. */
-function toText(v: unknown): string {
-  if (v === null || v === undefined) return "";
-  return typeof v === "string" ? v : JSON.stringify(v);
-}
 
 /**
  * Renders a design template to PNGs — one per page. Each template placeholder
@@ -40,7 +35,7 @@ export const renderTemplateNode: NodeDefinition<RenderTemplateConfig> = {
       const bound = bindings[ph.key];
       data[ph.key] =
         bound !== undefined && bound !== ""
-          ? toText(bound)
+          ? valueToText(bound)
           : (fields[ph.key] ?? "");
       ctx.log(`placeholder "${ph.key}" (${ph.kind}) = ${data[ph.key] || "(empty)"}`);
     }

@@ -82,7 +82,7 @@ export function collectUpstreamFields(
     const nodeLabel = meta?.label ?? n.type;
 
     // Webhook nodes don't surface their raw body/headers/query ports. Instead the
-    // user picks exact dot-paths from a captured sample (see WebhookFieldsDialog),
+    // user picks structural dot-paths from a captured sample (see WebhookFieldsDialog),
     // and only those become referenceable downstream. Nothing picked = nothing
     // exposed, so the "Data" picker stays scoped to what was deliberately chosen.
     if (n.type === "webhook") {
@@ -163,22 +163,57 @@ export function collectConnectablePorts(
   return ports;
 }
 
-/** Flatten a captured webhook payload into referenceable dot-paths + previews. */
+/** A path segment that is a bare integer — an array index in a captured sample. */
+const ARRAY_INDEX = /^\d+$/;
+
+/**
+ * Normalize a literal dot-path to a structural one by replacing array-index
+ * segments with `*`: `items.0.title` -> `items.*.title`. This is what lets a
+ * selection describe the payload's *shape* instead of one captured request's
+ * positions. (A numeric *object* key is indistinguishable from an index in a
+ * dot-path and is wildcarded too; `*` still resolves it — see resolvePathMatches.)
+ */
+export function toStructuralPath(path: string): string {
+  return path
+    .split(".")
+    .map((seg) => (ARRAY_INDEX.test(seg) ? "*" : seg))
+    .join(".");
+}
+
+/**
+ * Discover the referenceable dot-paths in a captured webhook payload (+ a value
+ * preview for each), as *structural* paths: array indices collapse to `*`, so
+ * `items.0.title` and `items.1.title` both surface once as `items.*.title` (first
+ * preview kept). See resolvePathMatches for how `*` resolves at run time.
+ */
 export function flattenSample(
+  payload: unknown,
+): { path: string; preview: string }[] {
+  const seen = new Set<string>();
+  const out: { path: string; preview: string }[] = [];
+  for (const { path, preview } of flattenRaw(payload)) {
+    const structural = toStructuralPath(path);
+    if (seen.has(structural)) continue;
+    seen.add(structural);
+    out.push({ path: structural, preview });
+  }
+  return out;
+}
+
+/** Raw recursive flatten: every leaf (and capped-depth container) as a literal dot-path. */
+function flattenRaw(
   payload: unknown,
   prefix = "",
   depth = 0,
 ): { path: string; preview: string }[] {
   if (depth > 3 || payload === null || typeof payload !== "object") {
-    return prefix
-      ? [{ path: prefix, preview: previewValue(payload) }]
-      : [];
+    return prefix ? [{ path: prefix, preview: previewValue(payload) }] : [];
   }
   const out: { path: string; preview: string }[] = [];
   for (const [k, v] of Object.entries(payload as Record<string, unknown>)) {
     const path = prefix ? `${prefix}.${k}` : k;
     if (v !== null && typeof v === "object" && depth < 3) {
-      out.push(...flattenSample(v, path, depth + 1));
+      out.push(...flattenRaw(v, path, depth + 1));
     } else {
       out.push({ path, preview: previewValue(v) });
     }
@@ -194,22 +229,104 @@ function previewValue(v: unknown): string {
 
 // --- Runtime resolution (engine) ---
 
+/**
+ * Resolve a `<nodeId>.<dotPath>` reference against computed outputs (or the
+ * trigger). A path may contain `*` wildcard segments (from structural webhook
+ * selections): a wildcard yields every match, so the result is the single value
+ * when exactly one matches, an array when several do, and undefined when none do.
+ * Wildcard-free paths keep the original single-value fast path unchanged.
+ */
 function lookup(
   ref: string,
   outputs: Record<string, Record<string, unknown>>,
   trigger: Record<string, unknown>,
 ): unknown {
   const [nodeId, ...path] = ref.split(".");
-  let base: unknown = outputs[nodeId] ?? (nodeId === "trigger" ? trigger : undefined);
-  for (const key of path) {
-    if (base === null || base === undefined) return undefined;
-    base = (base as Record<string, unknown>)[key];
+  const root: unknown =
+    outputs[nodeId] ?? (nodeId === "trigger" ? trigger : undefined);
+  if (!path.includes("*")) {
+    let base: unknown = root;
+    for (const key of path) {
+      if (base === null || base === undefined) return undefined;
+      base = (base as Record<string, unknown>)[key];
+    }
+    return base;
   }
-  return base;
+  const matches = resolvePathMatches(root, path);
+  return matches.length === 0
+    ? undefined
+    : matches.length === 1
+      ? matches[0]
+      : matches;
+}
+
+/**
+ * Every value reachable from `root` along `segments`, in document order, where a
+ * `*` segment matches any array element or any object value. Returns [] when the
+ * path doesn't resolve. Shared by token resolution (lookup) and webhook payload
+ * validation, so "what a path matches" and "what counts as present" never drift.
+ * An explicit `null` leaf counts as a match (it was deliberately sent); a missing
+ * key (`undefined`) does not.
+ */
+export function resolvePathMatches(root: unknown, segments: string[]): unknown[] {
+  let frontier: unknown[] = root === undefined ? [] : [root];
+  for (const seg of segments) {
+    const next: unknown[] = [];
+    for (const cur of frontier) {
+      if (cur === null || cur === undefined) continue;
+      if (seg === "*") {
+        if (Array.isArray(cur)) {
+          for (const v of cur) if (v !== undefined) next.push(v);
+        } else if (typeof cur === "object") {
+          for (const v of Object.values(cur as Record<string, unknown>)) {
+            if (v !== undefined) next.push(v);
+          }
+        }
+      } else if (typeof cur === "object") {
+        const v = (cur as Record<string, unknown>)[seg];
+        if (v !== undefined) next.push(v);
+      }
+    }
+    frontier = next;
+  }
+  return frontier;
+}
+
+/**
+ * Which of `paths` are absent from `payload` — i.e. resolve to zero values. A
+ * webhook's locked-in (selected) paths are its expected contract; the engine fails
+ * a run up-front when any are missing, instead of silently rendering blanks (see
+ * startRun). `payload` is the trigger envelope `{ body, headers, query }`, matching
+ * how selections are captured.
+ */
+export function validateLockedPaths(payload: unknown, paths: string[]): string[] {
+  return paths.filter(
+    (p) => resolvePathMatches(payload, p.split(".")).length === 0,
+  );
 }
 
 const TOKEN = /\{\{\s*([^}]+?)\s*\}\}/g;
 const EXACT = /^\{\{\s*([^}]+?)\s*\}\}$/;
+
+/**
+ * Coerce a resolved token value to display text. Strings pass through; numbers and
+ * booleans stringify; an array (e.g. a `*` wildcard match) joins its non-empty
+ * parts with ", "; anything else is JSON. Used for interpolated tokens here and by
+ * nodes that fill a single text/image slot (e.g. render-template), so a one-element
+ * wildcard match renders as that element and a multi-element one reads as a list.
+ */
+export function valueToText(v: unknown): string {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  if (Array.isArray(v)) {
+    return v
+      .map(valueToText)
+      .filter((s) => s !== "")
+      .join(", ");
+  }
+  return JSON.stringify(v);
+}
 
 function resolveString(
   s: string,
@@ -218,11 +335,9 @@ function resolveString(
 ): unknown {
   const exact = s.match(EXACT);
   if (exact) return lookup(exact[1].trim(), outputs, trigger);
-  return s.replace(TOKEN, (_, ref: string) => {
-    const v = lookup(ref.trim(), outputs, trigger);
-    if (v === null || v === undefined) return "";
-    return typeof v === "string" ? v : JSON.stringify(v);
-  });
+  return s.replace(TOKEN, (_, ref: string) =>
+    valueToText(lookup(ref.trim(), outputs, trigger)),
+  );
 }
 
 /** Deep-replace `{{…}}` tokens in a node's config from upstream outputs. */

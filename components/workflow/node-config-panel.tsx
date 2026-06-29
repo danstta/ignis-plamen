@@ -10,6 +10,8 @@ import {
   collectConnectablePorts,
   collectUpstreamFields,
   flattenSample,
+  resolvePathMatches,
+  toStructuralPath,
   type FieldRef,
   type RefNode,
 } from "@/lib/workflows/references";
@@ -238,22 +240,17 @@ export function NodeConfigPanel({
         return;
       }
       const fields = flattenSample(payload);
-      // Keep any prior picks that still resolve in the fresh payload; a first
-      // capture starts empty so the user deliberately chooses what to expose.
-      const stillValid = (path: string) => {
-        let cur: unknown = payload;
-        for (const k of path.split(".")) {
-          if (cur === null || typeof cur !== "object") return false;
-          cur = (cur as Record<string, unknown>)[k];
-          if (cur === undefined) return false;
-        }
-        return true;
-      };
+      // Carry over prior picks that still resolve in the fresh payload, upgrading
+      // any legacy literal-index paths to structural (`*`) form and de-duping. A
+      // first capture has none, so the user deliberately chooses what to expose.
+      const keptSelected = [
+        ...new Set(selectedFields.map(toStructuralPath)),
+      ].filter((path) => resolvePathMatches(payload, path.split(".")).length > 0);
       updateNodeConfig(selectedNodeId, {
         ...config,
         sample: payload,
         sampleFields: fields,
-        selectedFields: selectedFields.filter(stillValid),
+        selectedFields: keptSelected,
       });
       toast.success(`Captured ${fields.length} fields`);
     });

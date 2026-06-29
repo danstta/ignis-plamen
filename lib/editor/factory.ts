@@ -4,6 +4,7 @@ import type {
   TemplateDoc,
   TextElement,
 } from "./types";
+import type { ShapeKind } from "./shapes";
 
 export const DEFAULT_FONT = "Inter";
 
@@ -91,7 +92,7 @@ export function createImage(
 
 export function createShape(
   doc: TemplateDoc,
-  shape: "rect" | "ellipse" = "rect",
+  shape: ShapeKind = "rect",
 ): ShapeElement {
   const width = 320;
   const height = 320;
@@ -103,6 +104,27 @@ export function createShape(
     height,
     shape,
     fill: "#3b82f6",
+    // Corner radius only applies to "rect"; other kinds ignore it.
     borderRadius: shape === "rect" ? 16 : 0,
+  };
+}
+
+/**
+ * A line / divider: a thin rounded bar spanning half the canvas width. It is a
+ * "rect" shape (so it keeps the corner-radius + border controls) preset to line
+ * proportions — there is no distinct "line" geometry to render.
+ */
+export function createLine(doc: TemplateDoc): ShapeElement {
+  const width = Math.round(doc.width * 0.5);
+  const height = 8;
+  return {
+    id: crypto.randomUUID(),
+    type: "shape",
+    ...center(doc, width, height),
+    width,
+    height,
+    shape: "rect",
+    fill: "#111111",
+    borderRadius: 999,
   };
 }

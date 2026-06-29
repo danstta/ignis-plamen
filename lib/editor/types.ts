@@ -8,6 +8,8 @@
  * absolute positioning only). Keep new style props within the Satori-safe subset.
  */
 
+import type { ShapeKind } from "./shapes";
+
 export type ElementType = "text" | "image" | "shape";
 
 /** A single color stop along a gradient. */
@@ -150,9 +152,14 @@ export interface ImageElement extends BaseElement, Bordered {
 
 export interface ShapeElement extends BaseElement, Bordered {
   type: "shape";
-  shape: "rect" | "ellipse";
+  /**
+   * Shape geometry. "rect"/"ellipse" use {@link borderRadius}; the polygon kinds
+   * (triangle, diamond, …) are clipped — see {@link ShapeKind} and `shapes.ts`.
+   */
+  shape: ShapeKind;
   /** Solid color or gradient. */
   fill: Fill;
+  /** Rounded corners (px) — only applies to the "rect" shape. */
   borderRadius?: number;
 }
 

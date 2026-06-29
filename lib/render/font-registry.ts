@@ -41,9 +41,15 @@ export type FontDef =
       weights: readonly FontWeight[];
     };
 
-// Loaded so Latin-Extended glyphs (e.g. Balkan č/ć/š/ž/đ) render via Satori's
-// glyph fallback, matching the original Inter-only behavior.
-const LATIN = ["latin", "latin-ext"] as const;
+// Subsets fetched for every Fontsource family. Latin + Latin-Extended cover
+// Western/Balkan diacritics (č/ć/š/ž/đ); Cyrillic + Cyrillic-Extended cover
+// Serbian/Russian/etc. Satori composes glyphs across all loaded subset faces,
+// and the server-side auto-fit measurer (lib/render/measure-server.ts) mirrors
+// that, so a document mixing scripts both renders and fits correctly. Other
+// scripts (Greek, Vietnamese) still fall back to .notdef — add their subsets
+// here to support them. A subset a given weight doesn't ship 404s and is
+// skipped gracefully, so over-listing is safe.
+const SUBSETS = ["latin", "latin-ext", "cyrillic", "cyrillic-ext"] as const;
 
 /** The font every render keeps loaded as the ultimate layout/glyph fallback. */
 export const FALLBACK_FAMILY = "Inter";
@@ -54,7 +60,7 @@ export const FONTS: Record<string, FontDef> = {
     kind: "fontsource",
     pkg: "@fontsource/inter@4.5.15",
     slug: "inter",
-    subsets: LATIN,
+    subsets: SUBSETS,
     weights: [100, 200, 300, 400, 500, 600, 700, 800, 900],
   },
   Roboto: {
@@ -62,7 +68,7 @@ export const FONTS: Record<string, FontDef> = {
     kind: "fontsource",
     pkg: "@fontsource/roboto@5.0.8",
     slug: "roboto",
-    subsets: LATIN,
+    subsets: SUBSETS,
     // Roboto on Fontsource ships these weights only (no 200/600/800).
     weights: [100, 300, 400, 500, 700, 900],
   },
@@ -71,7 +77,7 @@ export const FONTS: Record<string, FontDef> = {
     kind: "fontsource",
     pkg: "@fontsource/montserrat@5.0.18",
     slug: "montserrat",
-    subsets: LATIN,
+    subsets: SUBSETS,
     weights: [100, 200, 300, 400, 500, 600, 700, 800, 900],
   },
   // Licensed faces — supply the files in public/fonts/ (see the README there).

@@ -8,7 +8,7 @@ import type {
 } from "@/lib/editor/types";
 import { resolveText } from "./element-style";
 import { type LineMeasurer, resolveFontSize } from "./fit-text";
-import { loadFontBytes } from "./fonts";
+import { loadFontFaceBytes } from "./fonts";
 
 /**
  * Server-side text measurement for {@link TextElement.autoFit}, used by the
@@ -19,32 +19,84 @@ import { loadFontBytes } from "./fonts";
  * the shared algorithm in `fit-text.ts`, so PNG and preview agree.
  */
 
-// Parsed fonts are reused across renders (and across the deduped preload below).
-const fontCache = new Map<string, Font | null>();
+// Parsed faces are reused across renders (and across the deduped preload below).
+// Each family@weight maps to every subset face that loaded (Latin, Cyrillic, …);
+// the measurer composes glyph advances across them, mirroring how Satori draws.
+const faceCache = new Map<string, Font[]>();
+
+/**
+ * Width (in em) charged for a code point no loaded face can draw. opentype's own
+ * `.notdef` advance is ~1em, which made Cyrillic text measured against a
+ * Latin-only face come out ~1.8× too wide and auto-fit to a tiny size. A half-em
+ * is a sane neutral guess and matches the no-font rough estimate below.
+ */
+const MISSING_GLYPH_EM = 0.5;
 
 function cacheKey(family: string, weight: number): string {
   return `${family}@${weight}`;
 }
 
-async function loadFont(family: string, weight: number): Promise<Font | null> {
+async function loadFaces(family: string, weight: number): Promise<Font[]> {
   const key = cacheKey(family, weight);
-  const cached = fontCache.get(key);
+  const cached = faceCache.get(key);
   if (cached !== undefined) return cached;
-  let font: Font | null = null;
+  let faces: Font[] = [];
   try {
-    const bytes = await loadFontBytes(family, weight);
-    if (bytes) font = parse(bytes);
+    const buffers = await loadFontFaceBytes(family, weight);
+    // Parse each face independently so one bad subset can't sink the rest.
+    faces = buffers.flatMap((bytes) => {
+      try {
+        return [parse(bytes)];
+      } catch {
+        return [];
+      }
+    });
   } catch {
-    font = null;
+    faces = [];
   }
-  fontCache.set(key, font);
-  return font;
+  faceCache.set(key, faces);
+  return faces;
 }
 
-/** A {@link LineMeasurer} from a parsed font; rough estimate when unavailable. */
-function measurerFor(font: Font | null): LineMeasurer {
-  if (!font) return (text, fontSize) => text.length * fontSize * 0.5;
-  return (text, fontSize) => font.getAdvanceWidth(text, fontSize);
+/**
+ * A {@link LineMeasurer} backed by a family's subset faces. Each code point's
+ * advance is resolved against the FIRST face that actually has the glyph —
+ * mirroring Satori's cross-subset glyph fallback — so mixed-script text (Latin +
+ * Cyrillic) measures at its true width. Glyphs absent from every face fall back
+ * to {@link MISSING_GLYPH_EM} rather than opentype's wide `.notdef`. With no
+ * parsed face at all, a rough per-character estimate is used.
+ *
+ * Kerning is intentionally ignored: it can't be composed across faces and its
+ * effect is below the slack `fit-text.ts` already leaves, while the missing-glyph
+ * error it replaces was ~80%.
+ */
+function measurerFor(faces: Font[]): LineMeasurer {
+  if (faces.length === 0) {
+    return (text, fontSize) => text.length * fontSize * 0.5;
+  }
+
+  // Advance per code point in em (font-size-independent), memoized across calls
+  // since the fitter re-measures the same text at many candidate sizes.
+  const advanceEm = new Map<string, number>();
+  const emFor = (ch: string): number => {
+    const hit = advanceEm.get(ch);
+    if (hit !== undefined) return hit;
+    let em = MISSING_GLYPH_EM;
+    for (const face of faces) {
+      if (face.hasChar(ch)) {
+        em = (face.charToGlyph(ch).advanceWidth ?? 0) / face.unitsPerEm;
+        break;
+      }
+    }
+    advanceEm.set(ch, em);
+    return em;
+  };
+
+  return (text, fontSize) => {
+    let em = 0;
+    for (const ch of text) em += emFor(ch);
+    return em * fontSize;
+  };
 }
 
 /**
@@ -61,18 +113,18 @@ export async function resolveAutoFitCanvas(
   );
   if (fitting.length === 0) return canvas;
 
-  // Preload the parsed face each fitting element needs (deduped by the cache).
+  // Preload the parsed faces each fitting element needs (deduped by the cache).
   await Promise.all(
-    fitting.map((el) => loadFont(el.fontFamily, el.fontWeight ?? 400)),
+    fitting.map((el) => loadFaces(el.fontFamily, el.fontWeight ?? 400)),
   );
 
   const elements = canvas.elements.map((el) => {
     if (el.type !== "text" || !el.autoFit) return el;
-    const font = fontCache.get(cacheKey(el.fontFamily, el.fontWeight ?? 400)) ?? null;
+    const faces = faceCache.get(cacheKey(el.fontFamily, el.fontWeight ?? 400)) ?? [];
     const fontSize = resolveFontSize(
       el,
       resolveText(el, data),
-      measurerFor(font),
+      measurerFor(faces),
     );
     return fontSize === el.fontSize ? el : { ...el, fontSize };
   });

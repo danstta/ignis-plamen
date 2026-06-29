@@ -65,6 +65,15 @@ async function readLocal(file: string): Promise<ArrayBuffer | null> {
   }
 }
 
+/** jsDelivr (Fontsource) URL for one subset face of a family at a weight. */
+function faceUrl(
+  def: Extract<FontDef, { kind: "fontsource" }>,
+  subset: string,
+  weight: FontWeight,
+): string {
+  return `https://cdn.jsdelivr.net/npm/${def.pkg}/files/${def.slug}-${subset}-${weight}-normal.woff`;
+}
+
 /** Load every face (one per weight, plus subsets for Fontsource) for a font. */
 async function loadFaces(
   def: FontDef,
@@ -77,8 +86,7 @@ async function loadFaces(
   for (const weight of weights) {
     if (def.kind === "fontsource") {
       for (const subset of def.subsets) {
-        const url = `https://cdn.jsdelivr.net/npm/${def.pkg}/files/${def.slug}-${subset}-${weight}-normal.woff`;
-        jobs.push(fetchBytes(url).then((d) => toFont(d, weight)));
+        jobs.push(fetchBytes(faceUrl(def, subset, weight)).then((d) => toFont(d, weight)));
       }
     } else {
       jobs.push(readLocal(def.file(weight)).then((d) => toFont(d, weight)));
@@ -89,23 +97,30 @@ async function loadFaces(
 }
 
 /**
- * Load the raw bytes of a single representative face (one subset/file) for a
- * family + weight. Enough for server-side text measurement (opentype.js) — which
- * only needs glyph advances, not every subset. Unknown families fall back to
- * Inter, mirroring the renderer. Returns null only when even the fallback face
- * can't be read (e.g. offline with the local file missing).
+ * Load the raw bytes of every subset face for a family + weight — the input the
+ * server-side auto-fit measurer (lib/render/measure-server.ts) parses with
+ * opentype.js. Satori is handed all faces and composes glyphs across them, but
+ * opentype measures one face at a time, so the measurer must see every subset to
+ * size mixed-script text (e.g. Latin + Cyrillic) correctly; a single Latin face
+ * would treat Cyrillic as missing glyphs and over-measure the text. Unknown
+ * families fall back to Inter, mirroring the renderer. Returns the faces that
+ * loaded — possibly empty if even the fallback can't be read (e.g. offline with
+ * a local file missing), in which case the caller uses a rough estimate.
  */
-export async function loadFontBytes(
+export async function loadFontFaceBytes(
   family: string,
   rawWeight: number,
-): Promise<ArrayBuffer | null> {
+): Promise<ArrayBuffer[]> {
   const def = FONTS[family] ?? FONTS[FALLBACK_FAMILY];
   const weight = normalizeWeight(def, rawWeight);
-  if (def.kind === "fontsource") {
-    const url = `https://cdn.jsdelivr.net/npm/${def.pkg}/files/${def.slug}-${def.subsets[0]}-${weight}-normal.woff`;
-    return fetchBytes(url);
+  if (def.kind === "local") {
+    const data = await readLocal(def.file(weight));
+    return data ? [data] : [];
   }
-  return readLocal(def.file(weight));
+  const datas = await Promise.all(
+    def.subsets.map((subset) => fetchBytes(faceUrl(def, subset, weight))),
+  );
+  return datas.filter((d): d is ArrayBuffer => d !== null);
 }
 
 /** Load the faces every text element on a canvas (one page) needs. */

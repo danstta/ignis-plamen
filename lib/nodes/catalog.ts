@@ -4,6 +4,7 @@ import { findLocationImagesMeta } from "./find-location-images/meta";
 import { rankImagesMeta } from "./rank-images/meta";
 import { manualReviewMeta } from "./manual-review/meta";
 import { renderTemplateMeta } from "./render-template/meta";
+import { rehostImageMeta } from "./rehost-image/meta";
 
 /**
  * Client-safe node catalog: metadata only (no run()), so the canvas palette,
@@ -17,6 +18,7 @@ const catalog: NodeMeta[] = [
   rankImagesMeta as unknown as NodeMeta,
   manualReviewMeta as unknown as NodeMeta,
   renderTemplateMeta as unknown as NodeMeta,
+  rehostImageMeta as unknown as NodeMeta,
 ];
 
 const byId = new Map(catalog.map((m) => [m.id, m]));

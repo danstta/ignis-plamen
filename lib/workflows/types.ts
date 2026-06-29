@@ -4,6 +4,12 @@
  * a deliberate subset of xyflow's Node/Edge so canvas <-> storage is near 1:1.
  */
 
+/** Where a step sits in control flow: inside one branch lane of a router. */
+export interface BranchRef {
+  routerId: string;
+  branchId: string;
+}
+
 /** A node placed on the workflow canvas. `type` is a node-type id from lib/nodes. */
 export interface WorkflowNode {
   id: string;
@@ -11,6 +17,11 @@ export interface WorkflowNode {
   position: { x: number; y: number };
   /** Per-node configuration, validated by the node type's configSchema at run time. */
   config: Record<string, unknown>;
+  /**
+   * Control-flow placement. Absent = trunk (the main top-to-bottom column). Set
+   * when the step lives inside a router branch — see lib/workflows/control-flow.
+   */
+  branch?: BranchRef;
 }
 
 /** A directed connection between two node ports. */

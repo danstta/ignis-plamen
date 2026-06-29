@@ -7,14 +7,12 @@ import {
   Position,
   type NodeProps,
 } from "@xyflow/react";
-import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, GitBranch, Trash2 } from "lucide-react";
 import { getNodeMeta } from "@/lib/nodes/catalog";
-import { useWorkflowEditor } from "@/lib/workflows/store";
+import { ROUTER_TYPE_ID } from "@/lib/workflows/conditions";
+import { routerBranchColumns } from "@/lib/nodes/router/meta";
+import { useWorkflowEditor, type WfNodeData } from "@/lib/workflows/store";
 import { cn } from "@/lib/utils";
-
-function isTriggerKind(type: string | undefined): boolean {
-  return !!type && getNodeMeta(type)?.category === "trigger";
-}
 
 /** A tiny icon button used in the per-node toolbar. */
 function ToolButton({
@@ -42,24 +40,19 @@ function ToolButton({
   );
 }
 
+const hiddenHandle =
+  "!size-1.5 !min-w-0 !border-0 !bg-border opacity-0";
+
 /**
  * A minimal step card: a Step badge plus the node's name. Ports and data wiring
  * are hidden here (configured in the side panel) so the canvas reads as a clean
- * vertical sequence. The hidden top/bottom handles only anchor the spine line.
+ * sequence of columns. The hidden top/bottom handles only anchor the connectors.
+ * A Router renders distinctly, listing its branch labels.
  */
-function WorkflowNodeImpl({ id, type, selected }: NodeProps) {
+function WorkflowNodeImpl({ id, type, selected, data }: NodeProps) {
   const def = getNodeMeta(type);
-  const step = useWorkflowEditor((s) => s.nodes.findIndex((n) => n.id === id));
   const moveNode = useWorkflowEditor((s) => s.moveNode);
   const removeNode = useWorkflowEditor((s) => s.removeNode);
-  const canMoveUp = useWorkflowEditor((s) => {
-    const i = s.nodes.findIndex((n) => n.id === id);
-    return i > 0 && !isTriggerKind(s.nodes[i].type) && !isTriggerKind(s.nodes[i - 1].type);
-  });
-  const canMoveDown = useWorkflowEditor((s) => {
-    const i = s.nodes.findIndex((n) => n.id === id);
-    return i >= 0 && i < s.nodes.length - 1 && !isTriggerKind(s.nodes[i].type);
-  });
 
   if (!def) {
     return (
@@ -69,7 +62,13 @@ function WorkflowNodeImpl({ id, type, selected }: NodeProps) {
     );
   }
 
+  const d = data as WfNodeData;
   const isTrigger = def.category === "trigger";
+  const isRouter = type === ROUTER_TYPE_ID;
+  const step = d.step;
+  const canMoveUp = !isTrigger && !d.laneFirst;
+  const canMoveDown = !isTrigger && !d.laneLast;
+  const branches = isRouter ? routerBranchColumns(d.config) : [];
 
   return (
     <>
@@ -106,7 +105,7 @@ function WorkflowNodeImpl({ id, type, selected }: NodeProps) {
         position={Position.Top}
         id="in"
         isConnectable={false}
-        className="!size-1.5 !min-w-0 !border-0 !bg-border opacity-0"
+        className={hiddenHandle}
       />
 
       <div
@@ -123,10 +122,18 @@ function WorkflowNodeImpl({ id, type, selected }: NodeProps) {
               "flex size-6 shrink-0 items-center justify-center rounded-md text-xs font-semibold tabular-nums",
               isTrigger
                 ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
-                : "bg-muted text-muted-foreground",
+                : isRouter
+                  ? "bg-rose-500/15 text-rose-600 dark:text-rose-400"
+                  : "bg-muted text-muted-foreground",
             )}
           >
-            {step >= 0 ? step : "?"}
+            {isRouter ? (
+              <GitBranch className="size-3.5" />
+            ) : step !== undefined ? (
+              step
+            ) : (
+              "?"
+            )}
           </span>
           <div className="min-w-0">
             <span className="block truncate text-sm font-medium">
@@ -139,6 +146,24 @@ function WorkflowNodeImpl({ id, type, selected }: NodeProps) {
             ) : null}
           </div>
         </div>
+
+        {isRouter ? (
+          <div className="mt-2 flex flex-wrap gap-1 border-t pt-2">
+            {branches.map((b) => (
+              <span
+                key={b.branchId}
+                className={cn(
+                  "rounded px-1.5 py-0.5 text-[10px] font-medium",
+                  b.isElse
+                    ? "bg-muted text-muted-foreground"
+                    : "bg-rose-500/10 text-rose-600 dark:text-rose-400",
+                )}
+              >
+                {b.label}
+              </span>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       <Handle
@@ -146,7 +171,7 @@ function WorkflowNodeImpl({ id, type, selected }: NodeProps) {
         position={Position.Bottom}
         id="out"
         isConnectable={false}
-        className="!size-1.5 !min-w-0 !border-0 !bg-border opacity-0"
+        className={hiddenHandle}
       />
     </>
   );

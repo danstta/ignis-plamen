@@ -5,6 +5,7 @@ import { rankImagesNode } from "./rank-images";
 import { manualReviewNode } from "./manual-review";
 import { renderTemplateNode } from "./render-template";
 import { rehostImageNode } from "./rehost-image";
+import { routerNode } from "./router";
 
 /**
  * Registry of available workflow node types. To add a node, implement a
@@ -18,6 +19,7 @@ const definitions: NodeDefinition[] = [
   manualReviewNode as unknown as NodeDefinition,
   renderTemplateNode as unknown as NodeDefinition,
   rehostImageNode as unknown as NodeDefinition,
+  routerNode as unknown as NodeDefinition,
 ];
 
 const byId = new Map(definitions.map((d) => [d.id, d]));

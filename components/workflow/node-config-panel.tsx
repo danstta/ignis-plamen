@@ -1,10 +1,29 @@
 "use client";
 
 import { useMemo, useRef, useState, useTransition } from "react";
-import { Braces, Trash2, Webhook as WebhookIcon } from "lucide-react";
+import {
+  Braces,
+  ChevronDown,
+  ChevronUp,
+  GitBranch,
+  Plus,
+  Trash2,
+  Webhook as WebhookIcon,
+} from "lucide-react";
 import { toast } from "sonner";
-import { getNodeMeta } from "@/lib/nodes/catalog";
+import { getNodeMeta, listNodeCatalog } from "@/lib/nodes/catalog";
 import type { NodeConfigField } from "@/lib/nodes/types";
+import {
+  CONDITION_OP_LABELS,
+  CONDITION_OPS,
+  ROUTER_TYPE_ID,
+  isUnaryOp,
+  type ConditionOp,
+} from "@/lib/workflows/conditions";
+import {
+  routerBranchColumns,
+  type RouterBranch,
+} from "@/lib/nodes/router/meta";
 import { useWorkflowEditor } from "@/lib/workflows/store";
 import {
   collectConnectablePorts,
@@ -140,10 +159,12 @@ export function NodeConfigPanel({
   connections,
   templates,
   webhookBaseUrl,
+  enabledNodeTypeIds,
 }: {
   connections: Option[];
   templates: TemplateOption[];
   webhookBaseUrl: string;
+  enabledNodeTypeIds: string[];
 }) {
   const selectedNodeId = useWorkflowEditor((s) => s.selectedNodeId);
   const node = useWorkflowEditor((s) =>
@@ -394,6 +415,15 @@ export function NodeConfigPanel({
         </div>
       ) : null}
 
+      {node.type === ROUTER_TYPE_ID ? (
+        <RouterBranchesEditor
+          routerId={selectedNodeId}
+          config={config}
+          fields={upstreamFields}
+          enabledNodeTypeIds={enabledNodeTypeIds}
+        />
+      ) : null}
+
       {def.inputs.length > 0 ? (
         <div className="flex flex-col gap-3">
           <p className="text-xs font-medium tracking-wide text-muted-foreground/70">
@@ -539,6 +569,242 @@ function RenderTemplatePlaceholders({
           </div>
         ))
       )}
+    </div>
+  );
+}
+
+/** The branch + condition editor shown when a Router node is selected. */
+function RouterBranchesEditor({
+  routerId,
+  config,
+  fields,
+  enabledNodeTypeIds,
+}: {
+  routerId: string;
+  config: Record<string, unknown>;
+  fields: FieldRef[];
+  enabledNodeTypeIds: string[];
+}) {
+  const updateNodeConfig = useWorkflowEditor((s) => s.updateNodeConfig);
+  const addRouterBranch = useWorkflowEditor((s) => s.addRouterBranch);
+  const removeRouterBranch = useWorkflowEditor((s) => s.removeRouterBranch);
+
+  const branches = (config.branches as RouterBranch[] | undefined) ?? [];
+  const columns = routerBranchColumns(config);
+
+  const updateBranch = (branchId: string, patch: Partial<RouterBranch>) => {
+    const next = branches.map((b) =>
+      b.id === branchId ? { ...b, ...patch } : b,
+    );
+    updateNodeConfig(routerId, { ...config, branches: next });
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium tracking-wide text-muted-foreground/70">
+          Branches
+        </p>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-6 gap-1 px-1.5 text-xs"
+          onClick={() => addRouterBranch(routerId)}
+        >
+          <Plus className="size-3.5" /> Add branch
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Evaluated top to bottom; the first branch whose condition holds runs. If
+        none match, Else runs.
+      </p>
+
+      {columns.map((col) => {
+        const branch = branches.find((b) => b.id === col.branchId);
+        return (
+          <div
+            key={col.branchId}
+            className="flex flex-col gap-2 rounded-md border p-3"
+          >
+            <div className="flex items-center gap-2">
+              <GitBranch className="size-3.5 shrink-0 text-rose-500" />
+              {col.isElse || !branch ? (
+                <span className="text-sm font-medium">Else</span>
+              ) : (
+                <>
+                  <Input
+                    value={branch.label}
+                    placeholder="Branch name"
+                    className="h-8"
+                    onChange={(e) =>
+                      updateBranch(col.branchId, { label: e.target.value })
+                    }
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="ml-auto size-7 shrink-0 text-muted-foreground hover:text-destructive"
+                    title="Delete branch"
+                    onClick={() => removeRouterBranch(routerId, col.branchId)}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </>
+              )}
+            </div>
+
+            {!col.isElse && branch ? (
+              <ConditionRow
+                branch={branch}
+                fields={fields}
+                onChange={(patch) => updateBranch(col.branchId, patch)}
+              />
+            ) : null}
+
+            <BranchStepList
+              routerId={routerId}
+              branchId={col.branchId}
+              enabledNodeTypeIds={enabledNodeTypeIds}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Left operand + operator + right operand for one branch's condition. */
+function ConditionRow({
+  branch,
+  fields,
+  onChange,
+}: {
+  branch: RouterBranch;
+  fields: FieldRef[];
+  onChange: (patch: Partial<RouterBranch>) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label className="text-xs text-muted-foreground">If…</Label>
+      <TokenBindingInput
+        value={branch.left}
+        onChange={(v) => onChange({ left: v })}
+        fields={fields}
+        placeholder="Value — or insert data"
+      />
+      <div className="flex gap-1.5">
+        <select
+          className={selectClass}
+          value={branch.op}
+          onChange={(e) => onChange({ op: e.target.value as ConditionOp })}
+        >
+          {CONDITION_OPS.map((op) => (
+            <option key={op} value={op}>
+              {CONDITION_OP_LABELS[op]}
+            </option>
+          ))}
+        </select>
+        {!isUnaryOp(branch.op) ? (
+          <Input
+            value={branch.right}
+            placeholder="Compare to…"
+            onChange={(e) => onChange({ right: e.target.value })}
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/** The ordered steps inside one branch lane, with add/reorder/delete controls. */
+function BranchStepList({
+  routerId,
+  branchId,
+  enabledNodeTypeIds,
+}: {
+  routerId: string;
+  branchId: string;
+  enabledNodeTypeIds: string[];
+}) {
+  const steps = useWorkflowEditor((s) =>
+    s.nodes.filter(
+      (n) =>
+        n.data.branch?.routerId === routerId &&
+        n.data.branch.branchId === branchId,
+    ),
+  );
+  const addNodeToBranch = useWorkflowEditor((s) => s.addNodeToBranch);
+  const moveNode = useWorkflowEditor((s) => s.moveNode);
+  const removeNode = useWorkflowEditor((s) => s.removeNode);
+  const selectNode = useWorkflowEditor((s) => s.selectNode);
+
+  const enabled = new Set(enabledNodeTypeIds);
+  const stepTypes = listNodeCatalog().filter(
+    (t) =>
+      enabled.has(t.id) && t.category !== "trigger" && t.id !== ROUTER_TYPE_ID,
+  );
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      {steps.map((n, i) => {
+        const meta = getNodeMeta(n.type ?? "");
+        return (
+          <div
+            key={n.id}
+            className="flex items-center gap-0.5 rounded border bg-background px-2 py-1 text-xs"
+          >
+            <button
+              type="button"
+              className="min-w-0 flex-1 truncate text-left font-medium"
+              onClick={() => selectNode(n.id)}
+            >
+              {meta?.label ?? n.type}
+            </button>
+            <button
+              type="button"
+              aria-label="Move up"
+              disabled={i === 0}
+              onClick={() => moveNode(n.id, "up")}
+              className="text-muted-foreground hover:text-foreground disabled:opacity-30"
+            >
+              <ChevronUp className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              aria-label="Move down"
+              disabled={i === steps.length - 1}
+              onClick={() => moveNode(n.id, "down")}
+              className="text-muted-foreground hover:text-foreground disabled:opacity-30"
+            >
+              <ChevronDown className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              aria-label="Delete step"
+              onClick={() => removeNode(n.id)}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          </div>
+        );
+      })}
+      <select
+        className={`${selectClass} h-8`}
+        value=""
+        onChange={(e) => {
+          if (e.target.value) addNodeToBranch(e.target.value, routerId, branchId);
+        }}
+      >
+        <option value="">+ Add step…</option>
+        {stepTypes.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.label}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

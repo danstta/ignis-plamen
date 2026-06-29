@@ -13,6 +13,11 @@ const nodeSchema = z.object({
   type: z.string().min(1),
   position: z.object({ x: z.number(), y: z.number() }),
   config: z.record(z.string(), z.unknown()).default({}),
+  // Control-flow placement: present only for steps inside a router branch lane.
+  // Must survive the round-trip (zod strips unknown keys), or branches are lost.
+  branch: z
+    .object({ routerId: z.string().min(1), branchId: z.string().min(1) })
+    .optional(),
 });
 
 const edgeSchema = z.object({

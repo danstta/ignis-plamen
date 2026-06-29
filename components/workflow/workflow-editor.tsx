@@ -141,6 +141,7 @@ export function WorkflowEditor({
             connections={connections}
             templates={templates}
             webhookBaseUrl={webhookBaseUrl}
+            enabledNodeTypeIds={enabledNodeTypeIds}
           />
         </aside>
       </div>

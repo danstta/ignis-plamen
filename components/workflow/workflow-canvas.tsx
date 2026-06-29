@@ -11,6 +11,7 @@ import {
 } from "@xyflow/react";
 import { listNodeCatalog } from "@/lib/nodes/catalog";
 import { useWorkflowEditor, type WfNode } from "@/lib/workflows/store";
+import { buildStructure } from "@/lib/workflows/editor-structure";
 import { WorkflowNode } from "./workflow-node";
 
 // Every registered node type renders with the single generic node component.
@@ -18,28 +19,57 @@ const nodeTypes: NodeTypes = Object.fromEntries(
   listNodeCatalog().map((t) => [t.id, WorkflowNode]),
 );
 
+function connector(source: string, target: string): Edge {
+  return {
+    id: `spine-${source}-${target}`,
+    source,
+    target,
+    sourceHandle: "out",
+    targetHandle: "in",
+    type: "smoothstep",
+    focusable: false,
+    selectable: false,
+    deletable: false,
+    style: { stroke: "var(--border)", strokeWidth: 1.5 },
+  };
+}
+
 /**
- * The vertical "spine": a thin connector between each consecutive step. It's
- * derived from step order (array index), not from the graph's data edges — data
- * wiring lives in the config panel, so the canvas stays a clean top-to-bottom
- * sequence. These connectors are presentation-only and never persisted.
+ * The control-flow "spine": connectors derived from step structure, not from the
+ * graph's data edges (data wiring lives in the config panel). The trunk links
+ * consecutive steps; a Router instead links down into each branch's first step,
+ * along each branch, and back from each branch's last step to the rejoin (the
+ * next trunk step). Presentation-only — never persisted.
  */
 function buildSpine(nodes: WfNode[]): Edge[] {
+  const structure = buildStructure(nodes);
   const edges: Edge[] = [];
-  for (let i = 1; i < nodes.length; i++) {
-    edges.push({
-      id: `spine-${nodes[i - 1].id}-${nodes[i].id}`,
-      source: nodes[i - 1].id,
-      target: nodes[i].id,
-      sourceHandle: "out",
-      targetHandle: "in",
-      type: "straight",
-      focusable: false,
-      selectable: false,
-      deletable: false,
-      style: { stroke: "var(--border)", strokeWidth: 1.5 },
-    });
-  }
+
+  structure.forEach((entry, i) => {
+    const next = structure[i + 1]?.node;
+
+    if (entry.lanes.length === 0) {
+      if (next) edges.push(connector(entry.node.id, next.id));
+      return;
+    }
+
+    // Router: fan out into each non-empty branch, then rejoin at `next`.
+    let anyBranchHasSteps = false;
+    for (const lane of entry.lanes) {
+      if (lane.nodes.length === 0) continue;
+      anyBranchHasSteps = true;
+      edges.push(connector(entry.node.id, lane.nodes[0].id));
+      for (let k = 1; k < lane.nodes.length; k++) {
+        edges.push(connector(lane.nodes[k - 1].id, lane.nodes[k].id));
+      }
+      if (next) {
+        edges.push(connector(lane.nodes[lane.nodes.length - 1].id, next.id));
+      }
+    }
+    // All branches empty: keep the trunk visually connected through the router.
+    if (!anyBranchHasSteps && next) edges.push(connector(entry.node.id, next.id));
+  });
+
   return edges;
 }
 

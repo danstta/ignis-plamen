@@ -14,39 +14,37 @@ import {
 } from "@xyflow/react";
 import { getNodeMeta } from "@/lib/nodes/catalog";
 import { topoOrder } from "./graph";
-import type { WorkflowGraph, WorkflowNode } from "./types";
-
-/** xyflow node data: just the node-type config (the type id lives on node.type). */
-export type WfNodeData = { config: Record<string, unknown> };
-export type WfNode = Node<WfNodeData>;
+import { ROUTER_TYPE_ID } from "./conditions";
+import { laneNodes, layoutNodes } from "./editor-structure";
+import type { BranchRef, WorkflowGraph, WorkflowNode } from "./types";
 
 /**
- * The canvas is a single vertical column of steps (no free dragging). A node's
- * array index *is* its step number (the trigger is pinned to index 0 = Step 0),
- * and its on-canvas position is derived from that index, never hand-placed.
- * COLUMN_X is constant for now; branch layout (parallel columns) will vary it.
+ * xyflow node data. `config` + `branch` are persisted (the type id lives on
+ * node.type); `step`/`laneFirst`/`laneLast` are transient view fields recomputed
+ * by {@link layoutNodes} on every structural change and never saved.
  */
+export type WfNodeData = {
+  config: Record<string, unknown>;
+  branch?: BranchRef;
+  step?: number;
+  laneFirst?: boolean;
+  laneLast?: boolean;
+};
+export type WfNode = Node<WfNodeData>;
+
 const COLUMN_X = 0;
-const ROW_GAP_Y = 110;
 
 /** A trigger node (e.g. Webhook) starts a workflow and is always Step 0. */
 function isTriggerType(type: string | undefined): boolean {
   return !!type && getNodeMeta(type)?.category === "trigger";
 }
 
-/** Position every node down a single column in array order, so index = step. */
-function relayout(nodes: WfNode[]): WfNode[] {
-  return nodes.map((n, i) => ({
-    ...n,
-    position: { x: COLUMN_X, y: i * ROW_GAP_Y },
-  }));
-}
-
 /**
  * The step order for a loaded graph: trigger(s) first, then the remaining nodes
  * in execution (topological) order, so the visible Step numbers match the order
  * the engine actually runs them. Falls back to stored order if the graph has a
- * cycle (which the engine rejects anyway).
+ * cycle (which the engine rejects anyway). Branch membership is preserved on the
+ * nodes themselves, so {@link layoutNodes} regroups them into columns afterwards.
  */
 function orderGraphNodes(graph: WorkflowGraph): WorkflowNode[] {
   const order = topoOrder(graph) ?? graph.nodes;
@@ -75,6 +73,11 @@ function presentEdge(edge: Edge): Edge {
   };
 }
 
+/** A fresh, empty branch for a router. */
+function newBranch(label: string) {
+  return { id: crypto.randomUUID(), label, left: "", op: "eq", right: "" };
+}
+
 export type WorkflowLoadInput = {
   id: string | null;
   name: string;
@@ -100,9 +103,19 @@ interface WorkflowEditorState {
   onEdgesChange: OnEdgesChange;
   onConnect: OnConnect;
 
-  /** Append a step (or pin a trigger to the top). One trigger max. */
+  /** Append a step to the trunk (or pin a trigger to the top). One trigger max. */
   addNode: (nodeTypeId: string) => void;
-  /** Reorder a step one slot up/down; the trigger stays pinned at Step 0. */
+  /** Append a step into one branch lane of a router. */
+  addNodeToBranch: (
+    nodeTypeId: string,
+    routerId: string,
+    branchId: string,
+  ) => void;
+  /** Add an empty branch to a router. */
+  addRouterBranch: (routerId: string) => void;
+  /** Remove a branch from a router, deleting every step in that lane. */
+  removeRouterBranch: (routerId: string, branchId: string) => void;
+  /** Reorder a step one slot up/down within its own lane; the trigger is pinned. */
   moveNode: (id: string, direction: "up" | "down") => void;
   updateNodeConfig: (nodeId: string, config: Record<string, unknown>) => void;
   /** Map an upstream output port into an input port (replaces any existing edge there). */
@@ -121,10 +134,23 @@ interface WorkflowEditorState {
 
 /** Build a node's default config from its field defaults (parse {} through the schema). */
 function defaultConfig(nodeTypeId: string): Record<string, unknown> {
+  if (nodeTypeId === ROUTER_TYPE_ID) {
+    // A router is useless with no branches — seed one alongside the implicit Else.
+    return { branches: [newBranch("Branch 1")] };
+  }
   const meta = getNodeMeta(nodeTypeId);
   if (!meta) return {};
   const parsed = meta.configSchema.safeParse({});
   return parsed.success ? (parsed.data as Record<string, unknown>) : {};
+}
+
+function makeNode(nodeTypeId: string, branch?: BranchRef): WfNode {
+  return {
+    id: crypto.randomUUID(),
+    type: nodeTypeId,
+    position: { x: COLUMN_X, y: 0 },
+    data: { config: defaultConfig(nodeTypeId), branch },
+  };
 }
 
 function graphToFlow(graph: WorkflowGraph): { nodes: WfNode[]; edges: Edge[] } {
@@ -133,7 +159,7 @@ function graphToFlow(graph: WorkflowGraph): { nodes: WfNode[]; edges: Edge[] } {
       id: n.id,
       type: n.type,
       position: n.position,
-      data: { config: n.config },
+      data: { config: n.config, branch: n.branch },
     })),
     edges: graph.edges.map((e) =>
       presentEdge({
@@ -166,7 +192,7 @@ export const useWorkflowEditor = create<WorkflowEditorState>((set, get) => ({
       workflowId: input.id,
       name: input.name,
       active: input.active,
-      nodes: relayout(nodes),
+      nodes: layoutNodes(nodes),
       edges,
       selectedNodeId: null,
       dirty: false,
@@ -179,8 +205,8 @@ export const useWorkflowEditor = create<WorkflowEditorState>((set, get) => ({
 
   onNodesChange: (changes) =>
     set((s) => {
-      // Removal is handled by removeNode (it also prunes edges and relayouts the
-      // column), so drop xyflow's own remove changes to avoid double-handling.
+      // Removal is handled by removeNode (it also prunes edges, cascades router
+      // branches, and relayouts), so drop xyflow's own remove changes here.
       const applicable = changes.filter((c) => c.type !== "remove");
       return {
         nodes: applyNodeChanges(applicable, s.nodes),
@@ -195,10 +221,7 @@ export const useWorkflowEditor = create<WorkflowEditorState>((set, get) => ({
   onConnect: (connection) =>
     set((s) => ({
       edges: addEdge(
-        presentEdge({
-          ...connection,
-          id: crypto.randomUUID(),
-        }),
+        presentEdge({ ...connection, id: crypto.randomUUID() }),
         s.edges,
       ),
       dirty: true,
@@ -209,30 +232,80 @@ export const useWorkflowEditor = create<WorkflowEditorState>((set, get) => ({
       const trigger = isTriggerType(nodeTypeId);
       // A workflow has at most one trigger; ignore a second one.
       if (trigger && s.nodes.some((n) => isTriggerType(n.type))) return {};
-      const node: WfNode = {
-        id: crypto.randomUUID(),
-        type: nodeTypeId,
-        position: { x: COLUMN_X, y: 0 },
-        data: { config: defaultConfig(nodeTypeId) },
-      };
+      const node = makeNode(nodeTypeId);
       // Trigger pins to the top (Step 0); every other node appends below.
       const nodes = trigger ? [node, ...s.nodes] : [...s.nodes, node];
-      return { nodes: relayout(nodes), selectedNodeId: node.id, dirty: true };
+      return { nodes: layoutNodes(nodes), selectedNodeId: node.id, dirty: true };
+    }),
+
+  addNodeToBranch: (nodeTypeId, routerId, branchId) =>
+    set((s) => {
+      // Branch lanes can't hold triggers or (for now) nested routers.
+      if (isTriggerType(nodeTypeId) || nodeTypeId === ROUTER_TYPE_ID) return {};
+      const node = makeNode(nodeTypeId, { routerId, branchId });
+      return {
+        nodes: layoutNodes([...s.nodes, node]),
+        selectedNodeId: node.id,
+        dirty: true,
+      };
+    }),
+
+  addRouterBranch: (routerId) =>
+    set((s) => {
+      const router = s.nodes.find((n) => n.id === routerId);
+      if (!router || router.type !== ROUTER_TYPE_ID) return {};
+      const branches =
+        (router.data.config.branches as ReturnType<typeof newBranch>[]) ?? [];
+      const nextConfig = {
+        ...router.data.config,
+        branches: [...branches, newBranch(`Branch ${branches.length + 1}`)],
+      };
+      const nodes = s.nodes.map((n) =>
+        n.id === routerId ? { ...n, data: { ...n.data, config: nextConfig } } : n,
+      );
+      return { nodes: layoutNodes(nodes), dirty: true };
+    }),
+
+  removeRouterBranch: (routerId, branchId) =>
+    set((s) => {
+      const router = s.nodes.find((n) => n.id === routerId);
+      if (!router || router.type !== ROUTER_TYPE_ID) return {};
+      const branches =
+        (router.data.config.branches as ReturnType<typeof newBranch>[]) ?? [];
+      const nextConfig = {
+        ...router.data.config,
+        branches: branches.filter((b) => b.id !== branchId),
+      };
+      // Drop the router's updated config and every step that lived in the lane.
+      const remaining = s.nodes
+        .filter(
+          (n) =>
+            !(
+              n.data.branch?.routerId === routerId &&
+              n.data.branch.branchId === branchId
+            ),
+        )
+        .map((n) =>
+          n.id === routerId ? { ...n, data: { ...n.data, config: nextConfig } } : n,
+        );
+      return { nodes: layoutNodes(remaining), dirty: true };
     }),
 
   moveNode: (id, direction) =>
     set((s) => {
-      const i = s.nodes.findIndex((n) => n.id === id);
-      if (i < 0) return {};
+      const node = s.nodes.find((n) => n.id === id);
+      if (!node) return {};
+      const lane = laneNodes(s.nodes, node);
+      const i = lane.findIndex((n) => n.id === id);
       const j = direction === "up" ? i - 1 : i + 1;
-      if (j < 0 || j >= s.nodes.length) return {};
+      if (j < 0 || j >= lane.length) return {};
       // Keep the trigger pinned: it never moves, and no step may cross above it.
-      if (isTriggerType(s.nodes[i].type) || isTriggerType(s.nodes[j].type)) {
-        return {};
-      }
+      if (isTriggerType(lane[i].type) || isTriggerType(lane[j].type)) return {};
+      const fa = s.nodes.indexOf(lane[i]);
+      const fb = s.nodes.indexOf(lane[j]);
       const next = [...s.nodes];
-      [next[i], next[j]] = [next[j], next[i]];
-      return { nodes: relayout(next), dirty: true };
+      [next[fa], next[fb]] = [next[fb], next[fa]];
+      return { nodes: layoutNodes(next), dirty: true };
     }),
 
   updateNodeConfig: (nodeId, config) =>
@@ -269,12 +342,26 @@ export const useWorkflowEditor = create<WorkflowEditorState>((set, get) => ({
   selectNode: (id) => set({ selectedNodeId: id }),
 
   removeNode: (id) =>
-    set((s) => ({
-      nodes: relayout(s.nodes.filter((n) => n.id !== id)),
-      edges: s.edges.filter((e) => e.source !== id && e.target !== id),
-      selectedNodeId: s.selectedNodeId === id ? null : s.selectedNodeId,
-      dirty: true,
-    })),
+    set((s) => {
+      const target = s.nodes.find((n) => n.id === id);
+      // Deleting a router takes its whole branch subtree with it.
+      const removeIds = new Set<string>([id]);
+      if (target?.type === ROUTER_TYPE_ID) {
+        for (const n of s.nodes) {
+          if (n.data.branch?.routerId === id) removeIds.add(n.id);
+        }
+      }
+      return {
+        nodes: layoutNodes(s.nodes.filter((n) => !removeIds.has(n.id))),
+        edges: s.edges.filter(
+          (e) => !removeIds.has(e.source) && !removeIds.has(e.target),
+        ),
+        selectedNodeId: removeIds.has(s.selectedNodeId ?? "")
+          ? null
+          : s.selectedNodeId,
+        dirty: true,
+      };
+    }),
 
   toGraph: () => {
     const { nodes, edges } = get();
@@ -284,6 +371,7 @@ export const useWorkflowEditor = create<WorkflowEditorState>((set, get) => ({
         type: n.type ?? "",
         position: n.position,
         config: n.data?.config ?? {},
+        ...(n.data?.branch ? { branch: n.data.branch } : {}),
       })),
       edges: edges.map((e) => ({
         id: e.id,

@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { toStructuralPath } from "@/lib/workflows/references";
 import { cn } from "@/lib/utils";
 
 type SampleField = { path: string; preview?: string };
@@ -104,7 +105,9 @@ function TreeRow({
 }) {
   const container = isContainer(value);
   const isOpen = expanded.has(path);
-  const isSel = selected.has(path);
+  // Selections are stored structurally (array indices as `*`), so every element's
+  // row reflects — and toggles — the one shared path for that field across the array.
+  const isSel = selected.has(toStructuralPath(path));
   const children = container ? entriesOf(value) : [];
 
   return (
@@ -205,7 +208,8 @@ export function WebhookFieldsDialog({
       return next;
     });
 
-  const toggleSelect = (p: string) => {
+  const toggleSelect = (rawPath: string) => {
+    const p = toStructuralPath(rawPath);
     const next = new Set(selected);
     if (next.has(p)) next.delete(p);
     else next.add(p);

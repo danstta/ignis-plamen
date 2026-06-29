@@ -3,7 +3,7 @@ import { isNodeTypeEnabled } from "@/lib/plugins/service";
 import { getWorkflow } from "./service";
 import { createRun, getRun, saveRunState } from "./runs-service";
 import { incomingEdges, topoOrder } from "./graph";
-import { resolveReferences } from "./references";
+import { resolveReferences, validateLockedPaths } from "./references";
 import type { NodeOutputs, NodeRunState, WorkflowGraph } from "./types";
 import type { NodeRunContext, RunResult } from "@/lib/nodes/types";
 
@@ -215,6 +215,26 @@ export async function startRun(
     createRun(workflowId, trigger),
   );
   if (triggerNodeId) {
+    // The trigger node's selected fields are its locked-in contract. Fail the run
+    // up-front — naming the missing paths — when an inbound payload lacks them,
+    // rather than letting downstream nodes silently render blanks. Wildcards mean
+    // this holds for any new request of the same shape, not just the captured one.
+    const graph = workflow.graph as WorkflowGraph;
+    const triggerNode = graph.nodes.find((n) => n.id === triggerNodeId);
+    const locked = triggerNode?.config?.selectedFields;
+    const missing = Array.isArray(locked)
+      ? validateLockedPaths(trigger, locked as string[])
+      : [];
+    if (missing.length > 0) {
+      await step("start:trigger-validation", () =>
+        saveRunState(run.id, {
+          status: "error",
+          nodeStates: { [triggerNodeId]: "error" },
+          error: `Webhook payload is missing expected field(s): ${missing.join(", ")}`,
+        }),
+      );
+      return run.id;
+    }
     await step("start:seed-trigger", () =>
       saveRunState(run.id, {
         nodeOutputs: { [triggerNodeId]: trigger as NodeOutputs },

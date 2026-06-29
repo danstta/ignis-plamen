@@ -14,11 +14,12 @@ export type SampleField = z.infer<typeof sampleFieldSchema>;
 export const webhookConfigSchema = z.object({
   /** Raw captured payload ({ body, headers, query }) from "Capture sample event". */
   sample: z.record(z.string(), z.unknown()).optional(),
-  /** Flattened field paths discovered in the sample, exposed to downstream nodes. */
+  /** Structural field paths (array indices as `*`) discovered in the sample, offered for selection. */
   sampleFields: z.array(sampleFieldSchema).default([]),
   /**
-   * Subset of `sampleFields` paths the user chose to expose downstream. Empty =
-   * expose all detected fields (the default before any selection is made).
+   * Structural dot-paths (e.g. `body.items.*.title`) the user locked in to expose
+   * downstream — the webhook's expected contract. Empty = expose nothing. A run
+   * fails up-front if an inbound payload is missing any of these (see startRun).
    */
   selectedFields: z.array(z.string()).default([]),
 });

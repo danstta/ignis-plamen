@@ -30,6 +30,13 @@ const definitions: PluginDefinition[] = [
     nodeTypeIds: ["find-location-images", "rank-images"],
   },
   {
+    id: "ai",
+    name: "AI",
+    description: "Calls configured AI model connections from workflows.",
+    nodeTypeIds: ["llm-prompt"],
+    defaultEnabled: true,
+  },
+  {
     id: "notion",
     name: "Notion",
     description:

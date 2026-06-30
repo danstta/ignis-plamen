@@ -138,7 +138,7 @@ async function rankWithAzure(
 ): Promise<RankingEntry[]> {
   const endpoint = String(config.endpoint ?? "").trim().replace(/\/+$/, "");
   const apiKey = String(config.apiKey ?? "").trim();
-  const apiVersion = String(config.apiVersion || "2025-01-01-preview").trim();
+  const configuredApiVersion = String(config.apiVersion ?? "").trim();
 
   if (!endpoint) throw new Error("Azure connection is missing an endpoint.");
   if (!apiKey) throw new Error("Azure connection is missing an API key.");
@@ -152,10 +152,8 @@ async function rankWithAzure(
       ? `${endpoint}/chat/completions`
       : `${endpoint}/openai/deployments/${encodeURIComponent(deploymentName)}/chat/completions`,
   );
-  if (apiVersion) {
-    url.searchParams.set("api-version", apiVersion);
-  } else if (!usesUnifiedV1Endpoint) {
-    url.searchParams.set("api-version", "2025-01-01-preview");
+  if (!usesUnifiedV1Endpoint) {
+    url.searchParams.set("api-version", configuredApiVersion || "2025-01-01-preview");
   }
 
   const body = {

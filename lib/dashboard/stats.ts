@@ -23,6 +23,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const since7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const startOfTodayIso = startOfToday.toISOString();
+  const since7dIso = since7d.toISOString();
 
   const [tpl, wf, runs] = await Promise.all([
     db().select({ count: sql<number>`count(*)::int` }).from(templates),
@@ -34,9 +36,9 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       .from(workflows),
     db()
       .select({
-        runsToday: sql<number>`count(*) filter (where ${workflowRuns.createdAt} >= ${startOfToday})::int`,
-        total7d: sql<number>`count(*) filter (where ${workflowRuns.createdAt} >= ${since7d})::int`,
-        success7d: sql<number>`count(*) filter (where ${workflowRuns.createdAt} >= ${since7d} and ${workflowRuns.status} = 'success')::int`,
+        runsToday: sql<number>`count(*) filter (where ${workflowRuns.createdAt} >= ${startOfTodayIso})::int`,
+        total7d: sql<number>`count(*) filter (where ${workflowRuns.createdAt} >= ${since7dIso})::int`,
+        success7d: sql<number>`count(*) filter (where ${workflowRuns.createdAt} >= ${since7dIso} and ${workflowRuns.status} = 'success')::int`,
         active: sql<number>`count(*) filter (where ${workflowRuns.status} in ('running', 'waiting'))::int`,
       })
       .from(workflowRuns),

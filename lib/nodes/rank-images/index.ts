@@ -1,11 +1,12 @@
-import { openaiApiKey } from "@/lib/env";
+import { getConnection } from "@/lib/connections/service";
+import { modelOptionsForConnection } from "@/lib/connections/model-options";
 import type { ImageCandidate, NodeDefinition } from "../types";
 import { rankImagesMeta, type RankImagesConfig } from "./meta";
 
 /**
- * Ranks candidate images with OpenAI GPT vision. Sends every candidate URL plus
- * the location + criteria, and asks for a structured ranking (json_schema) so we
- * get a deterministic ordered list back. Outputs the sorted list and the best url.
+ * Ranks candidate images with a configured vision-capable AI connection. Sends
+ * every candidate URL plus the location + criteria, and asks for a structured
+ * ranking (json_schema) so we get a deterministic ordered list back.
  */
 const responseSchema = {
   type: "object",
@@ -34,12 +35,11 @@ interface RankingEntry {
   reason: string;
 }
 
-async function rankWithOpenAI(
-  model: string,
+function buildMessages(
   criteria: string,
   location: string,
   candidates: ImageCandidate[],
-): Promise<RankingEntry[]> {
+): { role: "user"; content: unknown[] }[] {
   const content: unknown[] = [
     {
       type: "text",
@@ -55,27 +55,21 @@ async function rankWithOpenAI(
     })),
   ];
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${openaiApiKey()}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: "user", content }],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "image_ranking",
-          strict: true,
-          schema: responseSchema,
-        },
-      },
-    }),
-  });
+  return [{ role: "user", content }];
+}
+
+const responseFormat = {
+  type: "json_schema",
+  json_schema: {
+    name: "image_ranking",
+    strict: true,
+    schema: responseSchema,
+  },
+} as const;
+
+async function parseRankingResponse(res: Response, provider: string) {
   if (!res.ok) {
-    throw new Error(`OpenAI ${res.status}: ${await res.text()}`);
+    throw new Error(`${provider} ${res.status}: ${await res.text()}`);
   }
   const json = (await res.json()) as {
     choices?: { message?: { content?: string } }[];
@@ -83,6 +77,71 @@ async function rankWithOpenAI(
   const text = json.choices?.[0]?.message?.content ?? "{}";
   const parsed = JSON.parse(text) as { ranking?: RankingEntry[] };
   return parsed.ranking ?? [];
+}
+
+async function rankWithOpenAI(
+  config: Record<string, unknown>,
+  model: string,
+  criteria: string,
+  location: string,
+  candidates: ImageCandidate[],
+): Promise<RankingEntry[]> {
+  const apiKey = String(config.apiKey ?? "").trim();
+  if (!apiKey) throw new Error("OpenAI connection is missing an API key.");
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${apiKey}`,
+  };
+  const organizationId = String(config.organizationId ?? "").trim();
+  const projectId = String(config.projectId ?? "").trim();
+  if (organizationId) headers["OpenAI-Organization"] = organizationId;
+  if (projectId) headers["OpenAI-Project"] = projectId;
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      model,
+      messages: buildMessages(criteria, location, candidates),
+      response_format: responseFormat,
+    }),
+  });
+  return parseRankingResponse(res, "OpenAI");
+}
+
+async function rankWithAzure(
+  config: Record<string, unknown>,
+  deploymentName: string,
+  criteria: string,
+  location: string,
+  candidates: ImageCandidate[],
+): Promise<RankingEntry[]> {
+  const endpoint = String(config.endpoint ?? "").trim().replace(/\/+$/, "");
+  const apiKey = String(config.apiKey ?? "").trim();
+  const apiVersion = String(config.apiVersion || "2025-01-01-preview").trim();
+
+  if (!endpoint) throw new Error("Azure connection is missing an endpoint.");
+  if (!apiKey) throw new Error("Azure connection is missing an API key.");
+  if (!deploymentName) {
+    throw new Error("Azure connection is missing a deployment name.");
+  }
+
+  const url =
+    `${endpoint}/openai/deployments/${encodeURIComponent(deploymentName)}` +
+    `/chat/completions?api-version=${encodeURIComponent(apiVersion)}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "api-key": apiKey,
+    },
+    body: JSON.stringify({
+      messages: buildMessages(criteria, location, candidates),
+      response_format: responseFormat,
+    }),
+  });
+  return parseRankingResponse(res, "Azure");
 }
 
 export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
@@ -98,12 +157,43 @@ export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
 
     let ranked: ImageCandidate[];
     try {
-      const ranking = await rankWithOpenAI(
-        ctx.config.model,
-        ctx.config.criteria,
-        location,
-        candidates,
-      );
+      const connection = await getConnection(ctx.config.connectionId);
+      if (!connection) throw new Error("Select an AI connection.");
+
+      const configuredModels = modelOptionsForConnection({
+        type: connection.type,
+        config: connection.config ?? {},
+      });
+      if (
+        !configuredModels.some((option) => option.value === ctx.config.model)
+      ) {
+        throw new Error(
+          "Select one of the models configured on the chosen AI connection.",
+        );
+      }
+
+      const ranking =
+        connection.type === "openai"
+          ? await rankWithOpenAI(
+              connection.config ?? {},
+              ctx.config.model,
+              ctx.config.criteria,
+              location,
+              candidates,
+            )
+          : connection.type === "azure-foundry"
+            ? await rankWithAzure(
+                connection.config ?? {},
+                ctx.config.model,
+                ctx.config.criteria,
+                location,
+                candidates,
+              )
+            : (() => {
+                throw new Error(
+                  `Unsupported AI connection type: ${connection.type}`,
+                );
+              })();
       ranked = ranking
         .slice()
         .sort((a, b) => b.score - a.score)

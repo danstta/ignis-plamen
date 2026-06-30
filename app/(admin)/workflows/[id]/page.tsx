@@ -2,6 +2,10 @@ import { notFound } from "next/navigation";
 import { WorkflowEditor } from "@/components/workflow/workflow-editor";
 import { getWorkflow } from "@/lib/workflows/service";
 import { listConnections } from "@/lib/connections/service";
+import {
+  isAIModelConnectionType,
+  modelOptionsForConnection,
+} from "@/lib/connections/model-options";
 import { listTemplatesWithPlaceholders } from "@/lib/templates/service";
 import { enabledNodeTypeIds } from "@/lib/plugins/service";
 import { publicAppUrl } from "@/lib/env";
@@ -22,7 +26,14 @@ export default async function WorkflowEditorPage({
     enabledNodeTypeIds().catch(() => new Set<string>()),
   ]);
 
-  const connectionOpts = connections.map((c) => ({ id: c.id, name: c.name }));
+  const connectionOpts = connections.map((c) => ({
+    id: c.id,
+    name: c.name,
+    type: c.type,
+    models: isAIModelConnectionType(c.type)
+      ? modelOptionsForConnection({ type: c.type, config: c.config ?? {} })
+      : [],
+  }));
   const templateOpts = templates.map((t) => ({
     id: t.id,
     name: t.name,

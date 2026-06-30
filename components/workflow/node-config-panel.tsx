@@ -52,6 +52,12 @@ import { CopyField } from "@/components/connections/copy-field";
 import { PayloadFieldSelector, WebhookFieldsDialog } from "./webhook-fields-dialog";
 import { cn } from "@/lib/utils";
 
+type ConnectionOption = {
+  id: string;
+  name: string;
+  type: string;
+  models: { value: string; label: string }[];
+};
 type Option = { id: string; name: string };
 type TemplateOption = Option & {
   placeholders: { key: string; kind: "text" | "image" }[];
@@ -200,7 +206,7 @@ export function NodeConfigPanel({
   webhookBaseUrl,
   enabledNodeTypeIds,
 }: {
-  connections: Option[];
+  connections: ConnectionOption[];
   templates: TemplateOption[];
   webhookBaseUrl: string;
   enabledNodeTypeIds: string[];
@@ -244,8 +250,10 @@ export function NodeConfigPanel({
   }
 
   const config = node.data?.config ?? {};
+  const setConfig = (patch: Record<string, unknown>) =>
+    updateNodeConfig(selectedNodeId, { ...config, ...patch });
   const set = (name: string, value: unknown) =>
-    updateNodeConfig(selectedNodeId, { ...config, [name]: value });
+    setConfig({ [name]: value });
 
   // Upstream field availability for tokens + input mapping.
   const refNodes: RefNode[] = [...nodes]
@@ -380,6 +388,27 @@ export function NodeConfigPanel({
     });
   };
 
+  const connectionOptionsForField = (f: NodeConfigField) => {
+    if (!f.connectionTypes?.length) return connections;
+    const allowed = new Set(f.connectionTypes);
+    return connections.filter((connection) => allowed.has(connection.type));
+  };
+
+  const modelOptionsForField = (f: NodeConfigField) => {
+    const connectionField = f.modelSource?.connectionField;
+    if (!connectionField) return f.options ?? [];
+    const connectionId = String(config[connectionField] ?? "");
+    return (
+      connections.find((connection) => connection.id === connectionId)?.models ?? []
+    );
+  };
+
+  const providerLabel = (type: string) => {
+    if (type === "openai") return "OpenAI";
+    if (type === "azure-foundry") return "Azure";
+    return type;
+  };
+
   const renderField = (f: NodeConfigField) => {
     const value = config[f.name];
     const str = value === undefined || value === null ? "" : String(value);
@@ -408,41 +437,64 @@ export function NodeConfigPanel({
             onChange={(e) => set(f.name, e.target.value)}
           />
         );
-      case "select":
-        const selectValue =
-          f.options?.some((o) => o.value === str) || !f.options?.[0]
-            ? str
-            : f.options[0].value;
+      case "select": {
+        const options = modelOptionsForField(f);
+        const selectValue = options.some((o) => o.value === str) ? str : "";
+        const placeholder = f.modelSource
+          ? options.length > 0
+            ? "- select model -"
+            : String(config[f.modelSource.connectionField] ?? "")
+              ? "- no models configured -"
+              : "- select connection first -"
+          : "- select -";
         return (
           <select
             id={f.name}
             className={selectClass}
             value={selectValue}
+            disabled={f.modelSource ? options.length === 0 : false}
             onChange={(e) => set(f.name, e.target.value)}
           >
-            {(f.options ?? []).map((o) => (
+            <option value="" className={nativeOptionClass}>
+              {placeholder}
+            </option>
+            {options.map((o) => (
               <option key={o.value} value={o.value} className={nativeOptionClass}>
                 {o.label}
               </option>
             ))}
           </select>
         );
+      }
       case "connection":
       case "template": {
-        const options = f.type === "connection" ? connections : templates;
+        const options =
+          f.type === "connection" ? connectionOptionsForField(f) : templates;
         return (
           <select
             id={f.name}
             className={selectClass}
             value={str}
-            onChange={(e) => set(f.name, e.target.value)}
+            onChange={(e) => {
+              const nextValue = e.target.value;
+              const patch: Record<string, unknown> = { [f.name]: nextValue };
+              for (const dependent of def.configFields) {
+                if (dependent.modelSource?.connectionField !== f.name) continue;
+                patch[dependent.name] =
+                  connections.find((connection) => connection.id === nextValue)
+                    ?.models[0]?.value ?? "";
+              }
+              setConfig(patch);
+            }}
           >
             <option value="" className={nativeOptionClass}>
               — select —
             </option>
             {options.map((o) => (
               <option key={o.id} value={o.id} className={nativeOptionClass}>
-                {o.name}
+                {f.type === "connection"
+                  ? `${o.name} - ${providerLabel((o as ConnectionOption).type)}`
+                  : o.name}
               </option>
             ))}
           </select>

@@ -2,15 +2,16 @@ import { z } from "zod";
 import type { NodeMeta } from "../types";
 
 export const rankImagesConfigSchema = z.object({
+  connectionId: z.string().default(""),
   model: z
     .preprocess(
       (value) =>
         value === "gpt-4o" || value === "gpt-4o-mini"
           ? "gpt-4.1-mini"
           : value,
-      z.enum(["gpt-4.1", "gpt-4.1-mini"]),
+      z.coerce.string(),
     )
-    .default("gpt-4.1-mini"),
+    .default(""),
   criteria: z
     .string()
     .default(
@@ -35,13 +36,19 @@ export const rankImagesMeta: NodeMeta<RankImagesConfig> = {
   ],
   configFields: [
     {
+      name: "connectionId",
+      label: "AI connection",
+      type: "connection",
+      connectionTypes: ["openai", "azure-foundry"],
+      help: "Choose an OpenAI or Azure AI Foundry connection.",
+    },
+    {
       name: "model",
       label: "Model",
       type: "select",
-      options: [
-        { value: "gpt-4.1", label: "gpt-4.1 (higher quality)" },
-        { value: "gpt-4.1-mini", label: "gpt-4.1-mini (cheaper)" },
-      ],
+      options: [],
+      modelSource: { connectionField: "connectionId" },
+      help: "Models come from the selected connection's configured model list.",
     },
     {
       name: "criteria",

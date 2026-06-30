@@ -116,7 +116,7 @@ export function WorkflowTestDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[calc(100svh-2rem)] gap-3 sm:max-w-3xl">
+      <DialogContent className="grid max-h-[calc(100svh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-3 overflow-hidden sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FlaskConical className="size-4" /> Test workflow
@@ -126,7 +126,7 @@ export function WorkflowTestDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid min-h-0 gap-3 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className="grid min-h-0 gap-3 overflow-hidden md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
           <div className="flex min-h-0 flex-col gap-2">
             <div className="flex items-center justify-between gap-2">
               <Label htmlFor="workflow-test-event">Sample event</Label>
@@ -146,13 +146,13 @@ export function WorkflowTestDialog({
               value={eventText}
               onChange={(e) => setEventText(e.target.value)}
               spellCheck={false}
-              className="min-h-72 resize-none font-mono text-xs"
+              className="min-h-0 flex-1 resize-none overflow-auto font-mono text-xs [field-sizing:fixed]"
             />
           </div>
 
           <div className="flex min-h-0 flex-col gap-2">
             <Label>Step results</Label>
-            <ScrollArea className="h-72 rounded-lg border">
+            <ScrollArea className="min-h-0 flex-1 rounded-lg border">
               <div className="flex flex-col gap-2 p-2">
                 {!result ? (
                   <p className="px-2 py-10 text-center text-sm text-muted-foreground">

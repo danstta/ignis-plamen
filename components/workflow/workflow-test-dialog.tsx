@@ -72,6 +72,14 @@ export function WorkflowTestDialog({
     return webhook?.data.config.sample;
   }, [nodes]);
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      setEventText(pretty(capturedSample ?? DEFAULT_EVENT));
+      setResult(null);
+    }
+    onOpenChange(nextOpen);
+  };
+
   const run = async (mode: "workflow" | "node") => {
     let trigger: Record<string, unknown>;
     try {
@@ -107,7 +115,7 @@ export function WorkflowTestDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-h-[calc(100svh-2rem)] gap-3 sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

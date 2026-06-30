@@ -59,7 +59,13 @@ function normalizeCandidates(value: unknown): ImageCandidate[] {
   const raw = isRecord(value) && Array.isArray(value.candidates)
     ? value.candidates
     : value;
-  return Array.isArray(raw) ? raw.filter(isImageCandidate) : [];
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((candidate): ImageCandidate[] => {
+    if (isImageCandidate(candidate)) return [candidate];
+    if (typeof candidate !== "string") return [];
+    const url = candidate.trim();
+    return url ? [{ url, attribution: "" }] : [];
+  });
 }
 
 function buildMessages(

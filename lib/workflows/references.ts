@@ -54,7 +54,8 @@ export function selectedOutputPaths(n: RefNode): string[] {
       Boolean,
     );
   }
-  return selectedOutputFields(n);
+  const declared = getNodeMeta(n.type)?.outputs.map((output) => output.id) ?? [];
+  return [...new Set([...declared, ...selectedOutputFields(n)])];
 }
 
 function selectedOutputLabel(

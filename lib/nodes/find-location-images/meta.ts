@@ -17,15 +17,15 @@ export const findLocationImagesMeta: NodeMeta<FindLocationImagesConfig> = {
   description:
     "Searches Wikimedia Commons for real, reusable photos near the location.",
   category: "source",
-  inputs: [{ id: "location", label: "Location", kind: "text" }],
+  inputs: [],
   outputs: [{ id: "candidates", label: "Candidates", kind: "data" }],
   configFields: [
     {
       name: "locationQuery",
-      label: "Location query",
+      label: "Location",
       type: "text",
       placeholder: "Venue name, address, or insert webhook data",
-      help: "Build this from selected webhook fields, for example venue name plus address. Uses OpenStreetMap + Wikimedia Commons; no API key required.",
+      help: "Insert webhook fields or type a venue, city, country, or address. Uses OpenStreetMap + Wikimedia Commons; no API key required.",
     },
     {
       name: "maxCandidates",

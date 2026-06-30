@@ -35,6 +35,14 @@ interface RankingEntry {
   reason: string;
 }
 
+interface RankingResult {
+  ranking: RankingEntry[];
+  candidates: ImageCandidate[];
+}
+
+const IMAGE_FETCH_USER_AGENT = "Ignis/0.1 (https://github.com/danstta/ignis)";
+const MAX_AZURE_IMAGE_BYTES = 8 * 1024 * 1024;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -57,20 +65,20 @@ function normalizeCandidates(value: unknown): ImageCandidate[] {
 function buildMessages(
   criteria: string,
   location: string,
-  candidates: ImageCandidate[],
+  imageUrls: string[],
 ): { role: "user"; content: unknown[] }[] {
   const content: unknown[] = [
     {
       type: "text",
       text:
-        `Rank these ${candidates.length} candidate photos for the location "${location}".\n` +
+        `Rank these ${imageUrls.length} candidate photos for the location "${location}".\n` +
         `Criteria: ${criteria}\n` +
-        `Each image is given in order, index 0..${candidates.length - 1}. ` +
+        `Each image is given in order, index 0..${imageUrls.length - 1}. ` +
         `Return a ranking where a higher score is a better fit.`,
     },
-    ...candidates.map((c) => ({
+    ...imageUrls.map((url) => ({
       type: "image_url",
-      image_url: { url: c.url },
+      image_url: { url },
     })),
   ];
 
@@ -104,7 +112,7 @@ async function rankWithOpenAI(
   criteria: string,
   location: string,
   candidates: ImageCandidate[],
-): Promise<RankingEntry[]> {
+): Promise<RankingResult> {
   const apiKey = String(config.apiKey ?? "").trim();
   if (!apiKey) throw new Error("OpenAI connection is missing an API key.");
 
@@ -122,11 +130,68 @@ async function rankWithOpenAI(
     headers,
     body: JSON.stringify({
       model,
-      messages: buildMessages(criteria, location, candidates),
+      messages: buildMessages(
+        criteria,
+        location,
+        candidates.map((candidate) => candidate.url),
+      ),
       response_format: responseFormat,
     }),
   });
-  return parseRankingResponse(res, "OpenAI");
+  return { ranking: await parseRankingResponse(res, "OpenAI"), candidates };
+}
+
+async function imageUrlToDataUrl(candidate: ImageCandidate): Promise<string> {
+  const res = await fetch(candidate.url, {
+    headers: {
+      Accept: "image/*",
+      "User-Agent": IMAGE_FETCH_USER_AGENT,
+    },
+  });
+  if (!res.ok) {
+    throw new Error(`${res.status}: ${await res.text()}`);
+  }
+
+  const contentType = res.headers.get("content-type")?.split(";")[0] ?? "";
+  if (!contentType.startsWith("image/")) {
+    throw new Error(
+      `expected image content-type, got "${contentType || "unknown"}"`,
+    );
+  }
+
+  const contentLength = Number(res.headers.get("content-length") ?? 0);
+  if (contentLength > MAX_AZURE_IMAGE_BYTES) {
+    throw new Error(`image is ${contentLength} bytes`);
+  }
+
+  const bytes = await res.arrayBuffer();
+  if (bytes.byteLength > MAX_AZURE_IMAGE_BYTES) {
+    throw new Error(`image is ${bytes.byteLength} bytes`);
+  }
+
+  return `data:${contentType};base64,${Buffer.from(bytes).toString("base64")}`;
+}
+
+async function prepareAzureImages(
+  candidates: ImageCandidate[],
+  log: (message: string) => void,
+): Promise<{ candidate: ImageCandidate; dataUrl: string }[]> {
+  const settled = await Promise.allSettled(
+    candidates.map(async (candidate) => ({
+      candidate,
+      dataUrl: await imageUrlToDataUrl(candidate),
+    })),
+  );
+
+  return settled.flatMap((result, index) => {
+    if (result.status === "fulfilled") return [result.value];
+    const reason =
+      result.reason instanceof Error ? result.reason.message : result.reason;
+    log(
+      `Skipping image candidate ${index} because it could not be prepared for Azure: ${reason}`,
+    );
+    return [];
+  });
 }
 
 async function rankWithAzure(
@@ -135,7 +200,8 @@ async function rankWithAzure(
   criteria: string,
   location: string,
   candidates: ImageCandidate[],
-): Promise<RankingEntry[]> {
+  log: (message: string) => void,
+): Promise<RankingResult> {
   const endpoint = String(config.endpoint ?? "").trim().replace(/\/+$/, "");
   const apiKey = String(config.apiKey ?? "").trim();
   const configuredApiVersion = String(config.apiVersion ?? "").trim();
@@ -153,12 +219,24 @@ async function rankWithAzure(
       : `${endpoint}/openai/deployments/${encodeURIComponent(deploymentName)}/chat/completions`,
   );
   if (!usesUnifiedV1Endpoint) {
-    url.searchParams.set("api-version", configuredApiVersion || "2025-01-01-preview");
+    url.searchParams.set(
+      "api-version",
+      configuredApiVersion || "2025-01-01-preview",
+    );
+  }
+
+  const preparedImages = await prepareAzureImages(candidates, log);
+  if (preparedImages.length === 0) {
+    throw new Error("No image candidates could be prepared for Azure vision.");
   }
 
   const body = {
     ...(usesUnifiedV1Endpoint ? { model: deploymentName } : {}),
-    messages: buildMessages(criteria, location, candidates),
+    messages: buildMessages(
+      criteria,
+      location,
+      preparedImages.map((image) => image.dataUrl),
+    ),
     response_format: responseFormat,
   };
 
@@ -170,7 +248,10 @@ async function rankWithAzure(
     },
     body: JSON.stringify(body),
   });
-  return parseRankingResponse(res, "Azure");
+  return {
+    ranking: await parseRankingResponse(res, "Azure"),
+    candidates: preparedImages.map((image) => image.candidate),
+  };
 }
 
 export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
@@ -214,16 +295,17 @@ export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
               ctx.config.criteria,
               location,
               candidates,
+              ctx.log,
             )
           : (() => {
               throw new Error(
                 `Unsupported AI connection type: ${connection.type}`,
               );
             })();
-    const ranked = ranking
+    const ranked = ranking.ranking
       .slice()
       .sort((a, b) => b.score - a.score)
-      .map((r) => candidates[r.index])
+      .map((r) => ranking.candidates[r.index])
       .filter((c): c is ImageCandidate => Boolean(c));
     // Append any candidates the model omitted so nothing is lost.
     for (const c of candidates) if (!ranked.includes(c)) ranked.push(c);

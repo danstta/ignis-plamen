@@ -59,11 +59,22 @@ export function baseStyle(el: TemplateElement): CSSProperties {
 }
 
 export function textStyle(el: TextElement): CSSProperties {
+  const verticalAlign = el.textVerticalAlign ?? (el.autoWidth ? "middle" : "top");
   const style: CSSProperties = {
     display: "flex",
     flexDirection: "column",
-    justifyContent: el.autoWidth ? "center" : "flex-start",
-    textAlign: el.textAlign ?? "left",
+    justifyContent:
+      verticalAlign === "middle"
+        ? "center"
+        : verticalAlign === "bottom"
+          ? "flex-end"
+          : "flex-start",
+    alignItems:
+      el.textAlign === "center"
+        ? "center"
+        : el.textAlign === "right"
+          ? "flex-end"
+          : "flex-start",
     fontFamily: el.fontFamily,
     fontSize: el.fontSize,
     fontWeight: el.fontWeight ?? 400,
@@ -71,9 +82,6 @@ export function textStyle(el: TextElement): CSSProperties {
     color: el.color,
     lineHeight: el.lineHeight ?? 1.2,
     letterSpacing: el.letterSpacing ?? 0,
-    // A chip stays on one line so its width hugs the text; normal text wraps.
-    whiteSpace: el.autoWidth ? "nowrap" : "pre-wrap",
-    wordBreak: "break-word",
     overflow: "hidden",
   };
   if (el.background !== undefined) Object.assign(style, fillToStyle(el.background));
@@ -82,6 +90,24 @@ export function textStyle(el: TextElement): CSSProperties {
   }
   if (el.borderRadius) style.borderRadius = el.borderRadius;
   return style;
+}
+
+/** Inner text flow. Keeping it separate makes flex alignment work in Satori too. */
+export function textContentStyle(el: TextElement): CSSProperties {
+  return {
+    display: "flex",
+    width: el.autoWidth ? "auto" : "100%",
+    justifyContent:
+      el.textAlign === "center"
+        ? "center"
+        : el.textAlign === "right"
+          ? "flex-end"
+          : "flex-start",
+    textAlign: el.textAlign ?? "left",
+    // A chip stays on one line so its width hugs the text; normal text wraps.
+    whiteSpace: el.autoWidth ? "nowrap" : "pre-wrap",
+    wordBreak: "break-word",
+  };
 }
 
 /**

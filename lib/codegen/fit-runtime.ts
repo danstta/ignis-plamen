@@ -26,11 +26,13 @@ export function docHasAutoFit(doc: TemplateDoc): boolean {
 export const FIT_TEXT_COMPONENT_SOURCE = `function FitText({
   children,
   style,
+  contentStyle,
   min,
   max,
 }: {
   children: React.ReactNode;
   style: React.CSSProperties;
+  contentStyle: React.CSSProperties;
   min: number;
   max: number;
 }) {
@@ -57,7 +59,7 @@ export const FIT_TEXT_COMPONENT_SOURCE = `function FitText({
   });
   return (
     <div ref={ref} style={style}>
-      {children}
+      <div style={contentStyle}>{children}</div>
     </div>
   );
 }`;

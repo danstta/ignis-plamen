@@ -5,6 +5,9 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
+  AlignVerticalJustifyStart,
+  AlignVerticalJustifyCenter,
+  AlignVerticalJustifyEnd,
   Copy,
   Trash2,
   BringToFront,
@@ -648,12 +651,54 @@ function TextProps({ element }: { element: TextElement }) {
           </ToggleGroupItem>
         </ToggleGroup>
       </Field>
+      <Field label="Vertical align">
+        <ToggleGroup
+          value={[element.textVerticalAlign ?? (element.autoWidth ? "middle" : "top")]}
+          onValueChange={(value) => {
+            const v = value[0] as TextElement["textVerticalAlign"];
+            if (!v) return;
+            snapshot();
+            update(id, { textVerticalAlign: v });
+          }}
+          variant="outline"
+          className="w-full"
+        >
+          <ToggleGroupItem value="top" aria-label="Align top" className="flex-1">
+            <AlignVerticalJustifyStart className="size-4" />
+          </ToggleGroupItem>
+          <ToggleGroupItem value="middle" aria-label="Align middle" className="flex-1">
+            <AlignVerticalJustifyCenter className="size-4" />
+          </ToggleGroupItem>
+          <ToggleGroupItem value="bottom" aria-label="Align bottom" className="flex-1">
+            <AlignVerticalJustifyEnd className="size-4" />
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </Field>
       <Field label="Color">
         <ColorInput value={element.color} onChange={(color) => update(id, { color })} />
       </Field>
 
       <Separator />
       <SectionTitle>Box</SectionTitle>
+      <div className="flex items-center justify-between">
+        <Label className="text-xs text-muted-foreground">
+          Center content
+        </Label>
+        <Switch
+          checked={
+            (element.textAlign ?? "left") === "center" &&
+            (element.textVerticalAlign ?? (element.autoWidth ? "middle" : "top")) ===
+              "middle"
+          }
+          onCheckedChange={(checked) => {
+            snapshot();
+            update(id, {
+              textAlign: checked ? "center" : "left",
+              textVerticalAlign: checked ? "middle" : "top",
+            });
+          }}
+        />
+      </div>
       <div className="flex items-center justify-between">
         <Label className="text-xs text-muted-foreground">
           Auto width (hug text)

@@ -149,16 +149,12 @@ export function WorkflowEditor({
         <div className="relative min-w-0 flex-1">
           <WorkflowCanvas />
         </div>
-        <aside className="w-80 shrink-0 overflow-auto border-l bg-background">
+        <aside className="w-[28rem] shrink-0 overflow-auto border-l bg-background 2xl:w-[32rem]">
           <NodeConfigPanel
             connections={connections}
             templates={templates}
             webhookBaseUrl={webhookBaseUrl}
             enabledNodeTypeIds={enabledNodeTypeIds}
-            onTestNode={(nodeId) => {
-              setTestTargetNodeId(nodeId);
-              setTestOpen(true);
-            }}
           />
         </aside>
       </div>

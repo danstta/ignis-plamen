@@ -195,6 +195,48 @@ export function WebhookFieldsDialog({
   selectedFields: string[];
   onChange: (next: string[]) => void;
 }) {
+  return (
+    <Dialog>
+      <DialogTrigger
+        render={<Button variant="outline" size="sm" className="self-start" />}
+      >
+        <Braces /> Inspect &amp; select fields
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Webhook payload</DialogTitle>
+          <DialogDescription>
+            Hover a property and click <span className="font-medium">Select
+            path</span> to expose it to downstream nodes. Only selected properties
+            appear in the “Data” picker.
+          </DialogDescription>
+        </DialogHeader>
+
+        <PayloadFieldSelector
+          sample={sample}
+          selectedFields={selectedFields}
+          onChange={onChange}
+          maxHeightClassName="max-h-[55vh]"
+          emptyText="No payload captured yet."
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function PayloadFieldSelector({
+  sample,
+  selectedFields,
+  onChange,
+  maxHeightClassName = "max-h-96",
+  emptyText = "No output yet.",
+}: {
+  sample: unknown;
+  selectedFields: string[];
+  onChange: (next: string[]) => void;
+  maxHeightClassName?: string;
+  emptyText?: string;
+}) {
   const selected = useMemo(() => new Set(selectedFields), [selectedFields]);
   const [expanded, setExpanded] = useState<Set<string>>(() =>
     defaultExpanded(sample),
@@ -219,75 +261,67 @@ export function WebhookFieldsDialog({
   const roots = isContainer(sample) ? entriesOf(sample) : [];
 
   return (
-    <Dialog>
-      <DialogTrigger
-        render={<Button variant="outline" size="sm" className="self-start" />}
-      >
-        <Braces /> Inspect &amp; select fields
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Webhook payload</DialogTitle>
-          <DialogDescription>
-            Hover a property and click <span className="font-medium">Select
-            path</span> to expose it to downstream nodes. Only selected properties
-            appear in the “Data” picker.
-          </DialogDescription>
-        </DialogHeader>
+    <Tabs defaultValue="tree" className="min-w-0">
+      <div className="flex items-center justify-between gap-2">
+        <TabsList>
+          <TabsTrigger value="tree">Tree</TabsTrigger>
+          <TabsTrigger value="raw">Raw</TabsTrigger>
+        </TabsList>
+        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          <span>{selected.size} selected</span>
+          {selected.size > 0 ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7"
+              onClick={() => onChange([])}
+            >
+              Clear
+            </Button>
+          ) : null}
+        </div>
+      </div>
 
-        <Tabs defaultValue="tree" className="min-w-0">
-          <div className="flex items-center justify-between gap-2">
-            <TabsList>
-              <TabsTrigger value="tree">Tree</TabsTrigger>
-              <TabsTrigger value="raw">Raw payload</TabsTrigger>
-            </TabsList>
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <span>{selected.size} selected</span>
-              {selected.size > 0 ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7"
-                  onClick={() => onChange([])}
-                >
-                  Clear
-                </Button>
-              ) : null}
-            </div>
-          </div>
+      <TabsContent value="tree" className="min-w-0">
+        <div
+          className={cn(
+            "min-h-0 overflow-auto rounded-md border p-1",
+            maxHeightClassName,
+          )}
+        >
+          {roots.length ? (
+            roots.map(([k, v]) => (
+              <TreeRow
+                key={k}
+                label={k}
+                value={v}
+                path={k}
+                depth={0}
+                expanded={expanded}
+                toggleExpand={toggleExpand}
+                selected={selected}
+                toggleSelect={toggleSelect}
+              />
+            ))
+          ) : (
+            <p className="px-2 py-3 text-xs text-muted-foreground">
+              {emptyText}
+            </p>
+          )}
+        </div>
+      </TabsContent>
 
-          <TabsContent value="tree" className="min-w-0">
-            <div className="max-h-[55vh] min-h-0 overflow-auto rounded-md border p-1">
-              {roots.length ? (
-                roots.map(([k, v]) => (
-                  <TreeRow
-                    key={k}
-                    label={k}
-                    value={v}
-                    path={k}
-                    depth={0}
-                    expanded={expanded}
-                    toggleExpand={toggleExpand}
-                    selected={selected}
-                    toggleSelect={toggleSelect}
-                  />
-                ))
-              ) : (
-                <p className="px-2 py-3 text-xs text-muted-foreground">
-                  No payload captured yet.
-                </p>
-              )}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="raw" className="min-w-0">
-            <pre className="max-h-[55vh] overflow-auto rounded-md border bg-muted/30 p-3 font-mono text-xs">
-              {JSON.stringify(sample ?? {}, null, 2)}
-            </pre>
-          </TabsContent>
-        </Tabs>
-      </DialogContent>
-    </Dialog>
+      <TabsContent value="raw" className="min-w-0">
+        <pre
+          className={cn(
+            "overflow-auto rounded-md border bg-muted/30 p-3 font-mono text-xs",
+            maxHeightClassName,
+          )}
+        >
+          {JSON.stringify(sample ?? {}, null, 2)}
+        </pre>
+      </TabsContent>
+    </Tabs>
   );
 }

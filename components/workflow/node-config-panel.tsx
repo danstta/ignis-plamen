@@ -3,17 +3,24 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import {
   Braces,
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
+  CircleAlert,
   FlaskConical,
   GitBranch,
+  Loader2,
+  Play,
   Plus,
   Trash2,
   Webhook as WebhookIcon,
+  XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getNodeMeta, listNodeCatalog } from "@/lib/nodes/catalog";
 import type { NodeConfigField } from "@/lib/nodes/types";
+import type { WorkflowGraph } from "@/lib/workflows/types";
+import type { TestNodeResult, WorkflowTestResult } from "@/lib/workflows/test-runner";
 import {
   CONDITION_OP_LABELS,
   CONDITION_OPS,
@@ -40,8 +47,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CopyField } from "@/components/connections/copy-field";
-import { WebhookFieldsDialog } from "./webhook-fields-dialog";
+import { PayloadFieldSelector, WebhookFieldsDialog } from "./webhook-fields-dialog";
 import { cn } from "@/lib/utils";
 
 type Option = { id: string; name: string };
@@ -54,6 +62,14 @@ const selectClass =
   "h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
 const nativeOptionClass = "bg-background text-foreground";
 const nativeOptGroupClass = "bg-background text-muted-foreground";
+const DEFAULT_TEST_EVENT = {
+  body: {
+    location: "Belgrade Youth Center",
+    caption: "Call for participants",
+  },
+  headers: {},
+  query: {},
+};
 
 function groupByNode<T extends { nodeId: string; nodeLabel: string }>(
   refs: T[],
@@ -183,13 +199,11 @@ export function NodeConfigPanel({
   templates,
   webhookBaseUrl,
   enabledNodeTypeIds,
-  onTestNode,
 }: {
   connections: Option[];
   templates: TemplateOption[];
   webhookBaseUrl: string;
   enabledNodeTypeIds: string[];
-  onTestNode?: (nodeId: string) => void;
 }) {
   const selectedNodeId = useWorkflowEditor((s) => s.selectedNodeId);
   const node = useWorkflowEditor((s) =>
@@ -206,6 +220,15 @@ export function NodeConfigPanel({
   const fieldEls = useRef<Record<string, FieldEl>>({});
   const [openToken, setOpenToken] = useState<string | null>(null);
   const [capturing, startCapture] = useTransition();
+  const [runningTest, setRunningTest] = useState(false);
+  const [testNode, setTestNode] = useState<TestNodeResult | null>(null);
+  const [testError, setTestError] = useState<string | null>(null);
+  const [testTargetNodeId, setTestTargetNodeId] = useState<string | null>(null);
+  const [testRunKey, setTestRunKey] = useState(0);
+  const capturedSample = useMemo(() => {
+    const webhook = nodes.find((n) => n.type === "webhook" && n.data.config.sample);
+    return webhook?.data.config.sample;
+  }, [nodes]);
 
   if (!node || !selectedNodeId) {
     return (
@@ -271,6 +294,54 @@ export function NodeConfigPanel({
     (config.sampleFields as { path: string; preview?: string }[] | undefined) ??
     [];
   const selectedFields = (config.selectedFields as string[] | undefined) ?? [];
+  const selectedOutputFields =
+    node.type === "webhook"
+      ? selectedFields
+      : ((config.selectedOutputFields as string[] | undefined) ?? []);
+  const activeTestNode = testTargetNodeId === selectedNodeId ? testNode : null;
+  const activeTestError = testTargetNodeId === selectedNodeId ? testError : null;
+  const setSelectedOutputFields = (next: string[]) => {
+    set(node.type === "webhook" ? "selectedFields" : "selectedOutputFields", next);
+  };
+
+  const runNodeTest = async () => {
+    const graph: WorkflowGraph = useWorkflowEditor.getState().toGraph();
+    const trigger = (capturedSample ?? DEFAULT_TEST_EVENT) as Record<string, unknown>;
+
+    setRunningTest(true);
+    setTestTargetNodeId(selectedNodeId);
+    setTestNode(null);
+    setTestError(null);
+    try {
+      const res = await fetch("/api/workflows/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          graph,
+          trigger,
+          targetNodeId: selectedNodeId,
+        }),
+      });
+      const data = (await res.json()) as WorkflowTestResult | { error?: unknown };
+      if (!res.ok) {
+        throw new Error(
+          "error" in data && data.error ? JSON.stringify(data.error) : res.statusText,
+        );
+      }
+      const result = data as WorkflowTestResult;
+      const target = result.nodes.find((n) => n.nodeId === selectedNodeId) ?? null;
+      setTestNode(target);
+      setTestRunKey((key) => key + 1);
+      if (!target) setTestError("This node was not reached by the sample event.");
+      else if (target.status === "error") setTestError(target.error ?? "Node failed.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setTestError(message);
+      toast.error("Test run failed", { description: message });
+    } finally {
+      setRunningTest(false);
+    }
+  };
 
   const origin =
     webhookBaseUrl ||
@@ -396,18 +467,13 @@ export function NodeConfigPanel({
         <p className="mt-0.5 text-xs text-muted-foreground">{def.description}</p>
       </div>
 
-      {onTestNode ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="self-start"
-          onClick={() => onTestNode(selectedNodeId)}
-        >
-          <FlaskConical className="size-4" /> Test run
-        </Button>
-      ) : null}
+      <Tabs defaultValue="config" className="min-w-0 gap-4">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="config">Config</TabsTrigger>
+          <TabsTrigger value="test">Test</TabsTrigger>
+        </TabsList>
 
+        <TabsContent value="config" className="flex min-w-0 flex-col gap-4">
       {node.type === "webhook" ? (
         <div className="flex flex-col gap-2 rounded-md border p-3">
           <div className="flex items-center gap-2 text-sm font-medium">
@@ -566,6 +632,89 @@ export function NodeConfigPanel({
       >
         <Trash2 className="size-4" /> Delete node
       </Button>
+        </TabsContent>
+
+        <TabsContent value="test" className="flex min-w-0 flex-col gap-4">
+          <div className="rounded-md border bg-muted/20 p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="flex items-center gap-2 text-sm font-medium">
+                  <FlaskConical className="size-4" /> Test this node
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Runs this node with the current config and the latest captured
+                  webhook event.
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                className="shrink-0"
+                disabled={runningTest}
+                onClick={() => void runNodeTest()}
+              >
+                {runningTest ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Play className="size-4" />
+                )}
+                {runningTest ? "Testing" : "Run"}
+              </Button>
+            </div>
+            <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+              {capturedSample ? (
+                <>
+                  <CheckCircle2 className="size-3.5 text-emerald-500" />
+                  Using captured sample event
+                </>
+              ) : (
+                <>
+                  <CircleAlert className="size-3.5 text-amber-500" />
+                  No captured event yet; using the default sample
+                </>
+              )}
+            </p>
+          </div>
+
+          {activeTestError ? (
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+              <p className="flex items-center gap-2 font-medium">
+                <XCircle className="size-4" /> Test failed
+              </p>
+              <p className="mt-1 text-xs">{activeTestError}</p>
+            </div>
+          ) : null}
+
+          {activeTestNode?.outputs ? (
+            <div className="flex min-w-0 flex-col gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">Output fields</p>
+                  <p className="text-xs text-muted-foreground">
+                    Select the paths this node exposes to next steps.
+                  </p>
+                </div>
+                <span className="rounded bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                  {activeTestNode.status}
+                </span>
+              </div>
+              <PayloadFieldSelector
+                key={`${selectedNodeId}-${testRunKey}`}
+                sample={activeTestNode.outputs}
+                selectedFields={selectedOutputFields}
+                onChange={setSelectedOutputFields}
+                maxHeightClassName="max-h-[calc(100svh-24rem)]"
+                emptyText="This node returned no output fields."
+              />
+            </div>
+          ) : !activeTestError ? (
+            <p className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
+              Run the node to inspect its output and choose fields for downstream
+              steps.
+            </p>
+          ) : null}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

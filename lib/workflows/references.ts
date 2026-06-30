@@ -41,6 +41,12 @@ export type PortRef = {
   portLabel: string;
 };
 
+function selectedOutputPaths(n: RefNode): string[] {
+  return ((n.config?.selectedOutputFields as string[] | undefined) ?? []).filter(
+    Boolean,
+  );
+}
+
 function reachable(
   start: string,
   edges: RefEdge[],
@@ -99,14 +105,27 @@ export function collectUpstreamFields(
       continue;
     }
 
-    for (const out of meta?.outputs ?? []) {
-      refs.push({
-        nodeId: n.id,
-        nodeLabel,
-        label: out.label,
-        path: out.id,
-        token: `{{${n.id}.${out.id}}}`,
-      });
+    const selectedOutputs = selectedOutputPaths(n);
+    if (selectedOutputs.length > 0) {
+      for (const path of selectedOutputs) {
+        refs.push({
+          nodeId: n.id,
+          nodeLabel,
+          label: path,
+          path,
+          token: `{{${n.id}.${path}}}`,
+        });
+      }
+    } else {
+      for (const out of meta?.outputs ?? []) {
+        refs.push({
+          nodeId: n.id,
+          nodeLabel,
+          label: out.label,
+          path: out.id,
+          token: `{{${n.id}.${out.id}}}`,
+        });
+      }
     }
   }
   return refs;
@@ -163,13 +182,25 @@ export function collectConnectablePorts(
       }
       continue;
     }
-    for (const out of meta.outputs) {
-      ports.push({
-        nodeId: n.id,
-        nodeLabel: meta.label,
-        portId: out.id,
-        portLabel: out.label,
-      });
+    const selectedOutputs = selectedOutputPaths(n);
+    if (selectedOutputs.length > 0) {
+      for (const path of selectedOutputs) {
+        ports.push({
+          nodeId: n.id,
+          nodeLabel: meta.label,
+          portId: path,
+          portLabel: path,
+        });
+      }
+    } else {
+      for (const out of meta.outputs) {
+        ports.push({
+          nodeId: n.id,
+          nodeLabel: meta.label,
+          portId: out.id,
+          portLabel: out.label,
+        });
+      }
     }
   }
   return ports;

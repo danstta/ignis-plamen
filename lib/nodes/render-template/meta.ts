@@ -19,11 +19,7 @@ export const renderTemplateMeta: NodeMeta<RenderTemplateConfig> = {
   label: "Render Template",
   description: "Fills a template's placeholders and renders the final PNG.",
   category: "output",
-  // A single generic input lets you wire this node downstream of another for an
-  // explicit, visible flow. Placeholder values are still bound by token, and the
-  // engine also orders this node after any node it references (referencedNodeIds),
-  // so the wire is about ordering/clarity rather than carrying the bound data.
-  inputs: [{ id: "in", label: "In", kind: "data" }],
+  inputs: [],
   outputs: [
     // First page, kept for single-image consumers and backward compatibility.
     { id: "renderUrl", label: "Render URL", kind: "image" },

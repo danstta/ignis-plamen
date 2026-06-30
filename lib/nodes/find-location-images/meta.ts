@@ -1,7 +1,14 @@
 import { z } from "zod";
 import type { NodeMeta } from "../types";
 
+export const findLocationImageProviders = [
+  "wikimedia",
+  "openverse",
+  "wikimedia-openverse",
+] as const;
+
 export const findLocationImagesConfigSchema = z.object({
+  provider: z.enum(findLocationImageProviders).default("wikimedia"),
   locationQuery: z.string().default(""),
   maxCandidates: z.coerce.number().int().min(1).max(10).default(5),
   maxWidthPx: z.coerce.number().int().min(200).max(4000).default(1200),
@@ -15,17 +22,28 @@ export const findLocationImagesMeta: NodeMeta<FindLocationImagesConfig> = {
   id: "find-location-images",
   label: "Find Location Images",
   description:
-    "Searches Wikimedia Commons for real, reusable photos near the location.",
+    "Searches free/open image sources for real, reusable photos near the location.",
   category: "source",
   inputs: [],
   outputs: [{ id: "candidates", label: "Candidates", kind: "data" }],
   configFields: [
     {
+      name: "provider",
+      label: "Provider",
+      type: "select",
+      options: [
+        { value: "wikimedia", label: "Wikimedia Commons" },
+        { value: "openverse", label: "Openverse" },
+        { value: "wikimedia-openverse", label: "Wikimedia + Openverse" },
+      ],
+      help: "Openverse searches a large index of open-licensed image providers. Wikimedia keeps the precise nearby geotagged search.",
+    },
+    {
       name: "locationQuery",
       label: "Location",
       type: "text",
       placeholder: "Venue name, address, or insert webhook data",
-      help: "Insert webhook fields or type a venue, city, country, or address. Uses OpenStreetMap + Wikimedia Commons; no API key required.",
+      help: "Insert webhook fields or type a venue, city, country, or address. No API key required.",
     },
     {
       name: "maxCandidates",

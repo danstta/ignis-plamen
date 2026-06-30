@@ -4,11 +4,13 @@ import { findLocationImagesMeta, type FindLocationImagesConfig } from "./meta";
 /**
  * Finds real photos of a project location without paid map/photo APIs:
  *   1. Geocode the location text with OpenStreetMap Nominatim.
- *   2. Search nearby geotagged Wikimedia Commons files.
- *   3. Fall back to Commons text search when geocoding or geosearch is sparse.
+ *   2. Search nearby geotagged Wikimedia Commons files when enabled.
+ *   3. Search Openverse's open-licensed catalog when enabled.
+ *   4. Fall back to text search when geocoding or geosearch is sparse.
  */
 const COMMONS_API = "https://commons.wikimedia.org/w/api.php";
 const NOMINATIM_SEARCH = "https://nominatim.openstreetmap.org/search";
+const OPENVERSE_IMAGES = "https://api.openverse.org/v1/images/";
 const USER_AGENT = "Ignis/0.1 (https://github.com/danstta/ignis)";
 // Wikimedia geosearch silently returns no pages above its 10km radius cap.
 const SEARCH_RADIUS_METERS = 10_000;
@@ -45,6 +47,28 @@ interface CommonsResponse {
   query?: {
     pages?: Record<string, CommonsPage>;
   };
+}
+
+interface OpenverseImage {
+  id?: string;
+  title?: string;
+  url?: string;
+  thumbnail?: string;
+  foreign_landing_url?: string;
+  creator?: string;
+  license?: string;
+  license_version?: string;
+  license_url?: string;
+  provider?: string;
+  source?: string;
+  attribution?: string;
+  mature?: boolean;
+  width?: number;
+  height?: number;
+}
+
+interface OpenverseResponse {
+  results?: OpenverseImage[];
 }
 
 async function geocodeLocation(
@@ -135,6 +159,30 @@ async function searchCommonsText(
   );
 }
 
+async function searchOpenverse(
+  query: string,
+  limit: number,
+): Promise<OpenverseImage[]> {
+  const url = new URL(OPENVERSE_IMAGES);
+  url.search = new URLSearchParams({
+    q: query,
+    page_size: String(limit),
+    license_type: "commercial,modification",
+  }).toString();
+
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": USER_AGENT,
+      Accept: "application/json",
+    },
+  });
+  if (!res.ok) {
+    throw new Error(`Openverse images ${res.status}: ${await res.text()}`);
+  }
+  const json = (await res.json()) as OpenverseResponse;
+  return json.results ?? [];
+}
+
 function stripHtml(value: string): string {
   return value
     .replace(/<[^>]*>/g, " ")
@@ -182,16 +230,53 @@ function toCandidate(page: CommonsPage): ImageCandidate | undefined {
   };
 }
 
-function uniqueCandidates(pages: CommonsPage[]): ImageCandidate[] {
+function toOpenverseCandidate(image: OpenverseImage): ImageCandidate | undefined {
+  const url = image.url ?? image.thumbnail;
+  if (!url || image.mature) return undefined;
+
+  const provider = humanizeProvider(image.provider ?? image.source ?? "Openverse");
+  const license = [image.license, image.license_version].filter(Boolean).join(" ");
+  const attribution =
+    image.attribution ??
+    [image.creator, license, provider].filter(Boolean).join(" | ");
+
+  return {
+    url,
+    attribution,
+    widthPx: image.width,
+    heightPx: image.height,
+    title: image.title,
+    source: provider === "Openverse" ? "Openverse" : `Openverse / ${provider}`,
+    license,
+    licenseUrl: image.license_url,
+    attributionUrl: image.foreign_landing_url,
+  };
+}
+
+function isCandidate(candidate: ImageCandidate | undefined): candidate is ImageCandidate {
+  return Boolean(candidate);
+}
+
+function humanizeProvider(value: string): string {
+  if (value.toLowerCase() === "wikimedia") return "Wikimedia Commons";
+  if (value.toLowerCase() === "flickr") return "Flickr";
+  return value
+    .split(/[_-]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function uniqueCandidates(candidates: ImageCandidate[]): ImageCandidate[] {
   const seen = new Set<string>();
-  const candidates: ImageCandidate[] = [];
-  for (const page of pages) {
-    const candidate = toCandidate(page);
-    if (!candidate || seen.has(candidate.url)) continue;
-    seen.add(candidate.url);
-    candidates.push(candidate);
+  const unique: ImageCandidate[] = [];
+  for (const candidate of candidates) {
+    const key = candidate.attributionUrl ?? candidate.url;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(candidate);
   }
-  return candidates;
+  return unique;
 }
 
 function stringValue(value: unknown): string {
@@ -202,6 +287,14 @@ function triggerBodyLocation(trigger: Record<string, unknown>): string {
   const body = trigger.body;
   if (body === null || typeof body !== "object") return "";
   return stringValue((body as Record<string, unknown>).location);
+}
+
+function providerUsesWikimedia(provider: FindLocationImagesConfig["provider"]) {
+  return provider === "wikimedia" || provider === "wikimedia-openverse";
+}
+
+function providerUsesOpenverse(provider: FindLocationImagesConfig["provider"]) {
+  return provider === "openverse" || provider === "wikimedia-openverse";
 }
 
 export const findLocationImagesNode: NodeDefinition<FindLocationImagesConfig> = {
@@ -215,45 +308,63 @@ export const findLocationImagesNode: NodeDefinition<FindLocationImagesConfig> = 
     if (!location) throw new Error("No location provided to search");
 
     const searchLimit = Math.min(Math.max(ctx.config.maxCandidates * 4, 10), 50);
-    const pages: CommonsPage[] = [];
+    const candidates: ImageCandidate[] = [];
 
     const place = await geocodeLocation(location);
     if (place) {
       ctx.log(
         `geocoded "${location}" to ${place.display_name ?? `${place.lat}, ${place.lon}`}`,
       );
-      pages.push(
-        ...(await searchNearbyCommons(
+      if (providerUsesWikimedia(ctx.config.provider)) {
+        const nearbyPages = await searchNearbyCommons(
           place.lat,
           place.lon,
           searchLimit,
           ctx.config.maxWidthPx,
-        )),
-      );
-    } else {
-      ctx.log(`could not geocode "${location}", using Commons text search only`);
-    }
-
-    let candidates = uniqueCandidates(pages);
-    if (candidates.length < ctx.config.maxCandidates) {
-      const textQueries = [location, place?.display_name].filter(
-        (query, index, all): query is string =>
-          typeof query === "string" &&
-          query.trim() !== "" &&
-          all.indexOf(query) === index,
-      );
-      for (const query of textQueries) {
-        pages.push(
-          ...(await searchCommonsText(query, searchLimit, ctx.config.maxWidthPx)),
         );
-        candidates = uniqueCandidates(pages);
-        if (candidates.length >= ctx.config.maxCandidates) break;
+        candidates.push(...nearbyPages.map(toCandidate).filter(isCandidate));
       }
+    } else {
+      ctx.log(`could not geocode "${location}", using text search only`);
     }
 
-    const selected = candidates.slice(0, ctx.config.maxCandidates);
+    const textQueries = [location, place?.display_name].filter(
+      (query, index, all): query is string =>
+        typeof query === "string" &&
+        query.trim() !== "" &&
+        all.indexOf(query) === index,
+    );
+
+    for (const query of textQueries) {
+      if (
+        providerUsesWikimedia(ctx.config.provider) &&
+        uniqueCandidates(candidates).length < ctx.config.maxCandidates
+      ) {
+        const textPages = await searchCommonsText(
+          query,
+          searchLimit,
+          ctx.config.maxWidthPx,
+        );
+        candidates.push(...textPages.map(toCandidate).filter(isCandidate));
+      }
+
+      if (
+        providerUsesOpenverse(ctx.config.provider) &&
+        uniqueCandidates(candidates).length < ctx.config.maxCandidates
+      ) {
+        candidates.push(
+          ...(await searchOpenverse(query, searchLimit))
+            .map(toOpenverseCandidate)
+            .filter(isCandidate),
+        );
+      }
+
+      if (uniqueCandidates(candidates).length >= ctx.config.maxCandidates) break;
+    }
+
+    const selected = uniqueCandidates(candidates).slice(0, ctx.config.maxCandidates);
     if (selected.length === 0) {
-      ctx.log(`No Wikimedia Commons photos found for "${location}"`);
+      ctx.log(`No reusable photos found for "${location}"`);
     }
 
     return { type: "output", outputs: { candidates: selected } };

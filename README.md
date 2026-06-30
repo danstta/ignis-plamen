@@ -33,7 +33,7 @@
 | Node | Description |
 |---|---|
 | Webhook Trigger | Starts a workflow from an inbound HTTP webhook |
-| Find Location Images | Finds reusable location photos via OpenStreetMap + Wikimedia Commons |
+| Find Location Images | Finds reusable location photos via OpenStreetMap, Wikimedia Commons, and Openverse |
 | Rank Images | Uses OpenAI GPT-4 Vision to score and filter images |
 | Manual Review | Pauses the run for a human to select an option |
 | Render Template | Fills template placeholders and renders a PNG |
@@ -133,9 +133,9 @@ Only `DATABASE_URL`, `ADMIN_PASSWORD`, and `SESSION_SECRET` are required to run 
 
 ### Find Location Images setup
 
-The Find Location Images node uses OpenStreetMap Nominatim to geocode the location query, then searches nearby geotagged Wikimedia Commons photos. It does not require a Google Maps key.
+The Find Location Images node uses OpenStreetMap Nominatim to geocode the location query, then searches free/open image providers. Wikimedia Commons gives the most precise nearby geotagged search, Openverse adds a broader open-licensed image catalog, and the combined mode can fall back across both. It does not require a Google Maps key.
 
-In the workflow editor, capture a webhook sample first, select only the fields you want to expose downstream, then insert those selected fields into the node's Location query. For example, combine a city, country, venue name, or street address instead of wiring the entire webhook body. Returned candidates include source, author, license, and attribution URLs where Wikimedia provides them.
+In the workflow editor, capture a webhook sample first, select only the fields you want to expose downstream, then insert those selected fields into the node's Location query. For example, combine a city, country, venue name, or street address instead of wiring the entire webhook body. Returned candidates include source, author, license, and attribution URLs when the provider returns them.
 
 ### 1. Deploy to Vercel (recommended)
 

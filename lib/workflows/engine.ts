@@ -2,7 +2,6 @@ import { getNodeType } from "@/lib/nodes/registry";
 import { isNodeTypeEnabled } from "@/lib/plugins/service";
 import { getWorkflow } from "./service";
 import { createRun, getRun, saveRunState } from "./runs-service";
-import { incomingEdges } from "./graph";
 import {
   ELSE_BRANCH_ID,
   ROUTER_TYPE_ID,
@@ -10,6 +9,7 @@ import {
   orderLane,
   trunkSteps,
 } from "./control-flow";
+import { resolveInputs } from "./input-resolution";
 import { resolveReferences, validateLockedPaths } from "./references";
 import type {
   NodeOutputs,
@@ -66,28 +66,6 @@ type NodeOutcome =
   | { type: "output"; outputs: NodeOutputs }
   | { type: "pause"; state: Record<string, unknown> }
   | { type: "error"; error: string };
-
-/** Resolve a node's input values from the outputs of its upstream neighbours. */
-function resolveInputs(
-  graph: WorkflowGraph,
-  nodeId: string,
-  outputs: Record<string, NodeOutputs>,
-): Record<string, unknown> {
-  const inputs: Record<string, unknown> = {};
-  for (const edge of incomingEdges(graph, nodeId)) {
-    const sourceDef = getNodeType(
-      graph.nodes.find((n) => n.id === edge.source)?.type ?? "",
-    );
-    const targetDef = getNodeType(
-      graph.nodes.find((n) => n.id === nodeId)?.type ?? "",
-    );
-    const sourceHandle = edge.sourceHandle ?? sourceDef?.outputs[0]?.id;
-    const targetHandle = edge.targetHandle ?? targetDef?.inputs[0]?.id;
-    if (!sourceHandle || !targetHandle) continue;
-    inputs[targetHandle] = outputs[edge.source]?.[sourceHandle];
-  }
-  return inputs;
-}
 
 async function execute(
   runId: string,

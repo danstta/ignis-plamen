@@ -2,7 +2,15 @@ import { z } from "zod";
 import type { NodeMeta } from "../types";
 
 export const rankImagesConfigSchema = z.object({
-  model: z.enum(["gpt-4o", "gpt-4o-mini"]).default("gpt-4o"),
+  model: z
+    .preprocess(
+      (value) =>
+        value === "gpt-4o" || value === "gpt-4o-mini"
+          ? "gpt-4.1-mini"
+          : value,
+      z.enum(["gpt-4.1", "gpt-4.1-mini"]),
+    )
+    .default("gpt-4.1-mini"),
   criteria: z
     .string()
     .default(
@@ -31,8 +39,8 @@ export const rankImagesMeta: NodeMeta<RankImagesConfig> = {
       label: "Model",
       type: "select",
       options: [
-        { value: "gpt-4o", label: "gpt-4o (higher quality)" },
-        { value: "gpt-4o-mini", label: "gpt-4o-mini (cheaper)" },
+        { value: "gpt-4.1", label: "gpt-4.1 (higher quality)" },
+        { value: "gpt-4.1-mini", label: "gpt-4.1-mini (cheaper)" },
       ],
     },
     {

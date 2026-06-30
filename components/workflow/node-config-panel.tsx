@@ -5,6 +5,7 @@ import {
   Braces,
   ChevronDown,
   ChevronUp,
+  FlaskConical,
   GitBranch,
   Plus,
   Trash2,
@@ -160,11 +161,13 @@ export function NodeConfigPanel({
   templates,
   webhookBaseUrl,
   enabledNodeTypeIds,
+  onTestNode,
 }: {
   connections: Option[];
   templates: TemplateOption[];
   webhookBaseUrl: string;
   enabledNodeTypeIds: string[];
+  onTestNode?: (nodeId: string) => void;
 }) {
   const selectedNodeId = useWorkflowEditor((s) => s.selectedNodeId);
   const node = useWorkflowEditor((s) =>
@@ -306,11 +309,15 @@ export function NodeConfigPanel({
           />
         );
       case "select":
+        const selectValue =
+          f.options?.some((o) => o.value === str) || !f.options?.[0]
+            ? str
+            : f.options[0].value;
         return (
           <select
             id={f.name}
             className={selectClass}
-            value={str}
+            value={selectValue}
             onChange={(e) => set(f.name, e.target.value)}
           >
             {(f.options ?? []).map((o) => (
@@ -364,6 +371,18 @@ export function NodeConfigPanel({
         <p className="text-sm font-semibold">{def.label}</p>
         <p className="mt-0.5 text-xs text-muted-foreground">{def.description}</p>
       </div>
+
+      {onTestNode ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="self-start"
+          onClick={() => onTestNode(selectedNodeId)}
+        >
+          <FlaskConical className="size-4" /> Test run
+        </Button>
+      ) : null}
 
       {node.type === "webhook" ? (
         <div className="flex flex-col gap-2 rounded-md border p-3">

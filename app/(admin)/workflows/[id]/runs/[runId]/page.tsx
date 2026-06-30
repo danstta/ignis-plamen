@@ -56,6 +56,11 @@ export default async function RunDetailPage({
           attribution?: string;
         }[])
       : [];
+  const reviewKind =
+    run.status === "waiting" && run.waitingNodeId
+      ? run.nodeOutputs[run.waitingNodeId]?.reviewKind
+      : undefined;
+  const reviewItemLabel = reviewKind === "designs" ? "design" : "image";
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -88,14 +93,17 @@ export default async function RunDetailPage({
 
       {run.status === "waiting" && run.resumeToken ? (
         <section className="mt-6">
-          <h2 className="text-sm font-semibold">Pick the final image</h2>
+          <h2 className="text-sm font-semibold">
+            Pick the final {reviewItemLabel}
+          </h2>
           <p className="mb-3 mt-0.5 text-xs text-muted-foreground">
-            The run is paused. Choose an image to finish it.
+            The run is paused. Choose a {reviewItemLabel} to finish it.
           </p>
           <ManualReviewPicker
             runId={run.id}
             resumeToken={run.resumeToken}
             candidates={waitingCandidates}
+            itemLabel={reviewItemLabel}
           />
         </section>
       ) : null}

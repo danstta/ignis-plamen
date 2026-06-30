@@ -3,7 +3,7 @@ import { getRun } from "@/lib/workflows/runs-service";
 import { inngest, runResumeEvent } from "@/lib/inngest/client";
 
 /**
- * Resume a paused (manual-review) run with the human's chosen image. Auth-gated
+ * Resume a paused review run with the human's chosen item. Auth-gated
  * by the proxy matcher (only /api/auth and /api/hooks are public), and further
  * guarded by the per-run resumeToken.
  *

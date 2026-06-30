@@ -4,6 +4,8 @@ import { findLocationImagesNode } from "./find-location-images";
 import { rankImagesNode } from "./rank-images";
 import { manualReviewNode } from "./manual-review";
 import { renderTemplateNode } from "./render-template";
+import { renderTemplateBatchNode } from "./render-template-batch";
+import { reviewDesignsNode } from "./review-designs";
 import { rehostImageNode } from "./rehost-image";
 import { routerNode } from "./router";
 import { notionUpdatePageNode } from "./notion-update-page";
@@ -19,6 +21,8 @@ const definitions: NodeDefinition[] = [
   rankImagesNode as unknown as NodeDefinition,
   manualReviewNode as unknown as NodeDefinition,
   renderTemplateNode as unknown as NodeDefinition,
+  renderTemplateBatchNode as unknown as NodeDefinition,
+  reviewDesignsNode as unknown as NodeDefinition,
   rehostImageNode as unknown as NodeDefinition,
   routerNode as unknown as NodeDefinition,
   notionUpdatePageNode as unknown as NodeDefinition,

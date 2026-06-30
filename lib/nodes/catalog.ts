@@ -4,6 +4,8 @@ import { findLocationImagesMeta } from "./find-location-images/meta";
 import { rankImagesMeta } from "./rank-images/meta";
 import { manualReviewMeta } from "./manual-review/meta";
 import { renderTemplateMeta } from "./render-template/meta";
+import { renderTemplateBatchMeta } from "./render-template-batch/meta";
+import { reviewDesignsMeta } from "./review-designs/meta";
 import { rehostImageMeta } from "./rehost-image/meta";
 import { routerMeta } from "./router/meta";
 import { notionUpdatePageMeta } from "./notion-update-page/meta";
@@ -20,6 +22,8 @@ const catalog: NodeMeta[] = [
   rankImagesMeta as unknown as NodeMeta,
   manualReviewMeta as unknown as NodeMeta,
   renderTemplateMeta as unknown as NodeMeta,
+  renderTemplateBatchMeta as unknown as NodeMeta,
+  reviewDesignsMeta as unknown as NodeMeta,
   rehostImageMeta as unknown as NodeMeta,
   routerMeta as unknown as NodeMeta,
   notionUpdatePageMeta as unknown as NodeMeta,

@@ -8,7 +8,7 @@ export type RunStartData = {
   payload: Record<string, unknown>;
 };
 
-/** Payload to resume a paused (manual-review) run with the human's choice. */
+/** Payload to resume a paused review run with the human's choice. */
 export type RunResumeData = {
   runId: string;
   resumeToken: string;

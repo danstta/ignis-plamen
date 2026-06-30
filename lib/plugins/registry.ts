@@ -11,7 +11,14 @@ const definitions: PluginDefinition[] = [
     name: "Core",
     description:
       "Built-in workflow nodes: webhook trigger, image rehosting, manual review, and template rendering.",
-    nodeTypeIds: ["webhook", "rehost-image", "manual-review", "render-template"],
+    nodeTypeIds: [
+      "webhook",
+      "rehost-image",
+      "manual-review",
+      "render-template",
+      "render-template-batch",
+      "review-designs",
+    ],
     defaultEnabled: true,
   },
   {

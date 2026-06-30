@@ -160,7 +160,10 @@ async function execute(
     if (outcome.type === "pause") {
       state.nodeStates[node.id] = "waiting";
       // Stash pause state (e.g. candidates) under this node's outputs for the UI.
-      state.nodeOutputs[node.id] = outcome.state as NodeOutputs;
+      state.nodeOutputs[node.id] = {
+        ...outcome.state,
+        reviewUrl: `/workflows/${run.workflowId}/runs/${runId}`,
+      } as NodeOutputs;
       await step(visitStepId(node.id, "persist"), () =>
         saveRunState(runId, {
           status: "waiting",
@@ -327,7 +330,27 @@ export async function startRun(
   return run.id;
 }
 
-/** Resume a paused run by supplying the human's chosen image, then continue. */
+function outputForHumanChoice(
+  pausedState: NodeOutputs | undefined,
+  choiceUrl: string,
+): NodeOutputs {
+  const candidates = pausedState?.candidates;
+  const chosenDesign = Array.isArray(candidates)
+    ? candidates.find(
+        (candidate) =>
+          candidate &&
+          typeof candidate === "object" &&
+          "url" in candidate &&
+          candidate.url === choiceUrl,
+      )
+    : undefined;
+  return {
+    chosen: choiceUrl,
+    ...(chosenDesign ? { chosenDesign } : {}),
+  };
+}
+
+/** Resume a paused run by supplying the human's chosen item, then continue. */
 export async function resumeRun(
   runId: string,
   resumeToken: string,
@@ -351,7 +374,10 @@ export async function resumeRun(
 
   const nodeOutputs = { ...run.nodeOutputs };
   const nodeStates = { ...run.nodeStates };
-  nodeOutputs[run.waitingNodeId] = { chosen: choiceUrl };
+  nodeOutputs[run.waitingNodeId] = outputForHumanChoice(
+    run.nodeOutputs[run.waitingNodeId],
+    choiceUrl,
+  );
   nodeStates[run.waitingNodeId] = "done";
 
   await step("resume:apply-choice", () =>

@@ -39,6 +39,7 @@ import {
   type NotionPropertyType,
   type NotionPropertyUpdate,
 } from "@/lib/nodes/notion-update-page/meta";
+import { RENDER_TEMPLATE_BATCH_TYPE_ID } from "@/lib/nodes/render-template-batch/meta";
 import { useWorkflowEditor } from "@/lib/workflows/store";
 import {
   collectConnectablePorts,
@@ -679,7 +680,8 @@ export function NodeConfigPanel({
         </div>
       ))}
 
-      {node.type === "render-template" ? (
+      {node.type === "render-template" ||
+      node.type === RENDER_TEMPLATE_BATCH_TYPE_ID ? (
         <RenderTemplatePlaceholders
           templateId={String(config.templateId ?? "")}
           templates={templates}

@@ -61,6 +61,10 @@ const BASE_FONTS = FONT_FAMILIES;
 const NO_COLORS: BrandColor[] = [];
 const NO_FONTS: BrandFont[] = [];
 
+function cssFontFamily(family: string) {
+  return `"${family.replaceAll('"', '\\"')}", sans-serif`;
+}
+
 function snapshot() {
   useEditor.getState().pushHistory();
 }
@@ -556,12 +560,20 @@ function TextProps({ element }: { element: TextElement }) {
               update(id, { fontFamily: v });
             }}
           >
-            <SelectTrigger size="sm" className="w-full">
+            <SelectTrigger
+              size="sm"
+              className="w-full"
+              style={{ fontFamily: cssFontFamily(element.fontFamily) }}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {fontOptions.map((f) => (
-                <SelectItem key={f} value={f}>
+                <SelectItem
+                  key={f}
+                  value={f}
+                  style={{ fontFamily: cssFontFamily(f) }}
+                >
                   {f}
                 </SelectItem>
               ))}

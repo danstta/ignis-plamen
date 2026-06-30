@@ -8,6 +8,7 @@ import {
   type FontDef,
   type FontWeight,
 } from "./font-registry";
+import { fontSourceFaceUrl } from "./font-assets";
 
 /**
  * Satori needs fonts supplied as raw bytes (and only reads ttf/otf/woff — not
@@ -65,15 +66,6 @@ async function readLocal(file: string): Promise<ArrayBuffer | null> {
   }
 }
 
-/** jsDelivr (Fontsource) URL for one subset face of a family at a weight. */
-function faceUrl(
-  def: Extract<FontDef, { kind: "fontsource" }>,
-  subset: string,
-  weight: FontWeight,
-): string {
-  return `https://cdn.jsdelivr.net/npm/${def.pkg}/files/${def.slug}-${subset}-${weight}-normal.woff`;
-}
-
 /** Load every face (one per weight, plus subsets for Fontsource) for a font. */
 async function loadFaces(
   def: FontDef,
@@ -86,7 +78,11 @@ async function loadFaces(
   for (const weight of weights) {
     if (def.kind === "fontsource") {
       for (const subset of def.subsets) {
-        jobs.push(fetchBytes(faceUrl(def, subset, weight)).then((d) => toFont(d, weight)));
+        jobs.push(
+          fetchBytes(fontSourceFaceUrl(def, subset, weight)).then((d) =>
+            toFont(d, weight),
+          ),
+        );
       }
     } else {
       jobs.push(readLocal(def.file(weight)).then((d) => toFont(d, weight)));
@@ -118,7 +114,7 @@ export async function loadFontFaceBytes(
     return data ? [data] : [];
   }
   const datas = await Promise.all(
-    def.subsets.map((subset) => fetchBytes(faceUrl(def, subset, weight))),
+    def.subsets.map((subset) => fetchBytes(fontSourceFaceUrl(def, subset, weight))),
   );
   return datas.filter((d): d is ArrayBuffer => d !== null);
 }

@@ -30,6 +30,10 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
+      <head>
+        {/* eslint-disable-next-line @next/next/no-css-tags -- generated from the shared editor font registry at request time. */}
+        <link rel="stylesheet" href="/api/editor-fonts" />
+      </head>
       <body className="min-h-full flex flex-col">
         <ThemeProvider
           attribute="class"

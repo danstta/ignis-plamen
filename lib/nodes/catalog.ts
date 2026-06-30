@@ -7,6 +7,7 @@ import { renderTemplateMeta } from "./render-template/meta";
 import { renderTemplateBatchMeta } from "./render-template-batch/meta";
 import { reviewDesignsMeta } from "./review-designs/meta";
 import { rehostImageMeta } from "./rehost-image/meta";
+import { runLinkMeta } from "./run-link/meta";
 import { routerMeta } from "./router/meta";
 import { notionUpdatePageMeta } from "./notion-update-page/meta";
 
@@ -25,6 +26,7 @@ const catalog: NodeMeta[] = [
   renderTemplateBatchMeta as unknown as NodeMeta,
   reviewDesignsMeta as unknown as NodeMeta,
   rehostImageMeta as unknown as NodeMeta,
+  runLinkMeta as unknown as NodeMeta,
   routerMeta as unknown as NodeMeta,
   notionUpdatePageMeta as unknown as NodeMeta,
 ];

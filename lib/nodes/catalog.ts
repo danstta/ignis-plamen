@@ -2,6 +2,7 @@ import type { NodeMeta } from "./types";
 import { webhookMeta } from "./webhook/meta";
 import { findLocationImagesMeta } from "./find-location-images/meta";
 import { rankImagesMeta } from "./rank-images/meta";
+import { llmPromptMeta } from "./llm-prompt/meta";
 import { manualReviewMeta } from "./manual-review/meta";
 import { renderTemplateMeta } from "./render-template/meta";
 import { renderTemplateBatchMeta } from "./render-template-batch/meta";
@@ -21,6 +22,7 @@ const catalog: NodeMeta[] = [
   webhookMeta as unknown as NodeMeta,
   findLocationImagesMeta as unknown as NodeMeta,
   rankImagesMeta as unknown as NodeMeta,
+  llmPromptMeta as unknown as NodeMeta,
   manualReviewMeta as unknown as NodeMeta,
   renderTemplateMeta as unknown as NodeMeta,
   renderTemplateBatchMeta as unknown as NodeMeta,

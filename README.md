@@ -134,6 +134,12 @@ OPENAI_API_KEY=
 
 Only `DATABASE_URL`, `ADMIN_PASSWORD`, and `SESSION_SECRET` are required to run the core app. The other variables are needed only for the specific integrations they power.
 
+### Find Location Images setup
+
+The Find Location Images node uses the server-side `GOOGLE_MAPS_API_KEY`, not a browser-exposed key and not the Google Drive OAuth connection. In Google Cloud, enable the Places API (New) for the key, add billing as required by Google Maps Platform, and keep normal key restrictions on the credential.
+
+In the workflow editor, capture a webhook sample first, select only the fields you want to expose downstream, then insert those selected fields into the node's Location query. For example, combine a venue name and street address instead of wiring the entire webhook body.
+
 ### 1. Deploy to Vercel (recommended)
 
 1. Import the repository in the [Vercel dashboard](https://vercel.com/new)

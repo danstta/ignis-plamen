@@ -61,7 +61,11 @@ export const findLocationImagesNode: NodeDefinition<FindLocationImagesConfig> = 
   ...findLocationImagesMeta,
 
   async run(ctx) {
-    const location = String(ctx.inputs.location ?? "").trim();
+    // Keep ctx.inputs.location as a compatibility fallback for workflows saved
+    // before this node used a token-capable locationQuery config field.
+    const location = String(
+      ctx.config.locationQuery || ctx.inputs.location || "",
+    ).trim();
     if (!location) throw new Error("No location provided to search");
 
     const key = googleMapsApiKey();

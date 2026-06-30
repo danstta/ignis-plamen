@@ -14,7 +14,8 @@ export type FindLocationImagesConfig = z.infer<
 export const findLocationImagesMeta: NodeMeta<FindLocationImagesConfig> = {
   id: "find-location-images",
   label: "Find Location Images",
-  description: "Searches Google Places for real photos of the location.",
+  description:
+    "Searches Wikimedia Commons for real, reusable photos near the location.",
   category: "source",
   inputs: [],
   outputs: [{ id: "candidates", label: "Candidates", kind: "data" }],
@@ -24,7 +25,7 @@ export const findLocationImagesMeta: NodeMeta<FindLocationImagesConfig> = {
       label: "Location query",
       type: "text",
       placeholder: "Venue name, address, or insert webhook data",
-      help: "Build this from selected webhook fields, for example venue name plus address. Uses the server-side GOOGLE_MAPS_API_KEY.",
+      help: "Build this from selected webhook fields, for example venue name plus address. Uses OpenStreetMap + Wikimedia Commons; no API key required.",
     },
     {
       name: "maxCandidates",

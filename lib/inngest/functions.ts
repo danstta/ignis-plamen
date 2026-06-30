@@ -9,7 +9,7 @@ import { resumeRun, startRun, type StepRunner } from "@/lib/workflows/engine";
  * step results.
  *
  * `retries: 4` retries only the failed step (prior steps stay memoized);
- * `concurrency` caps parallel runs to protect the OpenAI/Places rate limits and the
+ * `concurrency` caps parallel runs to protect the OpenAI/location-search rate limits and the
  * DB pool.
  */
 

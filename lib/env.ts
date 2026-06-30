@@ -79,5 +79,3 @@ export const inngestEventKey = () => process.env.INNGEST_EVENT_KEY;
 // --- Workflow node APIs ---
 /** OpenAI API key — used by the Rank Images node (GPT vision). */
 export const openaiApiKey = () => required("OPENAI_API_KEY");
-/** Google Maps Platform key — used by the Find Location Images node (Places API). */
-export const googleMapsApiKey = () => required("GOOGLE_MAPS_API_KEY");

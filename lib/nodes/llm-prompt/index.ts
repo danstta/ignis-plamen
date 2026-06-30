@@ -59,6 +59,42 @@ async function parseChatResponse(
   };
 }
 
+async function postChatCompletion(
+  url: string | URL,
+  provider: string,
+  headers: Record<string, string>,
+  body: Record<string, unknown>,
+) {
+  const send = (payload: Record<string, unknown>) =>
+    fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+  const first = await send(body);
+  if (first.ok) return parseChatResponse(first, provider);
+
+  const errorText = await first.text();
+  if (
+    first.status === 400 &&
+    errorText.includes("max_tokens") &&
+    errorText.includes("max_completion_tokens") &&
+    "max_tokens" in body
+  ) {
+    const { max_tokens: maxCompletionTokens, ...rest } = body;
+    return parseChatResponse(
+      await send({
+        ...rest,
+        max_completion_tokens: maxCompletionTokens,
+      }),
+      provider,
+    );
+  }
+
+  throw new Error(`${provider} ${first.status}: ${errorText}`);
+}
+
 function openAIHeaders(config: Record<string, unknown>) {
   const apiKey = String(config.apiKey ?? "").trim();
   if (!apiKey) throw new Error("OpenAI connection is missing an API key.");
@@ -79,18 +115,17 @@ async function callOpenAI(
   nodeConfig: LlmPromptConfig,
   messages: ChatMessage[],
 ) {
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: openAIHeaders(config),
-    body: JSON.stringify({
+  return postChatCompletion(
+    "https://api.openai.com/v1/chat/completions",
+    "OpenAI",
+    openAIHeaders(config),
+    {
       model: nodeConfig.model,
       messages,
       temperature: nodeConfig.temperature,
       max_tokens: nodeConfig.maxTokens,
-    }),
-  });
-
-  return parseChatResponse(res, "OpenAI");
+    },
+  );
 }
 
 function azureChatCompletionsUrl(
@@ -132,21 +167,20 @@ async function callAzure(
     config,
     nodeConfig.model,
   );
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
+  return postChatCompletion(
+    url,
+    "Azure",
+    {
       "Content-Type": "application/json",
       "api-key": apiKey,
     },
-    body: JSON.stringify({
+    {
       ...(usesUnifiedV1Endpoint ? { model: nodeConfig.model } : {}),
       messages,
       temperature: nodeConfig.temperature,
       max_tokens: nodeConfig.maxTokens,
-    }),
-  });
-
-  return parseChatResponse(res, "Azure");
+    },
+  );
 }
 
 export const llmPromptNode: NodeDefinition<LlmPromptConfig> = {

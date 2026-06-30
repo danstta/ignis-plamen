@@ -12,6 +12,7 @@ import {
   resolveImageSrc,
   resolveText,
   shapeStyle,
+  textContentStyle,
   textStyle,
 } from "@/lib/render/element-style";
 
@@ -38,7 +39,7 @@ export function ElementView({
   if (el.type === "text") {
     return (
       <div style={{ ...style, ...textStyle(el) }} {...hook}>
-        {resolveText(el, data)}
+        <div style={textContentStyle(el)}>{resolveText(el, data)}</div>
       </div>
     );
   }

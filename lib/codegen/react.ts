@@ -4,6 +4,7 @@ import {
   fillToStyle,
   imageContainerStyle,
   shapeStyle,
+  textContentStyle,
   textStyle,
 } from "@/lib/render/element-style";
 import { FIT_MAX_FONT_SIZE, FIT_MIN_FONT_SIZE } from "@/lib/render/fit-text";
@@ -21,6 +22,7 @@ import { styleToObjectLiteral, toComponentName } from "./serialize";
 function elementJsx(el: TemplateElement): string {
   if (el.type === "text") {
     const style = styleToObjectLiteral({ ...baseStyle(el), ...textStyle(el) });
+    const contentStyle = styleToObjectLiteral(textContentStyle(el));
     const content = el.placeholderKey
       ? `{data[${JSON.stringify(el.placeholderKey)}] ?? ${JSON.stringify(el.text)}}`
       : `{${JSON.stringify(el.text)}}`;
@@ -29,9 +31,9 @@ function elementJsx(el: TemplateElement): string {
     if (el.autoFit) {
       const min = el.minFontSize ?? FIT_MIN_FONT_SIZE;
       const max = el.maxFontSize ?? FIT_MAX_FONT_SIZE;
-      return `<FitText style={${style}} min={${min}} max={${max}}>${content}</FitText>`;
+      return `<FitText style={${style}} contentStyle={${contentStyle}} min={${min}} max={${max}}>${content}</FitText>`;
     }
-    return `<div style={${style}}>${content}</div>`;
+    return `<div style={${style}}><div style={${contentStyle}}>${content}</div></div>`;
   }
 
   if (el.type === "image") {

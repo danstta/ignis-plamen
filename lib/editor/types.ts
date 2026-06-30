@@ -95,6 +95,7 @@ export interface TextElement extends BaseElement {
   fontStyle?: "normal" | "italic";
   color: string;
   textAlign?: "left" | "center" | "right";
+  textVerticalAlign?: "top" | "middle" | "bottom";
   lineHeight?: number;
   letterSpacing?: number;
   /**

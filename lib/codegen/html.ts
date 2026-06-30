@@ -11,6 +11,7 @@ import {
   resolveImageSrc,
   resolveText,
   shapeStyle,
+  textContentStyle,
   textStyle,
 } from "@/lib/render/element-style";
 import { FIT_MAX_FONT_SIZE, FIT_MIN_FONT_SIZE } from "@/lib/render/fit-text";
@@ -24,15 +25,16 @@ import { escapeHtml, styleToInlineCss } from "./serialize";
 function elementHtml(el: TemplateElement, data?: PlaceholderData): string {
   if (el.type === "text") {
     const style = styleToInlineCss({ ...baseStyle(el), ...textStyle(el) });
+    const contentStyle = styleToInlineCss(textContentStyle(el));
     const content = escapeHtml(resolveText(el, data));
     // Fit-to-box text is tagged for the runtime fitter (see FIT_HTML_SCRIPT),
     // which sizes the font to the box after layout.
     if (el.autoFit) {
       const min = el.minFontSize ?? FIT_MIN_FONT_SIZE;
       const max = el.maxFontSize ?? FIT_MAX_FONT_SIZE;
-      return `<div style="${style}" data-fit data-fit-min="${min}" data-fit-max="${max}">${content}</div>`;
+      return `<div style="${style}" data-fit data-fit-min="${min}" data-fit-max="${max}"><div style="${contentStyle}">${content}</div></div>`;
     }
-    return `<div style="${style}">${content}</div>`;
+    return `<div style="${style}"><div style="${contentStyle}">${content}</div></div>`;
   }
 
   if (el.type === "image") {

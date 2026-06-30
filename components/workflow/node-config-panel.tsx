@@ -51,7 +51,21 @@ type TemplateOption = Option & {
 type FieldEl = HTMLInputElement | HTMLTextAreaElement | null;
 
 const selectClass =
-  "h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
+  "h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
+const nativeOptionClass = "bg-background text-foreground";
+const nativeOptGroupClass = "bg-background text-muted-foreground";
+
+function groupByNode<T extends { nodeId: string; nodeLabel: string }>(
+  refs: T[],
+): { nodeId: string; nodeLabel: string; refs: T[] }[] {
+  const groups = new Map<string, { nodeId: string; nodeLabel: string; refs: T[] }>();
+  for (const ref of refs) {
+    const group = groups.get(ref.nodeId);
+    if (group) group.refs.push(ref);
+    else groups.set(ref.nodeId, { nodeId: ref.nodeId, nodeLabel: ref.nodeLabel, refs: [ref] });
+  }
+  return [...groups.values()];
+}
 
 /** A dropdown of upstream fields that inserts the chosen token. */
 function TokenMenu({
@@ -61,18 +75,26 @@ function TokenMenu({
   fields: FieldRef[];
   onPick: (token: string) => void;
 }) {
+  const groups = groupByNode(fields);
+
   return (
     <div className="absolute right-0 z-10 mt-1 max-h-64 w-64 overflow-auto rounded-md border bg-popover p-1 shadow-md">
-      {fields.map((r) => (
-        <button
-          key={r.token}
-          type="button"
-          className="flex w-full flex-col items-start rounded px-2 py-1 text-left text-xs hover:bg-accent"
-          onClick={() => onPick(r.token)}
-        >
-          <span className="font-medium">{r.label}</span>
-          <span className="text-muted-foreground">{r.nodeLabel}</span>
-        </button>
+      {groups.map((group) => (
+        <div key={group.nodeId} className="py-0.5">
+          <p className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
+            {group.nodeLabel}
+          </p>
+          {group.refs.map((r) => (
+            <button
+              key={r.token}
+              type="button"
+              className="flex w-full flex-col items-start rounded px-2 py-1 text-left text-xs hover:bg-accent"
+              onClick={() => onPick(r.token)}
+            >
+              <span className="font-medium">{r.label}</span>
+            </button>
+          ))}
+        </div>
       ))}
     </div>
   );
@@ -321,7 +343,7 @@ export function NodeConfigPanel({
             onChange={(e) => set(f.name, e.target.value)}
           >
             {(f.options ?? []).map((o) => (
-              <option key={o.value} value={o.value}>
+              <option key={o.value} value={o.value} className={nativeOptionClass}>
                 {o.label}
               </option>
             ))}
@@ -337,9 +359,11 @@ export function NodeConfigPanel({
             value={str}
             onChange={(e) => set(f.name, e.target.value)}
           >
-            <option value="">— select —</option>
+            <option value="" className={nativeOptionClass}>
+              — select —
+            </option>
             {options.map((o) => (
-              <option key={o.id} value={o.id}>
+              <option key={o.id} value={o.id} className={nativeOptionClass}>
                 {o.name}
               </option>
             ))}
@@ -464,14 +488,25 @@ export function NodeConfigPanel({
                   }
                 }}
               >
-                <option value="">— none —</option>
-                {connectable.map((p) => (
-                  <option
-                    key={`${p.nodeId}:${p.portId}`}
-                    value={`${p.nodeId}:${p.portId}`}
+                <option value="" className={nativeOptionClass}>
+                  — none —
+                </option>
+                {groupByNode(connectable).map((group) => (
+                  <optgroup
+                    key={group.nodeId}
+                    label={group.nodeLabel}
+                    className={nativeOptGroupClass}
                   >
-                    {p.nodeLabel} → {p.portLabel}
-                  </option>
+                    {group.refs.map((p) => (
+                      <option
+                        key={`${p.nodeId}:${p.portId}`}
+                        value={`${p.nodeId}:${p.portId}`}
+                        className={nativeOptionClass}
+                      >
+                        {p.portLabel}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
             </div>
@@ -739,8 +774,12 @@ function BranchRouteRow({
           onChange({ routeMode: e.target.value as RouterBranch["routeMode"] })
         }
       >
-        <option value="branch">Run branch steps</option>
-        <option value="redoPrevious">Redo previous step</option>
+        <option value="branch" className={nativeOptionClass}>
+          Run branch steps
+        </option>
+        <option value="redoPrevious" className={nativeOptionClass}>
+          Redo previous step
+        </option>
       </select>
       {routeMode === "redoPrevious" ? (
         <div className="flex items-center gap-2">
@@ -790,7 +829,7 @@ function ConditionRow({
           onChange={(e) => onChange({ op: e.target.value as ConditionOp })}
         >
           {CONDITION_OPS.map((op) => (
-            <option key={op} value={op}>
+            <option key={op} value={op} className={nativeOptionClass}>
               {CONDITION_OP_LABELS[op]}
             </option>
           ))}
@@ -887,9 +926,11 @@ function BranchStepList({
           if (e.target.value) addNodeToBranch(e.target.value, routerId, branchId);
         }}
       >
-        <option value="">+ Add step…</option>
+        <option value="" className={nativeOptionClass}>
+          + Add step…
+        </option>
         {stepTypes.map((t) => (
-          <option key={t.id} value={t.id}>
+          <option key={t.id} value={t.id} className={nativeOptionClass}>
             {t.label}
           </option>
         ))}

@@ -1,10 +1,15 @@
-
-> design-automations@0.1.0 dev
-> next dev
-
 ▲ Next.js 16.2.9 (Turbopack)
-- Local:         http://localhost:3001
-- Network:       http://192.168.56.1:3001
+- Local:         http://localhost:3000
+- Network:       http://192.168.100.140:3000
 - Environments: .env.local
-✓ Ready in 1272ms
-[?25h
+✓ Ready in 1290ms
+
+ GET /login?next=%2Fworkflows%2Fnew 200 in 723ms (next.js: 209ms, application-code: 514ms)
+ GET /login?next=%2Fworkflows%2Fnew 200 in 322ms (next.js: 8ms, application-code: 314ms)
+ POST /login?next=%2Fworkflows%2Fnew 200 in 38ms (next.js: 4ms, application-code: 34ms)
+  └─ ƒ loginAction({"error":null}, {}) in 1ms lib/auth/actions.ts
+ GET /login?next=%2Fworkflows%2Fnew 200 in 241ms (next.js: 7ms, application-code: 234ms)
+○ Compiling /workflows/[id] ...
+ GET /workflows/new 200 in 8.2s (next.js: 7.5s, proxy.ts: 8ms, application-code: 607ms)
+ POST /login?next=%2Fworkflows%2Fnew 303 in 8.2s (next.js: 5ms, application-code: 8.2s)
+  └─ ƒ loginAction({"error":null}, {}) in 16ms lib/auth/actions.ts

@@ -65,7 +65,7 @@ function WorkflowNodeImpl({ id, type, selected, data }: NodeProps) {
   const d = data as WfNodeData;
   const isTrigger = def.category === "trigger";
   const isRouter = type === ROUTER_TYPE_ID;
-  const step = d.step;
+  const stepLabel = d.stepLabel ?? (d.step !== undefined ? String(d.step) : "?");
   const canMoveUp = !isTrigger && !d.laneFirst;
   const canMoveDown = !isTrigger && !d.laneLast;
   const branches = isRouter ? routerBranchColumns(d.config) : [];
@@ -119,7 +119,7 @@ function WorkflowNodeImpl({ id, type, selected, data }: NodeProps) {
         <div className="flex items-center gap-2.5">
           <span
             className={cn(
-              "flex size-6 shrink-0 items-center justify-center rounded-md text-xs font-semibold tabular-nums",
+              "flex h-6 min-w-8 shrink-0 items-center justify-center rounded-md px-1.5 text-[11px] font-semibold tabular-nums",
               isTrigger
                 ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
                 : isRouter
@@ -127,17 +127,12 @@ function WorkflowNodeImpl({ id, type, selected, data }: NodeProps) {
                   : "bg-muted text-muted-foreground",
             )}
           >
-            {isRouter ? (
-              <GitBranch className="size-3.5" />
-            ) : step !== undefined ? (
-              step
-            ) : (
-              "?"
-            )}
+            S{stepLabel}
           </span>
           <div className="min-w-0">
-            <span className="block truncate text-sm font-medium">
-              {def.label}
+            <span className="flex items-center gap-1.5 truncate text-sm font-medium">
+              {isRouter ? <GitBranch className="size-3.5 shrink-0" /> : null}
+              <span className="truncate">{def.label}</span>
             </span>
             {isTrigger ? (
               <span className="block text-[11px] text-muted-foreground">

@@ -588,6 +588,8 @@ function RouterBranchesEditor({
   const updateNodeConfig = useWorkflowEditor((s) => s.updateNodeConfig);
   const addRouterBranch = useWorkflowEditor((s) => s.addRouterBranch);
   const removeRouterBranch = useWorkflowEditor((s) => s.removeRouterBranch);
+  const removeNode = useWorkflowEditor((s) => s.removeNode);
+  const nodes = useWorkflowEditor((s) => s.nodes);
 
   const branches = (config.branches as RouterBranch[] | undefined) ?? [];
   const columns = routerBranchColumns(config);
@@ -597,6 +599,15 @@ function RouterBranchesEditor({
       b.id === branchId ? { ...b, ...patch } : b,
     );
     updateNodeConfig(routerId, { ...config, branches: next });
+    if (patch.routeMode === "redoPrevious") {
+      nodes
+        .filter(
+          (n) =>
+            n.data.branch?.routerId === routerId &&
+            n.data.branch.branchId === branchId,
+        )
+        .forEach((n) => removeNode(n.id));
+    }
   };
 
   return (
@@ -656,21 +667,80 @@ function RouterBranchesEditor({
             </div>
 
             {!col.isElse && branch ? (
-              <ConditionRow
-                branch={branch}
-                fields={fields}
-                onChange={(patch) => updateBranch(col.branchId, patch)}
-              />
+              <>
+                <ConditionRow
+                  branch={branch}
+                  fields={fields}
+                  onChange={(patch) => updateBranch(col.branchId, patch)}
+                />
+                <BranchRouteRow
+                  branch={branch}
+                  onChange={(patch) => updateBranch(col.branchId, patch)}
+                />
+              </>
             ) : null}
 
-            <BranchStepList
-              routerId={routerId}
-              branchId={col.branchId}
-              enabledNodeTypeIds={enabledNodeTypeIds}
-            />
+            {branch?.routeMode === "redoPrevious" ? (
+              <p className="rounded border border-dashed px-2 py-1.5 text-xs text-muted-foreground">
+                This branch reruns the previous step, then evaluates this router
+                again.
+              </p>
+            ) : (
+              <BranchStepList
+                routerId={routerId}
+                branchId={col.branchId}
+                enabledNodeTypeIds={enabledNodeTypeIds}
+              />
+            )}
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/** What a matched branch does after its condition passes. */
+function BranchRouteRow({
+  branch,
+  onChange,
+}: {
+  branch: RouterBranch;
+  onChange: (patch: Partial<RouterBranch>) => void;
+}) {
+  const routeMode = branch.routeMode ?? "branch";
+  const maxAttempts = branch.maxAttempts ?? 3;
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label className="text-xs text-muted-foreground">Then</Label>
+      <select
+        className={selectClass}
+        value={routeMode}
+        onChange={(e) =>
+          onChange({ routeMode: e.target.value as RouterBranch["routeMode"] })
+        }
+      >
+        <option value="branch">Run branch steps</option>
+        <option value="redoPrevious">Redo previous step</option>
+      </select>
+      {routeMode === "redoPrevious" ? (
+        <div className="flex items-center gap-2">
+          <Label className="shrink-0 text-xs text-muted-foreground">
+            Attempts
+          </Label>
+          <Input
+            type="number"
+            min={1}
+            max={10}
+            value={maxAttempts}
+            onChange={(e) =>
+              onChange({
+                maxAttempts: Number.parseInt(e.target.value, 10) || 1,
+              })
+            }
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

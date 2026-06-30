@@ -10,7 +10,8 @@ import { findLocationImagesMeta, type FindLocationImagesConfig } from "./meta";
 const COMMONS_API = "https://commons.wikimedia.org/w/api.php";
 const NOMINATIM_SEARCH = "https://nominatim.openstreetmap.org/search";
 const USER_AGENT = "Ignis/0.1 (https://github.com/danstta/ignis)";
-const SEARCH_RADIUS_METERS = 15_000;
+// Wikimedia geosearch silently returns no pages above its 10km radius cap.
+const SEARCH_RADIUS_METERS = 10_000;
 
 interface NominatimPlace {
   lat: string;
@@ -235,10 +236,19 @@ export const findLocationImagesNode: NodeDefinition<FindLocationImagesConfig> = 
 
     let candidates = uniqueCandidates(pages);
     if (candidates.length < ctx.config.maxCandidates) {
-      pages.push(
-        ...(await searchCommonsText(location, searchLimit, ctx.config.maxWidthPx)),
+      const textQueries = [location, place?.display_name].filter(
+        (query, index, all): query is string =>
+          typeof query === "string" &&
+          query.trim() !== "" &&
+          all.indexOf(query) === index,
       );
-      candidates = uniqueCandidates(pages);
+      for (const query of textQueries) {
+        pages.push(
+          ...(await searchCommonsText(query, searchLimit, ctx.config.maxWidthPx)),
+        );
+        candidates = uniqueCandidates(pages);
+        if (candidates.length >= ctx.config.maxCandidates) break;
+      }
     }
 
     const selected = candidates.slice(0, ctx.config.maxCandidates);

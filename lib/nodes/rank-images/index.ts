@@ -35,6 +35,25 @@ interface RankingEntry {
   reason: string;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isImageCandidate(value: unknown): value is ImageCandidate {
+  return (
+    isRecord(value) &&
+    typeof value.url === "string" &&
+    value.url.trim() !== ""
+  );
+}
+
+function normalizeCandidates(value: unknown): ImageCandidate[] {
+  const raw = isRecord(value) && Array.isArray(value.candidates)
+    ? value.candidates
+    : value;
+  return Array.isArray(raw) ? raw.filter(isImageCandidate) : [];
+}
+
 function buildMessages(
   criteria: string,
   location: string,
@@ -148,10 +167,11 @@ export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
   ...rankImagesMeta,
 
   async run(ctx) {
-    const candidates = (ctx.inputs.candidates ?? []) as ImageCandidate[];
+    const candidates = normalizeCandidates(ctx.inputs.candidates);
     const location = String(ctx.inputs.location ?? "");
 
     if (candidates.length === 0) {
+      ctx.log("No image candidates were available to rank.");
       return { type: "output", outputs: { ranked: [], best: "" } };
     }
 

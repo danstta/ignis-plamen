@@ -7,7 +7,7 @@ active, the handler calls `await startRun(...)` and runs the **entire** automati
 synchronously, in-process, inside that one Vercel function invocation (`lib/workflows/engine.ts`).
 The webhook sender's HTTP request stays open for the whole run.
 
-The real automations are heavy and chained: `find-location-images` (~5–10s, Google Places +
+The real automations are heavy and chained: `find-location-images` (~5–10s, location search +
 Blob), `rank-images` (~2–5s, OpenAI vision), `render-template` (~1–3s, Satori + Blob). Together
 they routinely approach or exceed serverless/webhook timeouts. This produces two reliability
 failures that directly violate the "predictable under load and during failures" mandate in
@@ -83,7 +83,7 @@ export const inngest = new Inngest({
 
 ### 2. `lib/inngest/functions.ts`
 The two functions; inject the Inngest `StepRunner` into the engine. `retries: 4` (only the failed
-step retries; prior steps stay memoized), `concurrency: { limit: 10 }` to protect OpenAI/Places
+step retries; prior steps stay memoized), `concurrency: { limit: 10 }` to protect OpenAI/location-search
 rate limits + the DB pool.
 
 ```ts

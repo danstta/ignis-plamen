@@ -33,7 +33,7 @@
 | Node | Description |
 |---|---|
 | Webhook Trigger | Starts a workflow from an inbound HTTP webhook |
-| Find Location Images | Fetches images for a location via Google Maps Places API |
+| Find Location Images | Finds reusable location photos via OpenStreetMap + Wikimedia Commons |
 | Rank Images | Uses OpenAI GPT-4 Vision to score and filter images |
 | Manual Review | Pauses the run for a human to select an option |
 | Render Template | Fills template placeholders and renders a PNG |
@@ -125,9 +125,6 @@ INNGEST_SIGNING_KEY=
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 
-# Google Maps (for Find Location Images node)
-GOOGLE_MAPS_API_KEY=
-
 # OpenAI (for Rank Images node)
 OPENAI_API_KEY=
 ```
@@ -136,9 +133,9 @@ Only `DATABASE_URL`, `ADMIN_PASSWORD`, and `SESSION_SECRET` are required to run 
 
 ### Find Location Images setup
 
-The Find Location Images node uses the server-side `GOOGLE_MAPS_API_KEY`, not a browser-exposed key and not the Google Drive OAuth connection. In Google Cloud, enable the Places API (New) for the key, add billing as required by Google Maps Platform, and keep normal key restrictions on the credential.
+The Find Location Images node uses OpenStreetMap Nominatim to geocode the location query, then searches nearby geotagged Wikimedia Commons photos. It does not require a Google Maps key.
 
-In the workflow editor, capture a webhook sample first, select only the fields you want to expose downstream, then insert those selected fields into the node's Location query. For example, combine a venue name and street address instead of wiring the entire webhook body.
+In the workflow editor, capture a webhook sample first, select only the fields you want to expose downstream, then insert those selected fields into the node's Location query. For example, combine a city, country, venue name, or street address instead of wiring the entire webhook body. Returned candidates include source, author, license, and attribution URLs where Wikimedia provides them.
 
 ### 1. Deploy to Vercel (recommended)
 

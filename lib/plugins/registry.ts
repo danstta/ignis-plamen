@@ -18,7 +18,7 @@ const definitions: PluginDefinition[] = [
     id: "location-image-finder",
     name: "Location Image Finder",
     description:
-      "Finds real photos of a location (Google Places) and ranks them with GPT vision.",
+      "Finds reusable location photos (OpenStreetMap + Wikimedia Commons) and ranks them with GPT vision.",
     nodeTypeIds: ["find-location-images", "rank-images"],
   },
 ];

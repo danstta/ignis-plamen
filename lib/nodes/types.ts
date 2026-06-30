@@ -89,4 +89,9 @@ export interface ImageCandidate {
   attribution: string;
   widthPx?: number;
   heightPx?: number;
+  title?: string;
+  source?: string;
+  license?: string;
+  licenseUrl?: string;
+  attributionUrl?: string;
 }

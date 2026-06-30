@@ -17,7 +17,7 @@ export const findLocationImagesMeta: NodeMeta<FindLocationImagesConfig> = {
   description:
     "Searches Wikimedia Commons for real, reusable photos near the location.",
   category: "source",
-  inputs: [],
+  inputs: [{ id: "location", label: "Location", kind: "text" }],
   outputs: [{ id: "candidates", label: "Candidates", kind: "data" }],
   configFields: [
     {

@@ -193,13 +193,24 @@ function uniqueCandidates(pages: CommonsPage[]): ImageCandidate[] {
   return candidates;
 }
 
+function stringValue(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function triggerBodyLocation(trigger: Record<string, unknown>): string {
+  const body = trigger.body;
+  if (body === null || typeof body !== "object") return "";
+  return stringValue((body as Record<string, unknown>).location);
+}
+
 export const findLocationImagesNode: NodeDefinition<FindLocationImagesConfig> = {
   ...findLocationImagesMeta,
 
   async run(ctx) {
-    const location = String(
-      ctx.config.locationQuery || ctx.inputs.location || "",
-    ).trim();
+    const location =
+      stringValue(ctx.config.locationQuery) ||
+      stringValue(ctx.inputs.location) ||
+      triggerBodyLocation(ctx.trigger);
     if (!location) throw new Error("No location provided to search");
 
     const searchLimit = Math.min(Math.max(ctx.config.maxCandidates * 4, 10), 50);

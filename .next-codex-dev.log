@@ -33,3 +33,6 @@
  GET /settings/connections/15eecc54-ad3d-4aa7-a8a8-3dcdaf7a468e 200 in 8.0s (next.js: 7.4s, proxy.ts: 13ms, application-code: 547ms)
  POST /settings/connections?create=1&auth=keys 303 in 8.5s (next.js: 242ms, proxy.ts: 13ms, application-code: 8.3s)
   └─ ƒ createConnectionAction({}) in 121ms app/(admin)/settings/connections/actions.ts
+✓ Compiled in 105ms
+✓ Compiled in 277ms
+✓ Compiled in 154ms

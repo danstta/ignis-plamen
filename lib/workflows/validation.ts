@@ -28,7 +28,7 @@ const edgeSchema = z.object({
   targetHandle: z.string().optional().nullable(),
 });
 
-const graphSchema = z
+export const workflowGraphSchema = z
   .object({
     nodes: z.array(nodeSchema),
     edges: z.array(edgeSchema),
@@ -51,7 +51,7 @@ const graphSchema = z
 export const workflowInputSchema = z.object({
   name: z.string().min(1).max(200),
   active: z.boolean().default(false),
-  graph: graphSchema,
+  graph: workflowGraphSchema,
 });
 
 export type WorkflowInputBody = z.infer<typeof workflowInputSchema>;

@@ -2,16 +2,17 @@
 
 import "@xyflow/react/dist/style.css";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { toast } from "sonner";
-import { ListChecks } from "lucide-react";
+import { FlaskConical, ListChecks } from "lucide-react";
 import { useWorkflowEditor } from "@/lib/workflows/store";
 import { useAutosave } from "@/lib/hooks/use-autosave";
 import type { WorkflowGraph } from "@/lib/workflows/types";
 import { NodePalette } from "./node-palette";
 import { NodeConfigPanel } from "./node-config-panel";
+import { WorkflowTestDialog } from "./workflow-test-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -56,6 +57,8 @@ export function WorkflowEditor({
   const workflowId = useWorkflowEditor((s) => s.workflowId);
   const setName = useWorkflowEditor((s) => s.setName);
   const setActive = useWorkflowEditor((s) => s.setActive);
+  const [testOpen, setTestOpen] = useState(false);
+  const [testTargetNodeId, setTestTargetNodeId] = useState<string | null>(null);
 
   useEffect(() => {
     load(workflow);
@@ -113,6 +116,16 @@ export function WorkflowEditor({
           <span className="text-sm">{active ? "Active" : "Inactive"}</span>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setTestTargetNodeId(null);
+              setTestOpen(true);
+            }}
+          >
+            <FlaskConical className="size-4" /> Test workflow
+          </Button>
           {workflowId ? (
             <Button
               variant="outline"
@@ -142,9 +155,18 @@ export function WorkflowEditor({
             templates={templates}
             webhookBaseUrl={webhookBaseUrl}
             enabledNodeTypeIds={enabledNodeTypeIds}
+            onTestNode={(nodeId) => {
+              setTestTargetNodeId(nodeId);
+              setTestOpen(true);
+            }}
           />
         </aside>
       </div>
+      <WorkflowTestDialog
+        open={testOpen}
+        onOpenChange={setTestOpen}
+        initialTargetNodeId={testTargetNodeId}
+      />
     </div>
   );
 }

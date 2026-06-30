@@ -151,6 +151,18 @@ export function collectConnectablePorts(
     if (n.id === nodeId || descendants.has(n.id)) continue;
     const meta = getNodeMeta(n.type);
     if (!meta) continue;
+    if (n.type === "webhook") {
+      const selected = (n.config?.selectedFields as string[] | undefined) ?? [];
+      for (const path of selected) {
+        ports.push({
+          nodeId: n.id,
+          nodeLabel: meta.label,
+          portId: path,
+          portLabel: path,
+        });
+      }
+      continue;
+    }
     for (const out of meta.outputs) {
       ports.push({
         nodeId: n.id,

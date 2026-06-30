@@ -19,6 +19,8 @@ export const routerBranchSchema = z.object({
   left: z.coerce.string().default(""),
   op: z.enum(CONDITION_OPS).default("eq"),
   right: z.coerce.string().default(""),
+  routeMode: z.enum(["branch", "redoPrevious"]).default("branch"),
+  maxAttempts: z.coerce.number().int().min(1).max(10).default(3),
 });
 export type RouterBranch = z.infer<typeof routerBranchSchema>;
 
@@ -46,6 +48,7 @@ export interface BranchColumn {
   branchId: string;
   label: string;
   isElse: boolean;
+  routeMode: "branch" | "redoPrevious";
 }
 
 /**
@@ -56,12 +59,32 @@ export interface BranchColumn {
  */
 export function routerBranchColumns(config: unknown): BranchColumn[] {
   const branches =
-    (config as { branches?: { id: string; label?: string }[] } | null)
+    (config as
+      | {
+          branches?: {
+            id: string;
+            label?: string;
+            routeMode?: "branch" | "redoPrevious";
+          }[];
+        }
+      | null)
       ?.branches ?? [];
   const cols = branches.map((b) => ({
     branchId: b.id,
     label: b.label?.trim() || "Branch",
     isElse: false,
+    routeMode:
+      b.routeMode === "redoPrevious"
+        ? ("redoPrevious" as const)
+        : ("branch" as const),
   }));
-  return [...cols, { branchId: ELSE_BRANCH_ID, label: "Else", isElse: true }];
+  return [
+    ...cols,
+    {
+      branchId: ELSE_BRANCH_ID,
+      label: "Else",
+      isElse: true,
+      routeMode: "branch" as const,
+    },
+  ];
 }

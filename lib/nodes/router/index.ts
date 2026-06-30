@@ -16,7 +16,14 @@ export const routerNode: NodeDefinition<RouterConfig> = {
     for (const b of ctx.config.branches) {
       if (evaluateCondition({ left: b.left, op: b.op, right: b.right })) {
         ctx.log(`matched branch "${b.label || b.id}"`);
-        return { type: "output", outputs: { branch: b.id } };
+        return {
+          type: "output",
+          outputs: {
+            branch: b.id,
+            routeMode: b.routeMode,
+            maxAttempts: b.maxAttempts,
+          },
+        };
       }
     }
     ctx.log("no branch matched — routing to Else");

@@ -69,7 +69,7 @@ export function layoutNodes(nodes: WfNode[]): WfNode[] {
   const pos = new Map<string, { x: number; y: number }>();
   const view = new Map<
     string,
-    { step: number; laneFirst: boolean; laneLast: boolean }
+    { step: number; stepLabel: string; laneFirst: boolean; laneLast: boolean }
   >();
 
   const structure = buildStructure(nodes);
@@ -78,6 +78,7 @@ export function layoutNodes(nodes: WfNode[]): WfNode[] {
     pos.set(node.id, { x: 0, y: row * ROW_GAP_Y });
     view.set(node.id, {
       step: trunkIdx,
+      stepLabel: String(trunkIdx),
       laneFirst: trunkIdx === 0,
       laneLast: trunkIdx === structure.length - 1,
     });
@@ -92,6 +93,7 @@ export function layoutNodes(nodes: WfNode[]): WfNode[] {
           pos.set(ln.id, { x, y: (row + li) * ROW_GAP_Y });
           view.set(ln.id, {
             step: li + 1,
+            stepLabel: `${trunkIdx}.${li + 1}`,
             laneFirst: li === 0,
             laneLast: li === lane.nodes.length - 1,
           });
@@ -110,6 +112,7 @@ export function layoutNodes(nodes: WfNode[]): WfNode[] {
       data: {
         ...n.data,
         step: v?.step,
+        stepLabel: v?.stepLabel,
         laneFirst: v?.laneFirst,
         laneLast: v?.laneLast,
       },

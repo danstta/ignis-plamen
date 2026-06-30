@@ -83,7 +83,13 @@ export function NodePalette({ enabledNodeTypeIds }: { enabledNodeTypeIds: string
           </p>
         ) : (
           steps.map((t) => (
-            <PaletteButton key={t.id} meta={t} onAdd={addNode} />
+            <PaletteButton
+              key={t.id}
+              meta={t}
+              disabled={!hasTrigger}
+              hint="Add a trigger first"
+              onAdd={addNode}
+            />
           ))
         )}
       </section>

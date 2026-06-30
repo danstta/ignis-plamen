@@ -19,9 +19,13 @@ const nodeTypes: NodeTypes = Object.fromEntries(
   listNodeCatalog().map((t) => [t.id, WorkflowNode]),
 );
 
-function connector(source: string, target: string): Edge {
+function connector(
+  source: string,
+  target: string,
+  options: { id?: string; dashed?: boolean } = {},
+): Edge {
   return {
-    id: `spine-${source}-${target}`,
+    id: options.id ?? `spine-${source}-${target}`,
     source,
     target,
     sourceHandle: "out",
@@ -30,7 +34,11 @@ function connector(source: string, target: string): Edge {
     focusable: false,
     selectable: false,
     deletable: false,
-    style: { stroke: "var(--border)", strokeWidth: 1.5 },
+    style: {
+      stroke: "var(--border)",
+      strokeWidth: 1.5,
+      ...(options.dashed ? { strokeDasharray: "5 4" } : {}),
+    },
   };
 }
 
@@ -46,6 +54,7 @@ function buildSpine(nodes: WfNode[]): Edge[] {
   const edges: Edge[] = [];
 
   structure.forEach((entry, i) => {
+    const previous = structure[i - 1]?.node;
     const next = structure[i + 1]?.node;
 
     if (entry.lanes.length === 0) {
@@ -56,6 +65,17 @@ function buildSpine(nodes: WfNode[]): Edge[] {
     // Router: fan out into each non-empty branch, then rejoin at `next`.
     let anyBranchHasSteps = false;
     for (const lane of entry.lanes) {
+      if (lane.column.routeMode === "redoPrevious") {
+        if (previous) {
+          edges.push(
+            connector(entry.node.id, previous.id, {
+              id: `redo-${entry.node.id}-${lane.column.branchId}-${previous.id}`,
+              dashed: true,
+            }),
+          );
+        }
+        continue;
+      }
       if (lane.nodes.length === 0) continue;
       anyBranchHasSteps = true;
       edges.push(connector(entry.node.id, lane.nodes[0].id));

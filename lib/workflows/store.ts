@@ -27,6 +27,7 @@ export type WfNodeData = {
   config: Record<string, unknown>;
   branch?: BranchRef;
   step?: number;
+  stepLabel?: string;
   laneFirst?: boolean;
   laneLast?: boolean;
 };
@@ -230,6 +231,8 @@ export const useWorkflowEditor = create<WorkflowEditorState>((set, get) => ({
   addNode: (nodeTypeId) =>
     set((s) => {
       const trigger = isTriggerType(nodeTypeId);
+      // Structured workflows must begin with a trigger.
+      if (!trigger && !s.nodes.some((n) => isTriggerType(n.type))) return {};
       // A workflow has at most one trigger; ignore a second one.
       if (trigger && s.nodes.some((n) => isTriggerType(n.type))) return {};
       const node = makeNode(nodeTypeId);

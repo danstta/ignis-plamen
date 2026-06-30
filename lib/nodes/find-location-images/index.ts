@@ -1,4 +1,5 @@
 import type { ImageCandidate, NodeDefinition } from "../types";
+import { pexelsApiKey } from "@/lib/env";
 import { findLocationImagesMeta, type FindLocationImagesConfig } from "./meta";
 
 /**
@@ -6,11 +7,13 @@ import { findLocationImagesMeta, type FindLocationImagesConfig } from "./meta";
  *   1. Geocode the location text with OpenStreetMap Nominatim.
  *   2. Search nearby geotagged Wikimedia Commons files when enabled.
  *   3. Search Openverse's open-licensed catalog when enabled.
- *   4. Fall back to text search when geocoding or geosearch is sparse.
+ *   4. Search Pexels for polished poster-style travel photos when enabled.
+ *   5. Fall back to text search when geocoding or geosearch is sparse.
  */
 const COMMONS_API = "https://commons.wikimedia.org/w/api.php";
 const NOMINATIM_SEARCH = "https://nominatim.openstreetmap.org/search";
 const OPENVERSE_IMAGES = "https://api.openverse.org/v1/images/";
+const PEXELS_SEARCH = "https://api.pexels.com/v1/search";
 const USER_AGENT = "Ignis/0.1 (https://github.com/danstta/ignis)";
 // Wikimedia geosearch silently returns no pages above its 10km radius cap.
 const SEARCH_RADIUS_METERS = 10_000;
@@ -19,6 +22,15 @@ interface NominatimPlace {
   lat: string;
   lon: string;
   display_name?: string;
+  address?: {
+    city?: string;
+    town?: string;
+    village?: string;
+    municipality?: string;
+    county?: string;
+    state?: string;
+    country?: string;
+  };
 }
 
 interface CommonsMetadataValue {
@@ -71,6 +83,29 @@ interface OpenverseResponse {
   results?: OpenverseImage[];
 }
 
+interface PexelsPhotoSource {
+  original?: string;
+  large2x?: string;
+  large?: string;
+  landscape?: string;
+  medium?: string;
+}
+
+interface PexelsPhoto {
+  id?: number;
+  width?: number;
+  height?: number;
+  url?: string;
+  photographer?: string;
+  photographer_url?: string;
+  alt?: string;
+  src?: PexelsPhotoSource;
+}
+
+interface PexelsResponse {
+  photos?: PexelsPhoto[];
+}
+
 async function geocodeLocation(
   query: string,
 ): Promise<NominatimPlace | undefined> {
@@ -79,6 +114,7 @@ async function geocodeLocation(
     q: query,
     format: "jsonv2",
     limit: "1",
+    addressdetails: "1",
   }).toString();
 
   const res = await fetch(url, {
@@ -183,6 +219,39 @@ async function searchOpenverse(
   return json.results ?? [];
 }
 
+async function searchPexels(
+  query: string,
+  limit: number,
+): Promise<PexelsPhoto[]> {
+  const key = pexelsApiKey();
+  if (!key) {
+    throw new Error(
+      "Pexels provider requires PEXELS_API_KEY. Add it to .env.local or choose another provider.",
+    );
+  }
+
+  const url = new URL(PEXELS_SEARCH);
+  url.search = new URLSearchParams({
+    query,
+    orientation: "landscape",
+    size: "large",
+    per_page: String(Math.min(Math.max(limit, 1), 80)),
+  }).toString();
+
+  const res = await fetch(url, {
+    headers: {
+      Authorization: key,
+      "User-Agent": USER_AGENT,
+      Accept: "application/json",
+    },
+  });
+  if (!res.ok) {
+    throw new Error(`Pexels search ${res.status}: ${await res.text()}`);
+  }
+  const json = (await res.json()) as PexelsResponse;
+  return json.photos ?? [];
+}
+
 function stripHtml(value: string): string {
   return value
     .replace(/<[^>]*>/g, " ")
@@ -253,6 +322,41 @@ function toOpenverseCandidate(image: OpenverseImage): ImageCandidate | undefined
   };
 }
 
+function pexelsPhotoUrl(photo: PexelsPhoto, maxWidthPx: number): string | undefined {
+  if (maxWidthPx >= 1800) {
+    return photo.src?.large2x ?? photo.src?.original ?? photo.src?.large;
+  }
+  if (maxWidthPx >= 1100) {
+    return photo.src?.landscape ?? photo.src?.large ?? photo.src?.large2x;
+  }
+  return photo.src?.large ?? photo.src?.landscape ?? photo.src?.medium;
+}
+
+function toPexelsCandidate(
+  photo: PexelsPhoto,
+  maxWidthPx: number,
+): ImageCandidate | undefined {
+  const url = pexelsPhotoUrl(photo, maxWidthPx);
+  if (!url) return undefined;
+
+  const title = photo.alt?.trim() || undefined;
+  const attribution = photo.photographer
+    ? `Photo by ${photo.photographer} on Pexels`
+    : "Photo provided by Pexels";
+
+  return {
+    url,
+    attribution,
+    widthPx: photo.width,
+    heightPx: photo.height,
+    title,
+    source: "Pexels",
+    license: "Pexels License",
+    licenseUrl: "https://www.pexels.com/license/",
+    attributionUrl: photo.url ?? photo.photographer_url,
+  };
+}
+
 function isCandidate(candidate: ImageCandidate | undefined): candidate is ImageCandidate {
   return Boolean(candidate);
 }
@@ -290,11 +394,50 @@ function triggerBodyLocation(trigger: Record<string, unknown>): string {
 }
 
 function providerUsesWikimedia(provider: FindLocationImagesConfig["provider"]) {
-  return provider === "wikimedia" || provider === "wikimedia-openverse";
+  return (
+    provider === "wikimedia" ||
+    provider === "wikimedia-openverse" ||
+    provider === "pexels-wikimedia"
+  );
 }
 
 function providerUsesOpenverse(provider: FindLocationImagesConfig["provider"]) {
   return provider === "openverse" || provider === "wikimedia-openverse";
+}
+
+function providerUsesPexels(provider: FindLocationImagesConfig["provider"]) {
+  return provider === "pexels" || provider === "pexels-wikimedia";
+}
+
+function destinationName(place: NominatimPlace | undefined): string | undefined {
+  const address = place?.address;
+  if (!address) return undefined;
+  const locality =
+    address.city ??
+    address.town ??
+    address.village ??
+    address.municipality ??
+    address.county ??
+    address.state;
+  return [locality, address.country].filter(Boolean).join(", ") || undefined;
+}
+
+function pexelsQueries(
+  location: string,
+  place: NominatimPlace | undefined,
+): string[] {
+  const destination = destinationName(place);
+  return [
+    destination,
+    destination ? `${destination} cityscape landmark aerial view` : undefined,
+    `${location} travel landmark cityscape`,
+    location,
+  ].filter(
+    (query, index, all): query is string =>
+      typeof query === "string" &&
+      query.trim() !== "" &&
+      all.indexOf(query) === index,
+  );
 }
 
 export const findLocationImagesNode: NodeDefinition<FindLocationImagesConfig> = {
@@ -334,6 +477,17 @@ export const findLocationImagesNode: NodeDefinition<FindLocationImagesConfig> = 
         query.trim() !== "" &&
         all.indexOf(query) === index,
     );
+
+    if (providerUsesPexels(ctx.config.provider)) {
+      for (const query of pexelsQueries(location, place)) {
+        candidates.push(
+          ...(await searchPexels(query, searchLimit))
+            .map((photo) => toPexelsCandidate(photo, ctx.config.maxWidthPx))
+            .filter(isCandidate),
+        );
+        if (uniqueCandidates(candidates).length >= ctx.config.maxCandidates) break;
+      }
+    }
 
     for (const query of textQueries) {
       if (

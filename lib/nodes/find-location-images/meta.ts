@@ -4,7 +4,9 @@ import type { NodeMeta } from "../types";
 export const findLocationImageProviders = [
   "wikimedia",
   "openverse",
+  "pexels",
   "wikimedia-openverse",
+  "pexels-wikimedia",
 ] as const;
 
 export const findLocationImagesConfigSchema = z.object({
@@ -34,16 +36,18 @@ export const findLocationImagesMeta: NodeMeta<FindLocationImagesConfig> = {
       options: [
         { value: "wikimedia", label: "Wikimedia Commons" },
         { value: "openverse", label: "Openverse" },
+        { value: "pexels", label: "Pexels" },
         { value: "wikimedia-openverse", label: "Wikimedia + Openverse" },
+        { value: "pexels-wikimedia", label: "Pexels + Wikimedia" },
       ],
-      help: "Openverse searches a large index of open-licensed image providers. Wikimedia keeps the precise nearby geotagged search.",
+      help: "Pexels usually gives the most polished poster-style travel photos. Wikimedia keeps precise nearby geotagged search. Openverse is broad but quality varies.",
     },
     {
       name: "locationQuery",
       label: "Location",
       type: "text",
       placeholder: "Venue name, address, or insert webhook data",
-      help: "Insert webhook fields or type a venue, city, country, or address. No API key required.",
+      help: "Insert webhook fields or type a venue, city, country, or address. Pexels requires PEXELS_API_KEY; Wikimedia and Openverse do not.",
     },
     {
       name: "maxCandidates",

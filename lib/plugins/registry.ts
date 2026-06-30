@@ -18,6 +18,7 @@ const definitions: PluginDefinition[] = [
       "render-template",
       "render-template-batch",
       "review-designs",
+      "run-link",
     ],
     defaultEnabled: true,
   },

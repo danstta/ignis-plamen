@@ -7,6 +7,7 @@ import { renderTemplateNode } from "./render-template";
 import { renderTemplateBatchNode } from "./render-template-batch";
 import { reviewDesignsNode } from "./review-designs";
 import { rehostImageNode } from "./rehost-image";
+import { runLinkNode } from "./run-link";
 import { routerNode } from "./router";
 import { notionUpdatePageNode } from "./notion-update-page";
 
@@ -24,6 +25,7 @@ const definitions: NodeDefinition[] = [
   renderTemplateBatchNode as unknown as NodeDefinition,
   reviewDesignsNode as unknown as NodeDefinition,
   rehostImageNode as unknown as NodeDefinition,
+  runLinkNode as unknown as NodeDefinition,
   routerNode as unknown as NodeDefinition,
   notionUpdatePageNode as unknown as NodeDefinition,
 ];

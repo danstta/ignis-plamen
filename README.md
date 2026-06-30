@@ -33,7 +33,7 @@
 | Node | Description |
 |---|---|
 | Webhook Trigger | Starts a workflow from an inbound HTTP webhook |
-| Find Location Images | Finds reusable location photos via OpenStreetMap, Wikimedia Commons, and Openverse |
+| Find Location Images | Finds reusable location photos via OpenStreetMap, Pexels, Wikimedia Commons, and Openverse |
 | Rank Images | Uses OpenAI GPT-4 Vision to score and filter images |
 | Manual Review | Pauses the run for a human to select an option |
 | Render Template | Fills template placeholders and renders a PNG |
@@ -127,13 +127,16 @@ GOOGLE_CLIENT_SECRET=
 
 # OpenAI (for Rank Images node)
 OPENAI_API_KEY=
+
+# Pexels (optional, for polished Find Location Images results)
+PEXELS_API_KEY=
 ```
 
 Only `DATABASE_URL`, `ADMIN_PASSWORD`, and `SESSION_SECRET` are required to run the core app. The other variables are needed only for the specific integrations they power.
 
 ### Find Location Images setup
 
-The Find Location Images node uses OpenStreetMap Nominatim to geocode the location query, then searches free/open image providers. Wikimedia Commons gives the most precise nearby geotagged search, Openverse adds a broader open-licensed image catalog, and the combined mode can fall back across both. It does not require a Google Maps key.
+The Find Location Images node uses OpenStreetMap Nominatim to geocode the location query, then searches image providers. Pexels is best for polished poster-style destination photos and requires `PEXELS_API_KEY`. Wikimedia Commons gives the most precise nearby geotagged search. Openverse adds a broader open-licensed image catalog, but quality varies. None of these require a Google Maps key.
 
 In the workflow editor, capture a webhook sample first, select only the fields you want to expose downstream, then insert those selected fields into the node's Location query. For example, combine a city, country, venue name, or street address instead of wiring the entire webhook body. Returned candidates include source, author, license, and attribution URLs when the provider returns them.
 

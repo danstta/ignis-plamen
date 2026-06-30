@@ -79,3 +79,6 @@ export const inngestEventKey = () => process.env.INNGEST_EVENT_KEY;
 // --- Workflow node APIs ---
 /** OpenAI API key — used by the Rank Images node (GPT vision). */
 export const openaiApiKey = () => required("OPENAI_API_KEY");
+
+/** Optional Pexels key used by Find Location Images for polished stock photos. */
+export const pexelsApiKey = () => process.env.PEXELS_API_KEY?.trim() || undefined;

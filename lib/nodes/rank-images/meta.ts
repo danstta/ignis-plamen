@@ -15,7 +15,7 @@ export const rankImagesConfigSchema = z.object({
   criteria: z
     .string()
     .default(
-      "Pick clear, attractive photos that best represent the venue for a 'Call for participants' social post. Prefer well-lit, uncluttered, recognizable shots.",
+      "Pick the best poster hero image for a youth exchange call. Prefer polished travel/destination photos: wide landscape or aerial city views, recognizable landmarks, waterfronts, mountains, old towns, castles, churches, plazas, gardens, or scenic architecture. Favor bright daylight, blue sky, vivid natural color, strong depth, clean composition, and enough open space for overlay text. Avoid dark interiors, close-up details, random people, cars as the subject, low-resolution/archive-looking images, screenshots, logos, watermarks, text in the photo, awkward crops, and dull or cluttered street snapshots.",
     ),
 });
 

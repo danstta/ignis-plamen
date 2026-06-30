@@ -248,11 +248,18 @@ export function NodeConfigPanel({
     updateNodeConfig(selectedNodeId, { ...config, [name]: value });
 
   // Upstream field availability for tokens + input mapping.
-  const refNodes: RefNode[] = nodes.map((n) => ({
-    id: n.id,
-    type: n.type ?? "",
-    config: (n.data?.config ?? {}) as Record<string, unknown>,
-  }));
+  const refNodes: RefNode[] = [...nodes]
+    .sort(
+      (a, b) =>
+        a.position.y - b.position.y ||
+        a.position.x - b.position.x ||
+        a.id.localeCompare(b.id),
+    )
+    .map((n) => ({
+      id: n.id,
+      type: n.type ?? "",
+      config: (n.data?.config ?? {}) as Record<string, unknown>,
+    }));
   const refEdges = edges.map((e) => ({ source: e.source, target: e.target }));
   const upstreamFields = collectUpstreamFields(selectedNodeId, refNodes, refEdges);
   const connectable = collectConnectablePorts(selectedNodeId, refNodes, refEdges);

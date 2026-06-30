@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { getConnection } from "@/lib/connections/service";
 import { getConnectionType } from "@/lib/connections/registry";
+import { connectionErrorMessage } from "@/lib/connections/errors";
 import { getConnectionSetupState } from "@/lib/connections/status";
 import { ConnectionConfigForm } from "@/components/connections/connection-config-form";
 import { DeleteConnectionButton } from "@/components/connections/delete-connection-button";
@@ -119,7 +120,7 @@ export default async function ConnectionDetailPage({
 
       {error ? (
         <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-          Connection error: {error}
+          Connection error: {connectionErrorMessage(error)}
         </p>
       ) : null}
 

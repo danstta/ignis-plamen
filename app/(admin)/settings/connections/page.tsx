@@ -11,6 +11,7 @@ import {
 import { listConnections } from "@/lib/connections/service";
 import { getConnectionType, listConnectionTypes } from "@/lib/connections/registry";
 import { getConnectionSetupState } from "@/lib/connections/status";
+import { connectionErrorMessage } from "@/lib/connections/errors";
 import { createConnectionAction } from "./actions";
 import { ProviderIcon } from "@/components/connections/provider-icon";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,12 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 
 export const dynamic = "force-dynamic";
 
-export default async function SettingsConnectionsPage() {
+export default async function SettingsConnectionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error } = await searchParams;
   let rows: Awaited<ReturnType<typeof listConnections>> = [];
   let dbError: string | null = null;
   try {
@@ -62,6 +68,12 @@ export default async function SettingsConnectionsPage() {
           </div>
         </div>
       </header>
+
+      {error ? (
+        <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          Connection error: {connectionErrorMessage(error)}
+        </p>
+      ) : null}
 
       <section>
         <div className="flex flex-wrap items-end justify-between gap-3">

@@ -9,7 +9,7 @@ import type { ConnectionDefinition } from "./types";
  * provider + optional reconnect target without server-side session storage.
  */
 
-type OAuthDef = Extract<ConnectionDefinition["auth"], { type: "oauth" }>;
+export type OAuthDef = Extract<ConnectionDefinition["auth"], { type: "oauth" }>;
 
 export type OAuthTokens = {
   access_token: string;
@@ -58,6 +58,12 @@ async function hmac(payload: string): Promise<string> {
 }
 
 export type OAuthState = { provider: string; connectionId?: string };
+
+export function getMissingOAuthEnv(auth: OAuthDef): string[] {
+  return [auth.clientIdEnv, auth.clientSecretEnv].filter(
+    (name) => !process.env[name]?.trim(),
+  );
+}
 
 /** Sign a short-lived (10 min) state token for the authorize redirect. */
 export async function signState(state: OAuthState): Promise<string> {

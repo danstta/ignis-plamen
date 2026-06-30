@@ -128,6 +128,7 @@ export async function loadFontsForCanvas(
   canvas: CanvasView,
   _data?: PlaceholderData,
 ): Promise<SatoriFont[]> {
+  void _data;
   // Group text elements by family, collecting the weights each one uses.
   // Unknown families (e.g. unwired brand fonts) map to Inter, preserving the
   // "previews custom, renders as Inter" behavior.

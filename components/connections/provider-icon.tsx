@@ -1,4 +1,10 @@
-import { Plug, type LucideIcon } from "lucide-react";
+import {
+  Bot,
+  BrainCircuit,
+  CloudCog,
+  Plug,
+  type LucideIcon,
+} from "lucide-react";
 import type { ComponentType, SVGProps } from "react";
 import { NotionIcon } from "@/components/icons/notion";
 import { GoogleDriveIcon } from "@/components/icons/google-drive";
@@ -9,6 +15,9 @@ type IconComponent = ComponentType<SVGProps<SVGSVGElement>> | LucideIcon;
 const ICONS: Record<string, IconComponent> = {
   notion: NotionIcon,
   "google-drive": GoogleDriveIcon,
+  openai: Bot,
+  anthropic: BrainCircuit,
+  "azure-foundry": CloudCog,
 };
 
 /**

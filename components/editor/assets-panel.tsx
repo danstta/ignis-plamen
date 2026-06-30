@@ -28,9 +28,10 @@ export function AssetsPanel() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function load() {
-    setError(null);
     try {
-      setAssets(await fetchAssets());
+      const nextAssets = await fetchAssets();
+      setError(null);
+      setAssets(nextAssets);
     } catch (err) {
       setError(String(err));
     }
@@ -38,7 +39,14 @@ export function AssetsPanel() {
 
   // Load on first open; keep the list around afterwards.
   useEffect(() => {
-    if (open && assets === null) void load();
+    if (!open || assets !== null) return;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) void load();
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [open, assets]);
 
   function insert(asset: Asset) {

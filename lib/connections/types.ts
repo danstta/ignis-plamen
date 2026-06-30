@@ -16,6 +16,7 @@ export interface ConfigField {
   type: "text" | "password";
   placeholder?: string;
   help?: string;
+  required?: boolean;
 }
 
 /** How a provider's accounts authenticate. */

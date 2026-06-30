@@ -4,6 +4,7 @@ import { useTransition } from "react";
 import { Trash2 } from "lucide-react";
 import { deleteConnectionAction } from "@/app/(admin)/settings/connections/actions";
 import { Button } from "@/components/ui/button";
+import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 
 export function DeleteConnectionButton({
   id,
@@ -14,18 +15,21 @@ export function DeleteConnectionButton({
 }) {
   const [pending, start] = useTransition();
   return (
-    <Button
-      variant="outline"
-      size="sm"
-      disabled={pending}
-      onClick={() => {
-        if (!window.confirm(`Delete connection "${name}"?`)) return;
-        start(() => {
-          void deleteConnectionAction(id);
-        });
-      }}
+    <ConfirmDeleteDialog
+      itemLabel="connection"
+      itemName={name}
+      onConfirm={() =>
+        new Promise<void>((resolve) => {
+          start(() => {
+            void deleteConnectionAction(id);
+            resolve();
+          });
+        })
+      }
     >
-      <Trash2 className="size-4" /> Delete connection
-    </Button>
+      <Button variant="outline" size="sm" disabled={pending}>
+        <Trash2 className="size-4" /> Delete connection
+      </Button>
+    </ConfirmDeleteDialog>
   );
 }

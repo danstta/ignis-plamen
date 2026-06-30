@@ -37,9 +37,19 @@ export async function updateConnectionConfigAction(
   const patch: Record<string, unknown> = {};
   for (const f of fields) {
     const v = formData.get(f.name);
-    if (v !== null) patch[f.name] = String(v);
+    if (v !== null) patch[f.name] = String(v).trim();
   }
   const name = String(formData.get("name") || conn.name);
+  const missingRequired = fields.filter(
+    (field) =>
+      field.required !== false &&
+      !String(patch[field.name] ?? conn.config?.[field.name] ?? "").trim(),
+  );
+  if (missingRequired.length > 0) {
+    throw new Error(
+      `Missing required field: ${missingRequired.map((f) => f.label).join(", ")}`,
+    );
+  }
 
   // Preserve existing config (e.g. OAuth tokens) while applying edits.
   await updateConnection(id, {

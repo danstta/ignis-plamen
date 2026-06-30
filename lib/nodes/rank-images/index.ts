@@ -146,19 +146,31 @@ async function rankWithAzure(
     throw new Error("Azure connection is missing a deployment name.");
   }
 
-  const url =
-    `${endpoint}/openai/deployments/${encodeURIComponent(deploymentName)}` +
-    `/chat/completions?api-version=${encodeURIComponent(apiVersion)}`;
+  const usesUnifiedV1Endpoint = /\/openai\/v1$/i.test(endpoint);
+  const url = new URL(
+    usesUnifiedV1Endpoint
+      ? `${endpoint}/chat/completions`
+      : `${endpoint}/openai/deployments/${encodeURIComponent(deploymentName)}/chat/completions`,
+  );
+  if (apiVersion) {
+    url.searchParams.set("api-version", apiVersion);
+  } else if (!usesUnifiedV1Endpoint) {
+    url.searchParams.set("api-version", "2025-01-01-preview");
+  }
+
+  const body = {
+    ...(usesUnifiedV1Endpoint ? { model: deploymentName } : {}),
+    messages: buildMessages(criteria, location, candidates),
+    response_format: responseFormat,
+  };
+
   const res = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "api-key": apiKey,
     },
-    body: JSON.stringify({
-      messages: buildMessages(criteria, location, candidates),
-      response_format: responseFormat,
-    }),
+    body: JSON.stringify(body),
   });
   return parseRankingResponse(res, "Azure");
 }
@@ -175,58 +187,48 @@ export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
       return { type: "output", outputs: { ranked: [], best: "" } };
     }
 
-    let ranked: ImageCandidate[];
-    try {
-      const connection = await getConnection(ctx.config.connectionId);
-      if (!connection) throw new Error("Select an AI connection.");
+    const connection = await getConnection(ctx.config.connectionId);
+    if (!connection) throw new Error("Select an AI connection.");
 
-      const configuredModels = modelOptionsForConnection({
-        type: connection.type,
-        config: connection.config ?? {},
-      });
-      if (
-        !configuredModels.some((option) => option.value === ctx.config.model)
-      ) {
-        throw new Error(
-          "Select one of the models configured on the chosen AI connection.",
-        );
-      }
+    const configuredModels = modelOptionsForConnection({
+      type: connection.type,
+      config: connection.config ?? {},
+    });
+    if (!configuredModels.some((option) => option.value === ctx.config.model)) {
+      throw new Error(
+        "Select one of the models configured on the chosen AI connection.",
+      );
+    }
 
-      const ranking =
-        connection.type === "openai"
-          ? await rankWithOpenAI(
+    const ranking =
+      connection.type === "openai"
+        ? await rankWithOpenAI(
+            connection.config ?? {},
+            ctx.config.model,
+            ctx.config.criteria,
+            location,
+            candidates,
+          )
+        : connection.type === "azure-foundry"
+          ? await rankWithAzure(
               connection.config ?? {},
               ctx.config.model,
               ctx.config.criteria,
               location,
               candidates,
             )
-          : connection.type === "azure-foundry"
-            ? await rankWithAzure(
-                connection.config ?? {},
-                ctx.config.model,
-                ctx.config.criteria,
-                location,
-                candidates,
-              )
-            : (() => {
-                throw new Error(
-                  `Unsupported AI connection type: ${connection.type}`,
-                );
-              })();
-      ranked = ranking
-        .slice()
-        .sort((a, b) => b.score - a.score)
-        .map((r) => candidates[r.index])
-        .filter((c): c is ImageCandidate => Boolean(c));
-      // Append any candidates the model omitted so nothing is lost.
-      for (const c of candidates) if (!ranked.includes(c)) ranked.push(c);
-    } catch (err) {
-      ctx.log(
-        `Ranking failed, using search order: ${err instanceof Error ? err.message : err}`,
-      );
-      ranked = candidates;
-    }
+          : (() => {
+              throw new Error(
+                `Unsupported AI connection type: ${connection.type}`,
+              );
+            })();
+    const ranked = ranking
+      .slice()
+      .sort((a, b) => b.score - a.score)
+      .map((r) => candidates[r.index])
+      .filter((c): c is ImageCandidate => Boolean(c));
+    // Append any candidates the model omitted so nothing is lost.
+    for (const c of candidates) if (!ranked.includes(c)) ranked.push(c);
 
     return {
       type: "output",

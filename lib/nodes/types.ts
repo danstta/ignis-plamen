@@ -29,6 +29,10 @@ export interface NodeConfigField {
     | "template";
   /** Options for `select`. */
   options?: { value: string; label: string }[];
+  /** Limits a connection picker to these provider ids. */
+  connectionTypes?: string[];
+  /** Builds select options from the model list exposed by another connection field. */
+  modelSource?: { connectionField: string };
   placeholder?: string;
   help?: string;
 }

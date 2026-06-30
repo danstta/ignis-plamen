@@ -24,7 +24,12 @@ const WorkflowCanvas = dynamic(
   { ssr: false },
 );
 
-type Option = { id: string; name: string };
+type ConnectionOption = {
+  id: string;
+  name: string;
+  type: string;
+  models: { value: string; label: string }[];
+};
 type TemplateOption = {
   id: string;
   name: string;
@@ -46,7 +51,7 @@ export function WorkflowEditor({
   webhookBaseUrl,
 }: {
   workflow: WorkflowEditorInput;
-  connections: Option[];
+  connections: ConnectionOption[];
   templates: TemplateOption[];
   enabledNodeTypeIds: string[];
   webhookBaseUrl: string;

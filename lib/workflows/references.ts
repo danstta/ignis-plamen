@@ -41,10 +41,27 @@ export type PortRef = {
   portLabel: string;
 };
 
-function selectedOutputPaths(n: RefNode): string[] {
+function selectedOutputFields(n: RefNode): string[] {
   return ((n.config?.selectedOutputFields as string[] | undefined) ?? []).filter(
     Boolean,
   );
+}
+
+/** Output paths this node explicitly exposes to later steps. */
+export function selectedOutputPaths(n: RefNode): string[] {
+  if (n.type === "webhook") {
+    return ((n.config?.selectedFields as string[] | undefined) ?? []).filter(
+      Boolean,
+    );
+  }
+  return selectedOutputFields(n);
+}
+
+function selectedOutputLabel(
+  path: string,
+  outputs: { id: string; label: string }[],
+): string {
+  return outputs.find((out) => out.id === path)?.label ?? path;
 }
 
 function reachable(
@@ -70,6 +87,22 @@ function reachable(
 }
 
 /**
+ * The editor is presented as an ordered workflow: a node may only read values
+ * that come from earlier steps. Keep the descendant guard too so imported graphs
+ * with unusual edges cannot expose values that would create a cycle.
+ */
+function priorNodes(
+  nodeId: string,
+  nodes: RefNode[],
+  edges: RefEdge[],
+): RefNode[] {
+  const index = nodes.findIndex((n) => n.id === nodeId);
+  if (index < 0) return [];
+  const descendants = reachable(nodeId, edges, "down");
+  return nodes.slice(0, index).filter((n) => !descendants.has(n.id));
+}
+
+/**
  * Fields that `nodeId` may reference as `{{token}}`s: the outputs of every node
  * that isn't itself or one of its descendants (referencing a descendant would
  * form a cycle). Wiring is not required — a token reference *is* the dependency
@@ -80,52 +113,21 @@ export function collectUpstreamFields(
   nodes: RefNode[],
   edges: RefEdge[],
 ): FieldRef[] {
-  const descendants = reachable(nodeId, edges, "down");
   const refs: FieldRef[] = [];
-  for (const n of nodes) {
-    if (n.id === nodeId || descendants.has(n.id)) continue;
+  for (const n of priorNodes(nodeId, nodes, edges)) {
     const meta = getNodeMeta(n.type);
     const nodeLabel = meta?.label ?? n.type;
 
-    // Webhook nodes don't surface their raw body/headers/query ports. Instead the
-    // user picks structural dot-paths from a captured sample (see WebhookFieldsDialog),
-    // and only those become referenceable downstream. Nothing picked = nothing
-    // exposed, so the "Data" picker stays scoped to what was deliberately chosen.
-    if (n.type === "webhook") {
-      const selected = (n.config?.selectedFields as string[] | undefined) ?? [];
-      for (const path of selected) {
-        refs.push({
-          nodeId: n.id,
-          nodeLabel,
-          label: path,
-          path,
-          token: `{{${n.id}.${path}}}`,
-        });
-      }
-      continue;
-    }
-
-    const selectedOutputs = selectedOutputPaths(n);
-    if (selectedOutputs.length > 0) {
-      for (const path of selectedOutputs) {
-        refs.push({
-          nodeId: n.id,
-          nodeLabel,
-          label: path,
-          path,
-          token: `{{${n.id}.${path}}}`,
-        });
-      }
-    } else {
-      for (const out of meta?.outputs ?? []) {
-        refs.push({
-          nodeId: n.id,
-          nodeLabel,
-          label: out.label,
-          path: out.id,
-          token: `{{${n.id}.${out.id}}}`,
-        });
-      }
+    // Nothing selected means nothing exposed downstream. This keeps the Inputs
+    // dropdowns and token pickers scoped to the contract the user chose.
+    for (const path of selectedOutputPaths(n)) {
+      refs.push({
+        nodeId: n.id,
+        nodeLabel,
+        label: selectedOutputLabel(path, meta?.outputs ?? []),
+        path,
+        token: `{{${n.id}.${path}}}`,
+      });
     }
   }
   return refs;
@@ -164,43 +166,17 @@ export function collectConnectablePorts(
   nodes: RefNode[],
   edges: RefEdge[],
 ): PortRef[] {
-  const descendants = reachable(nodeId, edges, "down");
   const ports: PortRef[] = [];
-  for (const n of nodes) {
-    if (n.id === nodeId || descendants.has(n.id)) continue;
+  for (const n of priorNodes(nodeId, nodes, edges)) {
     const meta = getNodeMeta(n.type);
     if (!meta) continue;
-    if (n.type === "webhook") {
-      const selected = (n.config?.selectedFields as string[] | undefined) ?? [];
-      for (const path of selected) {
-        ports.push({
-          nodeId: n.id,
-          nodeLabel: meta.label,
-          portId: path,
-          portLabel: path,
-        });
-      }
-      continue;
-    }
-    const selectedOutputs = selectedOutputPaths(n);
-    if (selectedOutputs.length > 0) {
-      for (const path of selectedOutputs) {
-        ports.push({
-          nodeId: n.id,
-          nodeLabel: meta.label,
-          portId: path,
-          portLabel: path,
-        });
-      }
-    } else {
-      for (const out of meta.outputs) {
-        ports.push({
-          nodeId: n.id,
-          nodeLabel: meta.label,
-          portId: out.id,
-          portLabel: out.label,
-        });
-      }
+    for (const path of selectedOutputPaths(n)) {
+      ports.push({
+        nodeId: n.id,
+        nodeLabel: meta.label,
+        portId: path,
+        portLabel: selectedOutputLabel(path, meta.outputs),
+      });
     }
   }
   return ports;

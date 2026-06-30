@@ -13,6 +13,7 @@ import {
   type OnNodesChange,
 } from "@xyflow/react";
 import { getNodeMeta } from "@/lib/nodes/catalog";
+import { selectedOutputPaths } from "./references";
 import { topoOrder } from "./graph";
 import { ROUTER_TYPE_ID } from "./conditions";
 import { laneNodes, layoutNodes } from "./editor-structure";
@@ -72,6 +73,10 @@ function presentEdge(edge: Edge): Edge {
     type: "smoothstep",
     markerEnd: { type: MarkerType.ArrowClosed },
   };
+}
+
+function sourceHandleFor(node: WfNode, edge: Edge): string | undefined {
+  return edge.sourceHandle ?? getNodeMeta(node.type ?? "")?.outputs[0]?.id;
 }
 
 /** A fresh, empty branch for a router. */
@@ -312,12 +317,29 @@ export const useWorkflowEditor = create<WorkflowEditorState>((set, get) => ({
     }),
 
   updateNodeConfig: (nodeId, config) =>
-    set((s) => ({
-      nodes: s.nodes.map((n) =>
+    set((s) => {
+      const sourceNode = s.nodes.find((n) => n.id === nodeId);
+      const exposed = sourceNode
+        ? new Set(
+            selectedOutputPaths({
+              id: sourceNode.id,
+              type: sourceNode.type ?? "",
+              config,
+            }),
+          )
+        : null;
+      const nodes = s.nodes.map((n) =>
         n.id === nodeId ? { ...n, data: { ...n.data, config } } : n,
-      ),
-      dirty: true,
-    })),
+      );
+      const edges = exposed
+        ? s.edges.filter((e) => {
+            if (e.source !== nodeId || !sourceNode) return true;
+            const sourceHandle = sourceHandleFor(sourceNode, e);
+            return !!sourceHandle && exposed.has(sourceHandle);
+          })
+        : s.edges;
+      return { nodes, edges, dirty: true };
+    }),
 
   setInputEdge: (target, targetHandle, source, sourceHandle) =>
     set((s) => {

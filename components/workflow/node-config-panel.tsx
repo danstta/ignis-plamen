@@ -32,6 +32,13 @@ import {
   routerBranchColumns,
   type RouterBranch,
 } from "@/lib/nodes/router/meta";
+import {
+  NOTION_UPDATE_PAGE_TYPE_ID,
+  notionPropertyTypeLabels,
+  notionPropertyTypes,
+  type NotionPropertyType,
+  type NotionPropertyUpdate,
+} from "@/lib/nodes/notion-update-page/meta";
 import { useWorkflowEditor } from "@/lib/workflows/store";
 import {
   collectConnectablePorts,
@@ -682,6 +689,14 @@ export function NodeConfigPanel({
         />
       ) : null}
 
+      {node.type === NOTION_UPDATE_PAGE_TYPE_ID ? (
+        <NotionPropertiesEditor
+          properties={(config.properties ?? []) as NotionPropertyUpdate[]}
+          fields={upstreamFields}
+          onChange={(next) => set("properties", next)}
+        />
+      ) : null}
+
       <Button
         type="button"
         variant="ghost"
@@ -774,6 +789,116 @@ export function NodeConfigPanel({
           ) : null}
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+/** Dynamic property mapping rows for the Notion Update Page node. */
+function NotionPropertiesEditor({
+  properties,
+  fields,
+  onChange,
+}: {
+  properties: NotionPropertyUpdate[];
+  fields: FieldRef[];
+  onChange: (next: NotionPropertyUpdate[]) => void;
+}) {
+  const addProperty = () =>
+    onChange([
+      ...properties,
+      {
+        id: crypto.randomUUID(),
+        name: "",
+        type: "rich_text",
+        value: "",
+      },
+    ]);
+
+  const updateProperty = (
+    id: string,
+    patch: Partial<Omit<NotionPropertyUpdate, "id">>,
+  ) => {
+    onChange(properties.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+  };
+
+  const removeProperty = (id: string) => {
+    onChange(properties.filter((row) => row.id !== id));
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium tracking-wide text-muted-foreground/70">
+            Properties
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Choose the Notion fields to change and bind their values from previous steps.
+          </p>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-7 shrink-0 gap-1 px-2 text-xs"
+          onClick={addProperty}
+        >
+          <Plus className="size-3.5" /> Add
+        </Button>
+      </div>
+
+      {properties.length === 0 ? (
+        <button
+          type="button"
+          className="rounded-md border border-dashed p-3 text-left text-xs text-muted-foreground hover:border-foreground/20 hover:bg-accent"
+          onClick={addProperty}
+        >
+          Add a property update, then insert webhook or previous-step data as its value.
+        </button>
+      ) : (
+        properties.map((row) => (
+          <div key={row.id} className="flex flex-col gap-2 rounded-md border p-3">
+            <div className="flex items-center gap-1.5">
+              <Input
+                value={row.name}
+                placeholder="Property name"
+                onChange={(e) => updateProperty(row.id, { name: e.target.value })}
+              />
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
+                title="Remove property"
+                onClick={() => removeProperty(row.id)}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </div>
+            <select
+              className={selectClass}
+              value={row.type}
+              onChange={(e) =>
+                updateProperty(row.id, {
+                  type: e.target.value as NotionPropertyType,
+                })
+              }
+            >
+              {notionPropertyTypes.map((type) => (
+                <option key={type} value={type} className={nativeOptionClass}>
+                  {notionPropertyTypeLabels[type]}
+                </option>
+              ))}
+            </select>
+            <TokenBindingInput
+              value={String(row.value ?? "")}
+              onChange={(value) => updateProperty(row.id, { value })}
+              fields={fields}
+              placeholder="Value - or insert data"
+            />
+          </div>
+        ))
+      )}
     </div>
   );
 }

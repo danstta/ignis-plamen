@@ -6,6 +6,7 @@ import { manualReviewNode } from "./manual-review";
 import { renderTemplateNode } from "./render-template";
 import { rehostImageNode } from "./rehost-image";
 import { routerNode } from "./router";
+import { notionUpdatePageNode } from "./notion-update-page";
 
 /**
  * Registry of available workflow node types. To add a node, implement a
@@ -20,6 +21,7 @@ const definitions: NodeDefinition[] = [
   renderTemplateNode as unknown as NodeDefinition,
   rehostImageNode as unknown as NodeDefinition,
   routerNode as unknown as NodeDefinition,
+  notionUpdatePageNode as unknown as NodeDefinition,
 ];
 
 const byId = new Map(definitions.map((d) => [d.id, d]));

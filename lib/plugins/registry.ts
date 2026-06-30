@@ -21,6 +21,14 @@ const definitions: PluginDefinition[] = [
       "Finds reusable location photos (OpenStreetMap + Wikimedia Commons) and ranks them with GPT vision.",
     nodeTypeIds: ["find-location-images", "rank-images"],
   },
+  {
+    id: "notion",
+    name: "Notion",
+    description:
+      "Updates Notion pages from webhook payloads and previous workflow steps.",
+    nodeTypeIds: ["notion-update-page"],
+    defaultEnabled: true,
+  },
 ];
 
 const byId = new Map(definitions.map((d) => [d.id, d]));

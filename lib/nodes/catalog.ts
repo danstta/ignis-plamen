@@ -6,6 +6,7 @@ import { manualReviewMeta } from "./manual-review/meta";
 import { renderTemplateMeta } from "./render-template/meta";
 import { rehostImageMeta } from "./rehost-image/meta";
 import { routerMeta } from "./router/meta";
+import { notionUpdatePageMeta } from "./notion-update-page/meta";
 
 /**
  * Client-safe node catalog: metadata only (no run()), so the canvas palette,
@@ -21,6 +22,7 @@ const catalog: NodeMeta[] = [
   renderTemplateMeta as unknown as NodeMeta,
   rehostImageMeta as unknown as NodeMeta,
   routerMeta as unknown as NodeMeta,
+  notionUpdatePageMeta as unknown as NodeMeta,
 ];
 
 const byId = new Map(catalog.map((m) => [m.id, m]));

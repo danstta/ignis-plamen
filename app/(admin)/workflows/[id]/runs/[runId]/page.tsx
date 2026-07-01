@@ -10,12 +10,13 @@ import { CurateImagesPicker } from "@/components/workflow/curate-images-picker";
 import { ManualReviewPicker } from "@/components/workflow/manual-review-picker";
 import { Button } from "@/components/ui/button";
 import { RunLive } from "./run-live";
+import { RunNodeLogPanel } from "./run-node-log-panel";
 
 export const dynamic = "force-dynamic";
 
 const STATE_LABEL: Record<string, string> = {
   pending: "Pending",
-  running: "Running",
+  running: "Active",
   done: "Done",
   error: "Error",
   waiting: "Waiting",
@@ -191,6 +192,7 @@ export default async function RunDetailPage({
             const def = getNodeType(n.type);
             const state = run.nodeStates[n.id] ?? "pending";
             const outputs = run.nodeOutputs[n.id];
+            const logs = run.nodeLogs?.[n.id] ?? [];
             return (
               <div key={n.id} className="px-4 py-3">
                 <div className="flex items-center justify-between gap-2">
@@ -201,6 +203,12 @@ export default async function RunDetailPage({
                     {STATE_LABEL[state] ?? state}
                   </span>
                 </div>
+                <RunNodeLogPanel
+                  nodeLabel={def?.label ?? n.type}
+                  state={state}
+                  logs={logs}
+                  isLlmNode={n.type === "llm-prompt"}
+                />
                 {outputs ? (
                   <pre className="mt-2 max-h-40 overflow-auto rounded bg-muted p-2 text-[11px] leading-relaxed">
                     {JSON.stringify(outputs, null, 2)}

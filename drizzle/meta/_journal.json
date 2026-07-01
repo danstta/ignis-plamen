@@ -43,6 +43,13 @@
       "when": 1782583733790,
       "tag": "0005_add_asset_library_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782935538781,
+      "tag": "0006_adorable_corsair",
+      "breakpoints": true
     }
   ]
 }

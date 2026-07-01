@@ -204,7 +204,12 @@ export const llmPromptNode: NodeDefinition<LlmPromptConfig> = {
       );
     }
 
+    await ctx.log(`Using ${connection.type} model "${ctx.config.model}".`);
     const messages = buildMessages(ctx.config, ctx.inputs.input);
+    await ctx.log(
+      `Prepared ${messages.length} message${messages.length === 1 ? "" : "s"} for the chat completion request.`,
+    );
+    await ctx.log("Sending chat completion request.");
     const result =
       connection.type === "openai"
         ? await callOpenAI(connection.config ?? {}, ctx.config, messages)
@@ -216,6 +221,9 @@ export const llmPromptNode: NodeDefinition<LlmPromptConfig> = {
               );
             })();
 
+    await ctx.log(
+      `Received response${result.raw.usage ? ` with usage ${JSON.stringify(result.raw.usage)}` : ""}.`,
+    );
     return {
       type: "output",
       outputs: {

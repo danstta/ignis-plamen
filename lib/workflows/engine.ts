@@ -14,6 +14,8 @@ import { resolveReferences, validateLockedPaths } from "./references";
 import type {
   NodeOutputs,
   NodeRunState,
+  RunLogEntry,
+  RunLogLevel,
   WorkflowGraph,
   WorkflowNode,
 } from "./types";
@@ -54,6 +56,7 @@ const inlineRunner: StepRunner = (_id, fn) => fn();
 type LocalState = {
   nodeOutputs: Record<string, NodeOutputs>;
   nodeStates: Record<string, NodeRunState>;
+  nodeLogs: Record<string, RunLogEntry[]>;
 };
 
 /**
@@ -80,6 +83,7 @@ async function execute(
   const state: LocalState = {
     nodeOutputs: { ...run.nodeOutputs },
     nodeStates: { ...run.nodeStates },
+    nodeLogs: { ...(run.nodeLogs ?? {}) },
   };
   const trigger = run.trigger ?? {};
   const nodeVisitCounts: Record<string, number> = {};
@@ -90,6 +94,35 @@ async function execute(
     return visit === 1
       ? `node:${nodeId}:${phase}`
       : `node:${nodeId}:${phase}:${visit}`;
+  };
+
+  const logNode = async (
+    nodeId: string,
+    message: string,
+    level: RunLogLevel = "info",
+  ) => {
+    const entry: RunLogEntry = {
+      id:
+        typeof crypto.randomUUID === "function"
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      timestamp: new Date().toISOString(),
+      level,
+      message,
+    };
+    state.nodeLogs[nodeId] = [...(state.nodeLogs[nodeId] ?? []), entry].slice(
+      -200,
+    );
+    console.log(`[run ${runId}][${nodeId}] ${message}`);
+    try {
+      await saveRunState(runId, { nodeLogs: state.nodeLogs });
+    } catch (err) {
+      console.warn(
+        `[run ${runId}][${nodeId}] failed to persist log: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
   };
 
   // Resolve refs, validate config, and run one node — all the expensive,
@@ -114,7 +147,15 @@ async function execute(
       }
 
       try {
+        state.nodeStates[node.id] = "running";
+        await logNode(node.id, `Started ${def.label}.`);
+        await saveRunState(runId, {
+          nodeStates: state.nodeStates,
+          nodeLogs: state.nodeLogs,
+        });
+
         // Substitute {{nodeId.path}} references from upstream outputs, then validate.
+        await logNode(node.id, "Resolving inputs and validating configuration.");
         const resolvedConfig = resolveReferences(
           node.config,
           state.nodeOutputs,
@@ -126,16 +167,24 @@ async function execute(
           inputs: resolveInputs(graph, node.id, state.nodeOutputs),
           trigger,
           runId,
-          log: (msg) => console.log(`[run ${runId}][${node.id}] ${msg}`),
+          log: (msg) => logNode(node.id, msg),
         };
         const result: RunResult = await def.run(ctx);
+        await logNode(
+          node.id,
+          result.type === "pause"
+            ? "Paused for human input."
+            : "Completed successfully.",
+        );
         return result.type === "pause"
           ? { type: "pause", state: result.state }
           : { type: "output", outputs: result.outputs };
       } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        await logNode(node.id, message, "error");
         return {
           type: "error",
-          error: `${def.label}: ${err instanceof Error ? err.message : String(err)}`,
+          error: `${def.label}: ${message}`,
         };
       }
     });
@@ -151,6 +200,7 @@ async function execute(
         saveRunState(runId, {
           status: "error",
           nodeStates: state.nodeStates,
+          nodeLogs: state.nodeLogs,
           error: outcome.error,
         }),
       );
@@ -169,6 +219,7 @@ async function execute(
           status: "waiting",
           nodeStates: state.nodeStates,
           nodeOutputs: state.nodeOutputs,
+          nodeLogs: state.nodeLogs,
           waitingNodeId: node.id,
           // Minted inside the step so the token is memoized with the write.
           resumeToken: crypto.randomUUID(),
@@ -183,6 +234,7 @@ async function execute(
       saveRunState(runId, {
         nodeStates: state.nodeStates,
         nodeOutputs: state.nodeOutputs,
+        nodeLogs: state.nodeLogs,
       }),
     );
     return "continue";

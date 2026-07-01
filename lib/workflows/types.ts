@@ -52,6 +52,15 @@ export type NodeRunState =
   | "error"
   | "waiting";
 
+export type RunLogLevel = "info" | "warn" | "error";
+
+export interface RunLogEntry {
+  id: string;
+  timestamp: string;
+  level: RunLogLevel;
+  message: string;
+}
+
 /** Resolved outputs of a node, keyed by output port id. */
 export type NodeOutputs = Record<string, unknown>;
 

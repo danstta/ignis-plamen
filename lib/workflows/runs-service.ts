@@ -2,7 +2,7 @@ import { and, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { workflowRuns, workflows } from "@/lib/db/schema";
 import type { WorkflowRun } from "@/lib/db/schema";
-import type { NodeOutputs, NodeRunState, RunStatus } from "./types";
+import type { NodeOutputs, NodeRunState, RunLogEntry, RunStatus } from "./types";
 
 export async function createRun(
   workflowId: string,
@@ -101,6 +101,7 @@ export type RunStatePatch = Partial<{
   status: RunStatus;
   nodeOutputs: Record<string, NodeOutputs>;
   nodeStates: Record<string, NodeRunState>;
+  nodeLogs: Record<string, RunLogEntry[]>;
   waitingNodeId: string | null;
   resumeToken: string | null;
   error: string | null;

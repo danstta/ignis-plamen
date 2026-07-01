@@ -1,0 +1,1 @@
+ALTER TABLE "workflow_runs" ADD COLUMN "node_logs" jsonb DEFAULT '{}'::jsonb NOT NULL;

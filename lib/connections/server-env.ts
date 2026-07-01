@@ -90,6 +90,7 @@ export function listServerEnvironmentConnections(): ServerEnvironmentConnection[
     connection({
       id: "instagram-env",
       name: "Instagram Graph",
+      providerType: "instagram",
       description: "Server token and business account for profile grid previews.",
       access: "Reads media/profile preview data for the configured Instagram business account.",
       env: [
@@ -100,6 +101,7 @@ export function listServerEnvironmentConnections(): ServerEnvironmentConnection[
     connection({
       id: "supabase-env",
       name: "Supabase Storage",
+      providerType: "supabase",
       description: "Asset library storage backend.",
       access:
         "Service-role storage access for uploaded assets in the configured bucket; server-only.",
@@ -112,6 +114,7 @@ export function listServerEnvironmentConnections(): ServerEnvironmentConnection[
     connection({
       id: "vercel-blob-env",
       name: "Vercel Blob",
+      providerType: "vercel",
       description: "Render and export output storage.",
       access: "Read/write access for generated files and render artifacts stored in Blob.",
       env: [{ name: "BLOB_READ_WRITE_TOKEN" }],

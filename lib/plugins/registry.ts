@@ -15,6 +15,7 @@ const definitions: PluginDefinition[] = [
       "webhook",
       "rehost-image",
       "manual-review",
+      "curate-images",
       "render-template",
       "render-template-batch",
       "review-designs",

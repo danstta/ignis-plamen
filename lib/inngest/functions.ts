@@ -51,7 +51,9 @@ export const runResume = inngest.createFunction(
     await resumeRun(
       event.data.runId,
       event.data.resumeToken,
-      event.data.choiceUrl,
+      event.data.choiceUrl
+        ? { choiceUrl: event.data.choiceUrl }
+        : { selectedUrls: event.data.selectedUrls ?? [] },
       runner,
     );
   },

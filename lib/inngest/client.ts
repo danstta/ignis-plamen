@@ -12,7 +12,8 @@ export type RunStartData = {
 export type RunResumeData = {
   runId: string;
   resumeToken: string;
-  choiceUrl: string;
+  choiceUrl?: string;
+  selectedUrls?: string[];
 };
 
 /**

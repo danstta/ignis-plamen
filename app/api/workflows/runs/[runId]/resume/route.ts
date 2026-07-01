@@ -19,11 +19,17 @@ export async function POST(
   const body = (await req.json().catch(() => null)) as {
     resumeToken?: string;
     url?: string;
+    selectedUrls?: string[];
   } | null;
 
-  if (!body?.resumeToken || !body?.url) {
+  const hasSingleChoice = typeof body?.url === "string" && body.url.trim() !== "";
+  const hasCuratedSelection =
+    Array.isArray(body?.selectedUrls) &&
+    body.selectedUrls.some((url) => typeof url === "string" && url.trim() !== "");
+
+  if (!body?.resumeToken || (!hasSingleChoice && !hasCuratedSelection)) {
     return NextResponse.json(
-      { error: "resumeToken and url are required" },
+      { error: "resumeToken and url or selectedUrls are required" },
       { status: 400 },
     );
   }
@@ -46,7 +52,17 @@ export async function POST(
   // exactly one resume regardless of the async gap before the run leaves `waiting`.
   await inngest.send(
     runResumeEvent.create(
-      { runId, resumeToken: body.resumeToken, choiceUrl: body.url },
+      {
+        runId,
+        resumeToken: body.resumeToken,
+        ...(hasSingleChoice
+          ? { choiceUrl: body.url!.trim() }
+          : {
+              selectedUrls: body.selectedUrls!
+                .map((url) => url.trim())
+                .filter(Boolean),
+            }),
+      },
       { id: `${runId}:resume:${body.resumeToken}` },
     ),
   );

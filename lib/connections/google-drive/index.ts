@@ -27,9 +27,10 @@ export const googleDriveConnection: ConnectionDefinition<GoogleDriveConfig> = {
     type: "oauth",
     authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth",
     tokenUrl: "https://oauth2.googleapis.com/token",
-    scopes: ["https://www.googleapis.com/auth/drive.readonly"],
+    scopes: ["https://www.googleapis.com/auth/drive"],
     clientIdEnv: "GOOGLE_CLIENT_ID",
     clientSecretEnv: "GOOGLE_CLIENT_SECRET",
+    refreshTokenEnv: "GOOGLE_DRIVE_REFRESH_TOKEN",
     // Request a refresh token and force the consent screen so we always get one.
     authorizeParams: { access_type: "offline", prompt: "consent" },
   },

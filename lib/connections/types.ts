@@ -34,6 +34,8 @@ export type ConnectionAuth =
       /** Env var names holding the OAuth client credentials. */
       clientIdEnv: string;
       clientSecretEnv: string;
+      /** Optional fixed-account refresh token env var for server-owned credentials. */
+      refreshTokenEnv?: string;
       /** Extra static params appended to the authorize URL (e.g. access_type=offline). */
       authorizeParams?: Record<string, string>;
     };

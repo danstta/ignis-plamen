@@ -13,7 +13,10 @@ import { listConnections } from "@/lib/connections/service";
 import { getConnectionType, listConnectionTypes } from "@/lib/connections/registry";
 import { getConnectionSetupState } from "@/lib/connections/status";
 import { connectionErrorMessage } from "@/lib/connections/errors";
-import { createConnectionAction } from "./actions";
+import {
+  createConnectionAction,
+  createEnvOAuthConnectionAction,
+} from "./actions";
 import { ProviderIcon } from "@/components/connections/provider-icon";
 import { Button } from "@/components/ui/button";
 
@@ -347,6 +350,10 @@ function ProviderRow({
 }: {
   type: ReturnType<typeof listConnectionTypes>[number];
 }) {
+  const hasEnvOAuth =
+    type.auth.type === "oauth" &&
+    type.auth.refreshTokenEnv &&
+    Boolean(process.env[type.auth.refreshTokenEnv]?.trim());
   const rowContent = (
     <>
       <span className="flex items-center gap-4">
@@ -360,6 +367,24 @@ function ProviderRow({
   );
 
   if (type.auth.type === "oauth") {
+    if (hasEnvOAuth) {
+      return (
+        <form
+          action={createEnvOAuthConnectionAction}
+          className="border-b border-white/10 last:border-b-0"
+        >
+          <input type="hidden" name="type" value={type.id} />
+          <input type="hidden" name="name" value={`${type.name} (env)`} />
+          <button
+            className="flex min-h-[71px] w-full items-center justify-between px-7 py-4 text-left transition-colors hover:bg-white/[0.035] focus-visible:bg-white/[0.035] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-white/10"
+            type="submit"
+          >
+            {rowContent}
+          </button>
+        </form>
+      );
+    }
+
     return (
       <Link
         href={`/api/connections/oauth/${type.id}/start`}

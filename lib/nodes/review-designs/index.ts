@@ -94,6 +94,10 @@ export const reviewDesignsNode: NodeDefinition<ReviewDesignsConfig> = {
       state: {
         reviewKind: "designs",
         candidates: designs.slice(0, ctx.config.candidateCount),
+        instagramPreview: {
+          enabled: ctx.config.instagramPreviewEnabled,
+          username: ctx.config.instagramUsername,
+        },
       },
     };
   },

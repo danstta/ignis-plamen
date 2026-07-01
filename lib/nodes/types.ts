@@ -21,6 +21,7 @@ export interface NodeConfigField {
   label: string;
   type:
     | "text"
+    | "boolean"
     | "password"
     | "number"
     | "textarea"

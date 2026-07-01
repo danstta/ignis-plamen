@@ -54,6 +54,7 @@ import {
 import { captureWebhookSampleAction } from "@/app/(admin)/workflows/webhook-actions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -426,6 +427,19 @@ export function NodeConfigPanel({
     };
 
     switch (f.type) {
+      case "boolean":
+        return (
+          <div className="flex h-9 items-center gap-2">
+            <Switch
+              id={f.name}
+              checked={value === true || value === "true"}
+              onCheckedChange={(checked) => set(f.name, checked)}
+            />
+            <span className="text-xs text-muted-foreground">
+              {value === true || value === "true" ? "On" : "Off"}
+            </span>
+          </div>
+        );
       case "textarea":
         return (
           <Textarea

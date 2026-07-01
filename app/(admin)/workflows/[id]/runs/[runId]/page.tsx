@@ -99,6 +99,13 @@ export default async function RunDetailPage({
           unknown
         >)
       : {};
+  const instagramPreview =
+    run.status === "waiting" && run.waitingNodeId
+      ? ((run.nodeOutputs[run.waitingNodeId]?.instagramPreview ?? {}) as {
+          enabled?: boolean;
+          username?: string;
+        })
+      : undefined;
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -162,6 +169,7 @@ export default async function RunDetailPage({
             resumeToken={run.resumeToken}
             candidates={waitingCandidates}
             itemLabel={reviewItemLabel}
+            instagramPreview={instagramPreview}
           />
         </section>
       ) : null}

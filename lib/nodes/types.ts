@@ -59,7 +59,7 @@ export interface NodeRunContext<C = Record<string, unknown>> {
   trigger: Record<string, unknown>;
   runId: string;
   /** Append a line to the run log (best-effort; never throws). */
-  log: (message: string) => void;
+  log: (message: string) => void | Promise<void>;
 }
 
 /**

@@ -13,6 +13,7 @@ import type {
   WorkflowGraph,
   NodeOutputs,
   NodeRunState,
+  RunLogEntry,
 } from "@/lib/workflows/types";
 
 /** Brand identities: reusable palettes (+ scaffolded fonts/logo) surfaced in the editor. */
@@ -158,6 +159,11 @@ export const workflowRuns = pgTable("workflow_runs", {
   /** node id -> lifecycle state, for the run-detail UI. */
   nodeStates: jsonb("node_states")
     .$type<Record<string, NodeRunState>>()
+    .notNull()
+    .default({}),
+  /** node id -> structured log entries emitted while the run executes. */
+  nodeLogs: jsonb("node_logs")
+    .$type<Record<string, RunLogEntry[]>>()
     .notNull()
     .default({}),
   /** The Manual Review node currently paused, if status is "waiting". */

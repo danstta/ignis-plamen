@@ -1,4 +1,5 @@
 import { getNodeMeta } from "@/lib/nodes/catalog";
+import { RANK_IMAGES_TYPE_ID } from "@/lib/nodes/rank-images/meta";
 
 /**
  * Field propagation between connected nodes. Two surfaces share this module:
@@ -47,6 +48,20 @@ function selectedOutputFields(n: RefNode): string[] {
   );
 }
 
+function rankImagesSelectionCount(n: RefNode): number {
+  const value = Number(n.config?.selectionCount ?? 5);
+  if (!Number.isFinite(value)) return 5;
+  return Math.min(50, Math.max(1, Math.trunc(value)));
+}
+
+function rankImagesSelectedImagePaths(n: RefNode): string[] {
+  if (n.type !== RANK_IMAGES_TYPE_ID) return [];
+  return Array.from(
+    { length: rankImagesSelectionCount(n) },
+    (_, index) => `selected.${index}.url`,
+  );
+}
+
 /** Output paths this node explicitly exposes to later steps. */
 export function selectedOutputPaths(n: RefNode): string[] {
   if (n.type === "webhook") {
@@ -55,13 +70,21 @@ export function selectedOutputPaths(n: RefNode): string[] {
     );
   }
   const declared = getNodeMeta(n.type)?.outputs.map((output) => output.id) ?? [];
-  return [...new Set([...declared, ...selectedOutputFields(n)])];
+  return [
+    ...new Set([
+      ...declared,
+      ...rankImagesSelectedImagePaths(n),
+      ...selectedOutputFields(n),
+    ]),
+  ];
 }
 
 function selectedOutputLabel(
   path: string,
   outputs: { id: string; label: string }[],
 ): string {
+  const rankImageUrl = path.match(/^selected\.(\d+)\.url$/);
+  if (rankImageUrl) return `Selected image ${Number(rankImageUrl[1]) + 1}`;
   return outputs.find((out) => out.id === path)?.label ?? path;
 }
 

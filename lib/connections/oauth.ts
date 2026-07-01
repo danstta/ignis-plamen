@@ -65,6 +65,12 @@ export function getMissingOAuthEnv(auth: OAuthDef): string[] {
   );
 }
 
+export function getOAuthEnvRefreshToken(auth: OAuthDef): string | undefined {
+  const name = auth.refreshTokenEnv;
+  if (!name) return undefined;
+  return process.env[name]?.trim() || undefined;
+}
+
 /** Sign a short-lived (10 min) state token for the authorize redirect. */
 export async function signState(state: OAuthState): Promise<string> {
   const payload = toBase64Url(
@@ -168,7 +174,11 @@ export async function ensureFreshToken(connectionId: string): Promise<string> {
     config.expires_at - 60_000 > Date.now();
   if (stillFresh) return config.access_token;
 
-  if (!config.refresh_token) {
+  const storedRefreshToken = config.refresh_token;
+  const envRefreshToken = getOAuthEnvRefreshToken(def.auth);
+  const refreshToken = storedRefreshToken ?? envRefreshToken;
+
+  if (!refreshToken) {
     if (config.access_token) return config.access_token; // no refresh available
     throw new Error("Connection has no access token; reconnect required");
   }
@@ -178,7 +188,7 @@ export async function ensureFreshToken(connectionId: string): Promise<string> {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       grant_type: "refresh_token",
-      refresh_token: config.refresh_token,
+      refresh_token: refreshToken,
       client_id: requireEnv(def.auth.clientIdEnv),
       client_secret: requireEnv(def.auth.clientSecretEnv),
     }),
@@ -187,10 +197,12 @@ export async function ensureFreshToken(connectionId: string): Promise<string> {
     throw new Error(`Token refresh failed (${res.status}): ${await res.text()}`);
   }
   const next = toTokens(await res.json());
-  // Google omits refresh_token on refresh — keep the existing one.
-  await mergeConnectionConfig(connectionId, {
-    ...next,
-    refresh_token: next.refresh_token ?? config.refresh_token,
-  });
+  const patch: Record<string, unknown> = { ...next };
+  // Google omits refresh_token on refresh. Keep stored tokens in DB, but do not
+  // copy fixed-account env secrets into connection config.
+  const nextRefreshToken = next.refresh_token ?? storedRefreshToken;
+  if (nextRefreshToken) patch.refresh_token = nextRefreshToken;
+  else delete patch.refresh_token;
+  await mergeConnectionConfig(connectionId, patch);
   return next.access_token;
 }

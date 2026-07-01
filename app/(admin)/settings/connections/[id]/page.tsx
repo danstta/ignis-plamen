@@ -54,6 +54,11 @@ export default async function ConnectionDetailPage({
 
   const isOAuth = def.auth.type === "oauth";
   const setupState = getConnectionSetupState(conn.type, config);
+  const envRefreshTokenName =
+    def.auth.type === "oauth" ? def.auth.refreshTokenEnv : undefined;
+  const usesEnvRefreshToken =
+    Boolean(envRefreshTokenName && process.env[envRefreshTokenName]?.trim()) &&
+    config.credential_source === "env";
   const expiresAt =
     typeof config.expires_at === "number" ? new Date(config.expires_at) : null;
 
@@ -131,7 +136,9 @@ export default async function ConnectionDetailPage({
               <h2 className="text-base font-semibold">Authorization</h2>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
                 {setupState.configured
-                  ? "This account is authorized via OAuth. Reconnect if scopes change or the token is revoked."
+                  ? usesEnvRefreshToken
+                    ? `This account uses ${envRefreshTokenName} from the server environment.`
+                    : "This account is authorized via OAuth. Reconnect if scopes change or the token is revoked."
                   : "Authorize this account to start using it in workflows."}
               </p>
             </div>

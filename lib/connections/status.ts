@@ -1,4 +1,5 @@
 import { getConnectionType } from "./registry";
+import { getOAuthEnvRefreshToken } from "./oauth";
 
 export type ConnectionSetupState =
   | {
@@ -18,7 +19,7 @@ export function getConnectionSetupState(
   if (!def) return { configured: false, missingLabels: ["provider"] };
 
   if (def.auth.type === "oauth") {
-    return config.access_token
+    return config.access_token || getOAuthEnvRefreshToken(def.auth)
       ? { configured: true, missingLabels: [] }
       : { configured: false, missingLabels: ["authorization"] };
   }

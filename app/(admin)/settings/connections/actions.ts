@@ -8,6 +8,7 @@ import {
   getConnection,
   updateConnection,
 } from "@/lib/connections/service";
+import { getOAuthEnvRefreshToken } from "@/lib/connections/oauth";
 import { getConnectionType } from "@/lib/connections/registry";
 
 /** Create a key-based account, then open its detail page to enter credentials. */
@@ -20,6 +21,31 @@ export async function createConnectionAction(formData: FormData) {
   }
   const name = String(formData.get("name") || def.name);
   const conn = await createConnection({ type, name });
+  redirect(`/settings/connections/${conn.id}`);
+}
+
+/** Create an OAuth connection that uses a fixed account refresh token from env. */
+export async function createEnvOAuthConnectionAction(formData: FormData) {
+  const type = String(formData.get("type") ?? "");
+  const def = getConnectionType(type);
+  if (!def) throw new Error(`Unknown connection type: ${type}`);
+  if (def.auth.type !== "oauth") {
+    throw new Error(`${def.name} is not an OAuth provider`);
+  }
+  if (!getOAuthEnvRefreshToken(def.auth)) {
+    throw new Error(
+      `Missing required environment variable: ${def.auth.refreshTokenEnv ?? "refresh token"}`,
+    );
+  }
+
+  const conn = await createConnection({
+    type,
+    name: String(formData.get("name") || `${def.name} (env)`),
+    config: {
+      credential_source: "env",
+      scope: def.auth.scopes.join(" "),
+    },
+  });
   redirect(`/settings/connections/${conn.id}`);
 }
 

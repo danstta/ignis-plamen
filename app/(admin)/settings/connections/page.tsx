@@ -7,12 +7,14 @@ import {
   KeyRound,
   Link2,
   Search,
+  Server,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { listConnections } from "@/lib/connections/service";
 import { getConnectionType, listConnectionTypes } from "@/lib/connections/registry";
 import { getConnectionSetupState } from "@/lib/connections/status";
 import { connectionErrorMessage } from "@/lib/connections/errors";
+import { listServerEnvironmentConnections } from "@/lib/connections/server-env";
 import {
   createConnectionAction,
   createEnvOAuthConnectionAction,
@@ -73,9 +75,24 @@ export default async function SettingsConnectionsPage({
           .includes(normalizedQuery)
       : true;
   });
+  const serverEnvConnections = listServerEnvironmentConnections()
+    .filter((connection) => connection.present.length > 0)
+    .filter((connection) =>
+      normalizedQuery
+        ? [
+            connection.name,
+            connection.description,
+            connection.access,
+            ...connection.env.map((env) => env.name),
+          ]
+            .join(" ")
+            .toLowerCase()
+            .includes(normalizedQuery)
+        : true,
+    );
 
   return (
-    <div className="dark -m-8 min-h-svh bg-[#050505] p-2 font-[var(--font-geist-sans)] text-white">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
       {isCreating ? (
         <ProviderPicker
           authFilter={authFilter}
@@ -91,6 +108,7 @@ export default async function SettingsConnectionsPage({
           filteredRows={filteredRows}
           query={query}
           rows={rows}
+          serverEnvConnections={serverEnvConnections}
         />
       )}
     </div>
@@ -103,15 +121,17 @@ function ConnectionsOverview({
   filteredRows,
   query,
   rows,
+  serverEnvConnections,
 }: {
   dbError: string | null;
   error?: string;
   filteredRows: Awaited<ReturnType<typeof listConnections>>;
   query: string;
   rows: Awaited<ReturnType<typeof listConnections>>;
+  serverEnvConnections: ReturnType<typeof listServerEnvironmentConnections>;
 }) {
   return (
-    <div className="flex max-w-[1360px] flex-col gap-3">
+    <div className="flex flex-col gap-4">
       <Toolbar query={query} />
 
       {error ? <ConnectionError error={error} /> : null}
@@ -119,26 +139,26 @@ function ConnectionsOverview({
       {dbError ? (
         <DatabaseError message={dbError} />
       ) : rows.length === 0 ? (
-        <section className="flex min-h-[352px] items-center justify-center rounded-lg border border-white/10 bg-[#0a0a0a] px-6 py-10">
+        <section className="flex min-h-[352px] items-center justify-center rounded-lg border bg-card px-6 py-10">
           <div className="flex max-w-[390px] flex-col items-center text-center">
-            <div className="flex size-14 items-center justify-center rounded-lg border border-white/15 bg-[#111] text-zinc-400">
+            <div className="flex size-14 items-center justify-center rounded-lg border bg-background text-muted-foreground">
               <Link2 className="size-7" />
             </div>
             <h1 className="mt-7 text-base font-semibold">No connectors yet</h1>
-            <p className="mt-3 max-w-[34ch] text-sm leading-6 text-zinc-400">
+            <p className="mt-3 max-w-[34ch] text-sm leading-6 text-muted-foreground">
               Access third-party APIs from any project with Ignis-managed OAuth
               and token handling.
             </p>
             <div className="mt-6 flex flex-wrap justify-center gap-2">
               <Button
                 variant="outline"
-                className="h-10 border-white/15 bg-[#080808] px-4 text-sm text-white hover:bg-[#141414]"
+                className="h-10 px-4 text-sm"
                 render={<Link href="/settings/connections?create=1&scope=team" />}
               >
                 Manage Team Connectors
               </Button>
               <Button
-                className="h-10 bg-white px-4 text-sm text-black hover:bg-zinc-200"
+                className="h-10 px-4 text-sm"
                 render={<Link href="/settings/connections?create=1" />}
               >
                 Create Connector
@@ -146,16 +166,16 @@ function ConnectionsOverview({
             </div>
             <Link
               href="/settings/connections?create=1"
-              className="mt-4 text-sm text-zinc-500 transition-colors hover:text-zinc-300"
+              className="mt-4 text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
               Learn more
             </Link>
           </div>
         </section>
       ) : (
-        <section className="overflow-hidden rounded-lg border border-white/10 bg-[#0a0a0a]">
+        <section className="overflow-hidden rounded-lg border bg-card">
           {filteredRows.length === 0 ? (
-            <div className="px-5 py-12 text-center text-sm text-zinc-500">
+            <div className="px-5 py-12 text-center text-sm text-muted-foreground">
               No connectors match your search.
             </div>
           ) : (
@@ -170,7 +190,7 @@ function ConnectionsOverview({
                 <Link
                   key={connection.id}
                   href={`/settings/connections/${connection.id}`}
-                  className="group flex min-h-[72px] items-center justify-between gap-4 border-b border-white/10 px-8 py-4 last:border-b-0 hover:bg-white/[0.035]"
+                  className="group flex min-h-[72px] items-center justify-between gap-4 border-b px-6 py-4 transition-colors last:border-b-0 hover:bg-muted/45 sm:px-8"
                 >
                   <span className="flex min-w-0 items-center gap-4">
                     <span className="flex size-9 shrink-0 items-center justify-center">
@@ -180,10 +200,10 @@ function ConnectionsOverview({
                       <span className="block truncate text-[15px] font-semibold">
                         {connection.name}
                       </span>
-                      <span className="mt-1 flex items-center gap-1.5 text-xs text-zinc-500">
+                      <span className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
                         {state.configured ? (
                           <>
-                            <CheckCircle2 className="size-3.5 text-emerald-400" />
+                            <CheckCircle2 className="size-3.5 text-green-600 dark:text-green-400" />
                             Ready for workflows
                           </>
                         ) : (
@@ -192,18 +212,20 @@ function ConnectionsOverview({
                             Missing {state.missingLabels.join(", ")}
                           </>
                         )}
-                        <span className="text-zinc-700">/</span>
+                        <span className="text-border">/</span>
                         {definition?.name ?? connection.type}
                       </span>
                     </span>
                   </span>
-                  <ChevronRight className="size-5 shrink-0 text-zinc-500 transition-transform group-hover:translate-x-0.5 group-hover:text-zinc-300" />
+                  <ChevronRight className="size-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
                 </Link>
               );
             })
           )}
         </section>
       )}
+
+      <ServerEnvironmentSection connections={serverEnvConnections} query={query} />
     </div>
   );
 }
@@ -222,9 +244,9 @@ function ProviderPicker({
   query: string;
 }) {
   return (
-    <div className="max-w-[700px] border-r border-white/10 pb-3 pr-5">
+    <div className="mx-auto w-full max-w-3xl pb-3">
       <div className="mb-10 flex items-center gap-4">
-        <span className="grid size-9 place-items-center rounded-full bg-white text-sm font-semibold text-black">
+        <span className="grid size-9 place-items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
           1
         </span>
         <h1 className="text-xl font-semibold">Select a Provider</h1>
@@ -254,9 +276,9 @@ function ProviderPicker({
         <input type="hidden" name="create" value="1" />
         {authFilter ? <input type="hidden" name="auth" value={authFilter} /> : null}
         <label className="relative block">
-          <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-zinc-400" />
+          <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
           <input
-            className="h-[52px] w-full rounded-lg border border-white/15 bg-[#080808] pl-12 pr-4 text-base font-medium text-white outline-none transition-colors placeholder:text-zinc-500 focus:border-white/35 focus:ring-3 focus:ring-white/10"
+            className="h-[52px] w-full rounded-lg border bg-background pl-12 pr-4 text-base font-medium outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
             defaultValue={query}
             name="q"
             placeholder="Service name or URL"
@@ -264,9 +286,9 @@ function ProviderPicker({
         </label>
       </form>
 
-      <section className="mt-5 overflow-hidden rounded-lg border border-white/10 bg-[#080808]">
+      <section className="mt-5 overflow-hidden rounded-lg border bg-card">
         {filteredTypes.length === 0 ? (
-          <div className="px-6 py-12 text-center text-sm text-zinc-500">
+          <div className="px-6 py-12 text-center text-sm text-muted-foreground">
             Search to find more services.
           </div>
         ) : (
@@ -274,10 +296,105 @@ function ProviderPicker({
         )}
       </section>
 
-      <p className="mt-3 text-center text-sm text-zinc-500">
+      <p className="mt-3 text-center text-sm text-muted-foreground">
         Search to find more services.
       </p>
     </div>
+  );
+}
+
+function ServerEnvironmentSection({
+  connections,
+  query,
+}: {
+  connections: ReturnType<typeof listServerEnvironmentConnections>;
+  query: string;
+}) {
+  return (
+    <section className="rounded-lg border bg-card">
+      <div className="flex flex-col gap-2 border-b px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <Server className="size-4 text-muted-foreground" />
+            Server-side connections
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Environment-backed access available to workflow code on the server.
+          </p>
+        </div>
+        <span className="self-start rounded-md border bg-background px-2 py-1 text-xs text-muted-foreground">
+          {connections.length} detected
+        </span>
+      </div>
+
+      {connections.length === 0 ? (
+        <div className="px-5 py-8 text-sm text-muted-foreground">
+          {query
+            ? "No server-side environment connections match your search."
+            : "No server-side connection environment variables are configured yet."}
+        </div>
+      ) : (
+        <div className="divide-y">
+          {connections.map((connection) => (
+            <div
+              key={connection.id}
+              className="grid gap-4 px-5 py-4 md:grid-cols-[minmax(220px,0.8fr)_minmax(0,1.2fr)]"
+            >
+              <div className="flex min-w-0 gap-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-md border bg-background">
+                  {connection.providerType ? (
+                    <ProviderIcon type={connection.providerType} className="size-5" />
+                  ) : (
+                    <Server className="size-5 text-muted-foreground" />
+                  )}
+                </span>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-sm font-semibold">{connection.name}</h2>
+                    {connection.configured ? (
+                      <span className="inline-flex items-center gap-1 rounded-md border border-green-600/20 bg-green-500/10 px-1.5 py-0.5 text-xs text-green-700 dark:text-green-300">
+                        <CheckCircle2 className="size-3" />
+                        Ready
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-xs text-amber-700 dark:text-amber-300">
+                        <AlertCircle className="size-3" />
+                        Partial
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {connection.description}
+                  </p>
+                </div>
+              </div>
+
+              <div className="min-w-0 text-sm">
+                <p className="leading-6">{connection.access}</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {connection.env.map((env) => {
+                    const isPresent = connection.present.includes(env.name);
+                    return (
+                      <span
+                        key={env.name}
+                        className={[
+                          "rounded-md border px-2 py-1 font-mono text-[11px]",
+                          isPresent
+                            ? "bg-background text-muted-foreground"
+                            : "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+                        ].join(" ")}
+                      >
+                        {env.name}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -285,9 +402,9 @@ function Toolbar({ query }: { query: string }) {
   return (
     <div className="grid gap-2 lg:grid-cols-[minmax(260px,1fr)_40px_auto_auto]">
       <form action="/settings/connections" className="relative">
-        <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-zinc-500" />
+        <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
         <input
-          className="h-11 w-full rounded-lg border border-white/10 bg-[#080808] pl-11 pr-4 text-sm text-white outline-none transition-colors placeholder:text-zinc-500 focus:border-white/30 focus:ring-3 focus:ring-white/10"
+          className="h-11 w-full rounded-lg border bg-background pl-11 pr-4 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
           defaultValue={query}
           name="q"
           placeholder="Search connectors..."
@@ -295,20 +412,20 @@ function Toolbar({ query }: { query: string }) {
       </form>
       <button
         aria-label="Filter connectors"
-        className="grid size-11 place-items-center rounded-lg border border-white/10 bg-[#080808] text-zinc-300 transition-colors hover:bg-[#141414] focus-visible:border-white/40 focus-visible:ring-3 focus-visible:ring-white/10"
+        className="grid size-11 place-items-center rounded-lg border bg-background text-muted-foreground transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40"
         type="button"
       >
         <Funnel className="size-5" />
       </button>
       <Button
         variant="outline"
-        className="h-11 border-white/10 bg-[#080808] px-4 text-sm text-white hover:bg-[#141414]"
+        className="h-11 px-4 text-sm"
         render={<Link href="/settings/connections?create=1&scope=team" />}
       >
         Manage Team Connectors
       </Button>
       <Button
-        className="h-11 bg-white px-4 text-sm text-black hover:bg-zinc-200"
+        className="h-11 px-4 text-sm"
         render={<Link href="/settings/connections?create=1" />}
       >
         Create Connector
@@ -334,13 +451,13 @@ function AuthTypeCard({
     <Link
       href={href}
       className={[
-        "rounded-lg border bg-[#080808] p-5 transition-colors hover:border-white/25 hover:bg-[#101010]",
-        active ? "border-white/35" : "border-white/15",
+        "rounded-lg border bg-card p-5 transition-colors hover:bg-muted/45",
+        active ? "border-foreground/35" : "",
       ].join(" ")}
     >
-      <div className="text-zinc-400">{icon}</div>
+      <div className="text-muted-foreground">{icon}</div>
       <h2 className="mt-4 text-lg font-semibold">{title}</h2>
-      <p className="mt-3 text-base text-zinc-400">{description}</p>
+      <p className="mt-3 text-base text-muted-foreground">{description}</p>
     </Link>
   );
 }
@@ -362,7 +479,7 @@ function ProviderRow({
         </span>
         <span className="text-[17px] font-semibold">{type.name}</span>
       </span>
-      <ChevronRight className="size-6 text-zinc-500" />
+      <ChevronRight className="size-6 text-muted-foreground" />
     </>
   );
 
@@ -371,12 +488,12 @@ function ProviderRow({
       return (
         <form
           action={createEnvOAuthConnectionAction}
-          className="border-b border-white/10 last:border-b-0"
+          className="border-b last:border-b-0"
         >
           <input type="hidden" name="type" value={type.id} />
           <input type="hidden" name="name" value={`${type.name} (env)`} />
           <button
-            className="flex min-h-[71px] w-full items-center justify-between px-7 py-4 text-left transition-colors hover:bg-white/[0.035] focus-visible:bg-white/[0.035] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-white/10"
+            className="flex min-h-[71px] w-full items-center justify-between px-7 py-4 text-left transition-colors hover:bg-muted/45 focus-visible:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             type="submit"
           >
             {rowContent}
@@ -388,7 +505,7 @@ function ProviderRow({
     return (
       <Link
         href={`/api/connections/oauth/${type.id}/start`}
-        className="flex min-h-[71px] items-center justify-between border-b border-white/10 px-7 py-4 transition-colors last:border-b-0 hover:bg-white/[0.035]"
+        className="flex min-h-[71px] items-center justify-between border-b px-7 py-4 transition-colors last:border-b-0 hover:bg-muted/45"
       >
         {rowContent}
       </Link>
@@ -396,11 +513,11 @@ function ProviderRow({
   }
 
   return (
-    <form action={createConnectionAction} className="border-b border-white/10 last:border-b-0">
+    <form action={createConnectionAction} className="border-b last:border-b-0">
       <input type="hidden" name="type" value={type.id} />
       <input type="hidden" name="name" value={type.name} />
       <button
-        className="flex min-h-[71px] w-full items-center justify-between px-7 py-4 text-left transition-colors hover:bg-white/[0.035] focus-visible:bg-white/[0.035] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-white/10"
+        className="flex min-h-[71px] w-full items-center justify-between px-7 py-4 text-left transition-colors hover:bg-muted/45 focus-visible:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
         type="submit"
       >
         {rowContent}
@@ -411,7 +528,7 @@ function ProviderRow({
 
 function ConnectionError({ error }: { error: string }) {
   return (
-    <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+    <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
       Connection error: {connectionErrorMessage(error)}
     </p>
   );
@@ -419,9 +536,9 @@ function ConnectionError({ error }: { error: string }) {
 
 function DatabaseError({ message }: { message: string }) {
   return (
-    <div className="rounded-lg border border-dashed border-white/15 bg-white/[0.03] p-5 text-sm">
+    <div className="rounded-lg border border-dashed bg-muted/30 p-5 text-sm">
       <p className="font-medium">Database not reachable</p>
-      <p className="mt-1 text-zinc-400">{message}</p>
+      <p className="mt-1 text-muted-foreground">{message}</p>
     </div>
   );
 }

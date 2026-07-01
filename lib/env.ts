@@ -83,11 +83,7 @@ export const openaiApiKey = () => required("OPENAI_API_KEY");
 /** Optional Pexels key used by Find Location Images for polished stock photos. */
 export const pexelsApiKey = () => process.env.PEXELS_API_KEY?.trim() || undefined;
 
-// --- Instagram preview ---
-/** App or user token with Instagram Graph API access for profile grid previews. */
-export const instagramAccessToken = () =>
-  process.env.INSTAGRAM_ACCESS_TOKEN?.trim() || undefined;
-
-/** Instagram Business/Creator account id used for Business Discovery lookups. */
-export const instagramBusinessAccountId = () =>
-  process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID?.trim() || undefined;
+// --- Instagram-style preview ---
+/** Optional comma/newline-separated image URLs used to mimic an Instagram grid. */
+export const instagramPreviewPostUrls = () =>
+  process.env.INSTAGRAM_PREVIEW_POST_URLS?.trim() || undefined;

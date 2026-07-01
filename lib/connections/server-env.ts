@@ -88,17 +88,6 @@ export function listServerEnvironmentConnections(): ServerEnvironmentConnection[
       env: [{ name: "PEXELS_API_KEY" }],
     }),
     connection({
-      id: "instagram-env",
-      name: "Instagram Graph",
-      providerType: "instagram",
-      description: "Server token and business account for profile grid previews.",
-      access: "Reads media/profile preview data for the configured Instagram business account.",
-      env: [
-        { name: "INSTAGRAM_ACCESS_TOKEN" },
-        { name: "INSTAGRAM_BUSINESS_ACCOUNT_ID" },
-      ],
-    }),
-    connection({
       id: "supabase-env",
       name: "Supabase Storage",
       providerType: "supabase",

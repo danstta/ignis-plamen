@@ -6,7 +6,6 @@ import {
   AnthropicDark,
   AnthropicLight,
   GoogleDrive,
-  Instagram,
   MicrosoftAzure,
   Notion,
   OpenAIDark,
@@ -39,7 +38,6 @@ function ThemedSvglIcon({
 
 /** Brand logo per connection provider id (from lib/connections/registry). */
 const ICONS: Record<string, IconComponent> = {
-  instagram: Instagram,
   notion: Notion,
   "google-drive": GoogleDrive,
   "azure-foundry": MicrosoftAzure,

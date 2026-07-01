@@ -147,7 +147,7 @@ export function ManualReviewPicker({
               <img
                 src={c.url}
                 alt=""
-                className="aspect-square w-full object-contain"
+                className="aspect-[4/5] w-full object-contain"
               />
               {selected ? (
                 <span className="absolute right-2 top-2 rounded-full bg-foreground p-1 text-background">

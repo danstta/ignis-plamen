@@ -1,4 +1,5 @@
 import { getNodeMeta } from "@/lib/nodes/catalog";
+import { CURATE_IMAGES_TYPE_ID } from "@/lib/nodes/curate-images/meta";
 import { RANK_IMAGES_TYPE_ID } from "@/lib/nodes/rank-images/meta";
 
 /**
@@ -55,7 +56,9 @@ function rankImagesSelectionCount(n: RefNode): number {
 }
 
 function rankImagesSelectedImagePaths(n: RefNode): string[] {
-  if (n.type !== RANK_IMAGES_TYPE_ID) return [];
+  if (n.type !== RANK_IMAGES_TYPE_ID && n.type !== CURATE_IMAGES_TYPE_ID) {
+    return [];
+  }
   return Array.from(
     { length: rankImagesSelectionCount(n) },
     (_, index) => `selected.${index}.url`,

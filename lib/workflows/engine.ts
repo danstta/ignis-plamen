@@ -330,10 +330,60 @@ export async function startRun(
   return run.id;
 }
 
+type ResumeChoice =
+  | { choiceUrl: string }
+  | { selectedUrls: string[] };
+
+function isImageRecord(value: unknown): value is { url: string } {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "url" in value &&
+    typeof value.url === "string"
+  );
+}
+
+function outputForCuratedImages(
+  pausedState: NodeOutputs | undefined,
+  selectedUrls: string[],
+): NodeOutputs {
+  const ranked = Array.isArray(pausedState?.ranked)
+    ? pausedState.ranked.filter(isImageRecord)
+    : Array.isArray(pausedState?.candidates)
+      ? pausedState.candidates.filter(isImageRecord)
+      : [];
+  const byUrl = new Map(ranked.map((candidate) => [candidate.url, candidate]));
+  const seen = new Set<string>();
+  const selected = selectedUrls.flatMap((url) => {
+    if (seen.has(url)) return [];
+    const candidate = byUrl.get(url);
+    if (!candidate) return [];
+    seen.add(url);
+    return [candidate];
+  });
+  const selectedSet = new Set(selected.map((candidate) => candidate.url));
+  const curatedRanked = [
+    ...selected,
+    ...ranked.filter((candidate) => !selectedSet.has(candidate.url)),
+  ];
+
+  return {
+    ranked: curatedRanked,
+    selected,
+    selectedUrls: selected.map((candidate) => candidate.url),
+    best: selected[0]?.url ?? "",
+  };
+}
+
 function outputForHumanChoice(
   pausedState: NodeOutputs | undefined,
-  choiceUrl: string,
+  choice: ResumeChoice,
 ): NodeOutputs {
+  if ("selectedUrls" in choice) {
+    return outputForCuratedImages(pausedState, choice.selectedUrls);
+  }
+
+  const choiceUrl = choice.choiceUrl;
   const candidates = pausedState?.candidates;
   const chosenDesign = Array.isArray(candidates)
     ? candidates.find(
@@ -354,7 +404,7 @@ function outputForHumanChoice(
 export async function resumeRun(
   runId: string,
   resumeToken: string,
-  choiceUrl: string,
+  choice: ResumeChoice,
   step: StepRunner = inlineRunner,
 ): Promise<void> {
   // Distinct id from execute's own load so both reads memoize independently.
@@ -376,7 +426,7 @@ export async function resumeRun(
   const nodeStates = { ...run.nodeStates };
   nodeOutputs[run.waitingNodeId] = outputForHumanChoice(
     run.nodeOutputs[run.waitingNodeId],
-    choiceUrl,
+    choice,
   );
   nodeStates[run.waitingNodeId] = "done";
 

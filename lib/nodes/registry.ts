@@ -2,6 +2,7 @@ import type { NodeDefinition } from "./types";
 import { webhookNode } from "./webhook";
 import { findLocationImagesNode } from "./find-location-images";
 import { rankImagesNode } from "./rank-images";
+import { curateImagesNode } from "./curate-images";
 import { llmPromptNode } from "./llm-prompt";
 import { manualReviewNode } from "./manual-review";
 import { renderTemplateNode } from "./render-template";
@@ -23,6 +24,7 @@ const definitions: NodeDefinition[] = [
   webhookNode as unknown as NodeDefinition,
   findLocationImagesNode as unknown as NodeDefinition,
   rankImagesNode as unknown as NodeDefinition,
+  curateImagesNode as unknown as NodeDefinition,
   llmPromptNode as unknown as NodeDefinition,
   manualReviewNode as unknown as NodeDefinition,
   renderTemplateNode as unknown as NodeDefinition,

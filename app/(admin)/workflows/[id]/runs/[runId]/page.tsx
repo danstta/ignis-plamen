@@ -6,6 +6,7 @@ import { getWorkflow } from "@/lib/workflows/service";
 import { getNodeType } from "@/lib/nodes/registry";
 import type { WorkflowGraph } from "@/lib/workflows/types";
 import { RunStatusBadge } from "@/components/workflow/run-status-badge";
+import { CurateImagesPicker } from "@/components/workflow/curate-images-picker";
 import { ManualReviewPicker } from "@/components/workflow/manual-review-picker";
 import { Button } from "@/components/ui/button";
 import { RunLive } from "./run-live";
@@ -61,6 +62,24 @@ export default async function RunDetailPage({
       ? run.nodeOutputs[run.waitingNodeId]?.reviewKind
       : undefined;
   const reviewItemLabel = reviewKind === "designs" ? "design" : "image";
+  const waitingSelected =
+    run.status === "waiting" && run.waitingNodeId
+      ? ((run.nodeOutputs[run.waitingNodeId]?.selected ?? []) as {
+          url: string;
+          attribution?: string;
+        }[])
+      : [];
+  const waitingAlternates =
+    run.status === "waiting" && run.waitingNodeId
+      ? ((run.nodeOutputs[run.waitingNodeId]?.alternates ?? []) as {
+          url: string;
+          attribution?: string;
+        }[])
+      : [];
+  const waitingSelectionCount =
+    run.status === "waiting" && run.waitingNodeId
+      ? Number(run.nodeOutputs[run.waitingNodeId]?.selectionCount ?? 10)
+      : 10;
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -91,7 +110,24 @@ export default async function RunDetailPage({
         </div>
       ) : null}
 
-      {run.status === "waiting" && run.resumeToken ? (
+      {run.status === "waiting" && run.resumeToken && reviewKind === "image-set" ? (
+        <section className="mt-6">
+          <h2 className="text-sm font-semibold">Curate image set</h2>
+          <p className="mb-3 mt-0.5 text-xs text-muted-foreground">
+            Remove similar images from the selected set, then add replacements from
+            alternates.
+          </p>
+          <CurateImagesPicker
+            runId={run.id}
+            resumeToken={run.resumeToken}
+            selected={waitingSelected}
+            alternates={waitingAlternates}
+            selectionCount={waitingSelectionCount}
+          />
+        </section>
+      ) : null}
+
+      {run.status === "waiting" && run.resumeToken && reviewKind !== "image-set" ? (
         <section className="mt-6">
           <h2 className="text-sm font-semibold">
             Pick the final {reviewItemLabel}

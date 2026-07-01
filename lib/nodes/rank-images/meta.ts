@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { NodeMeta } from "../types";
 
+export const RANK_IMAGES_TYPE_ID = "rank-images";
+
 export const rankImagesConfigSchema = z.object({
   connectionId: z.string().default(""),
   model: z
@@ -23,7 +25,7 @@ export const rankImagesConfigSchema = z.object({
 export type RankImagesConfig = z.infer<typeof rankImagesConfigSchema>;
 
 export const rankImagesMeta: NodeMeta<RankImagesConfig> = {
-  id: "rank-images",
+  id: RANK_IMAGES_TYPE_ID,
   label: "Rank Images",
   description: "Ranks candidate photos with GPT vision against your criteria.",
   category: "transform",

@@ -25,7 +25,9 @@ export const googleDriveListImagesNode: NodeDefinition<GoogleDriveListImagesConf
       maxImages: ctx.config.maxImages,
     });
 
-    ctx.log(`found ${images.length} image file(s) in Drive folder ${folderId}`);
+    ctx.log(
+      `found ${images.length} image file(s) in Drive folder tree ${folderId}`,
+    );
 
     return {
       type: "output",

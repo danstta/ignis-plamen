@@ -125,30 +125,29 @@ function toImageFile(file: DriveFileResponse): GoogleDriveImageFile | undefined 
   };
 }
 
-export async function listGoogleDriveFolderImages(input: {
-  connectionId: string;
-  folder: string;
-  maxImages: number;
-}): Promise<GoogleDriveImageFile[]> {
-  const folderId = parseGoogleDriveFolderId(input.folder);
-  if (!folderId) throw new Error("Google Drive folder link or ID is required");
+function isDriveFolder(file: DriveFileResponse): file is DriveFileResponse & { id: string } {
+  return file.mimeType === DRIVE_FOLDER_MIME && Boolean(file.id);
+}
 
-  const token = await ensureFreshToken(input.connectionId);
-  const maxImages = Math.max(1, Math.trunc(input.maxImages));
+async function listGoogleDriveFolderChildren(input: {
+  token: string;
+  folderId: string;
+  maxImages: number;
+  images: GoogleDriveImageFile[];
+}): Promise<string[]> {
   const q = [
-    `'${escapeDriveQueryValue(folderId)}' in parents`,
+    `'${escapeDriveQueryValue(input.folderId)}' in parents`,
     "trashed = false",
-    "mimeType != '" + DRIVE_FOLDER_MIME + "'",
-    "mimeType contains 'image/'",
+    `(mimeType = '${DRIVE_FOLDER_MIME}' or mimeType contains 'image/')`,
   ].join(" and ");
 
-  const images: GoogleDriveImageFile[] = [];
+  const childFolderIds: string[] = [];
   let pageToken: string | undefined;
 
   do {
     const url = new URL(DRIVE_FILES_URL);
     url.searchParams.set("q", q);
-    url.searchParams.set("pageSize", String(Math.min(1000, maxImages - images.length)));
+    url.searchParams.set("pageSize", "1000");
     url.searchParams.set("spaces", "drive");
     url.searchParams.set("supportsAllDrives", "true");
     url.searchParams.set("includeItemsFromAllDrives", "true");
@@ -165,7 +164,7 @@ export async function listGoogleDriveFolderImages(input: {
     const res = await fetch(url, {
       headers: {
         Accept: "application/json",
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${input.token}`,
       },
     });
     const body = (await res.json().catch(() => null)) as DriveListResponse | null;
@@ -178,14 +177,54 @@ export async function listGoogleDriveFolderImages(input: {
     }
 
     for (const file of body?.files ?? []) {
+      if (isDriveFolder(file)) {
+        childFolderIds.push(file.id);
+        continue;
+      }
+
       const image = toImageFile(file);
       if (!image) continue;
-      images.push(image);
-      if (images.length >= maxImages) break;
+      input.images.push(image);
+      if (input.images.length >= input.maxImages) break;
     }
 
-    pageToken = images.length < maxImages ? body?.nextPageToken : undefined;
+    pageToken = input.images.length < input.maxImages ? body?.nextPageToken : undefined;
   } while (pageToken);
+
+  return childFolderIds;
+}
+
+export async function listGoogleDriveFolderImages(input: {
+  connectionId: string;
+  folder: string;
+  maxImages: number;
+}): Promise<GoogleDriveImageFile[]> {
+  const folderId = parseGoogleDriveFolderId(input.folder);
+  if (!folderId) throw new Error("Google Drive folder link or ID is required");
+
+  const token = await ensureFreshToken(input.connectionId);
+  const maxImages = Math.max(1, Math.trunc(input.maxImages));
+  const images: GoogleDriveImageFile[] = [];
+  const folderQueue = [folderId];
+  const visitedFolderIds = new Set<string>();
+  let folderIndex = 0;
+
+  while (folderIndex < folderQueue.length && images.length < maxImages) {
+    const currentFolderId = folderQueue[folderIndex++];
+    if (!currentFolderId || visitedFolderIds.has(currentFolderId)) continue;
+    visitedFolderIds.add(currentFolderId);
+
+    const childFolderIds = await listGoogleDriveFolderChildren({
+      token,
+      folderId: currentFolderId,
+      maxImages,
+      images,
+    });
+
+    for (const childFolderId of childFolderIds) {
+      if (!visitedFolderIds.has(childFolderId)) folderQueue.push(childFolderId);
+    }
+  }
 
   return images;
 }

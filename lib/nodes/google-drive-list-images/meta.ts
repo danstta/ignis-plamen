@@ -16,7 +16,7 @@ export type GoogleDriveListImagesConfig = z.infer<
 export const googleDriveListImagesMeta: NodeMeta<GoogleDriveListImagesConfig> = {
   id: GOOGLE_DRIVE_LIST_IMAGES_TYPE_ID,
   label: "List Drive Images",
-  description: "Lists image files inside a Google Drive folder.",
+  description: "Lists image files inside a Google Drive folder and its subfolders.",
   category: "source",
   inputs: [],
   outputs: [
@@ -47,7 +47,7 @@ export const googleDriveListImagesMeta: NodeMeta<GoogleDriveListImagesConfig> = 
       label: "Max images",
       type: "number",
       placeholder: "100",
-      help: "Caps how many image files this node returns.",
+      help: "Caps how many image files this node returns from the folder tree.",
     },
   ],
   configSchema: googleDriveListImagesConfigSchema,

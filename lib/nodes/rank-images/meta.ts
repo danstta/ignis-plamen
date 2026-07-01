@@ -17,6 +17,7 @@ export const rankImagesConfigSchema = z.object({
     .default(
       "Pick the best poster hero image for a youth exchange call. Prefer polished travel/destination photos: wide landscape or aerial city views, recognizable landmarks, waterfronts, mountains, old towns, castles, churches, plazas, gardens, or scenic architecture. Favor bright daylight, blue sky, vivid natural color, strong depth, clean composition, and enough open space for overlay text. Avoid dark interiors, close-up details, random people, cars as the subject, low-resolution/archive-looking images, screenshots, logos, watermarks, text in the photo, awkward crops, and dull or cluttered street snapshots.",
     ),
+  selectionCount: z.coerce.number().int().min(1).max(50).default(5),
 });
 
 export type RankImagesConfig = z.infer<typeof rankImagesConfigSchema>;
@@ -32,6 +33,8 @@ export const rankImagesMeta: NodeMeta<RankImagesConfig> = {
   ],
   outputs: [
     { id: "ranked", label: "Ranked images", kind: "data" },
+    { id: "selected", label: "Selected ranked images", kind: "data" },
+    { id: "selectedUrls", label: "Selected image URLs", kind: "data" },
     { id: "best", label: "Best image", kind: "image" },
   ],
   configFields: [
@@ -55,6 +58,13 @@ export const rankImagesMeta: NodeMeta<RankImagesConfig> = {
       label: "Ranking criteria",
       type: "textarea",
       help: "What makes a good image for this post.",
+    },
+    {
+      name: "selectionCount",
+      label: "Images to expose",
+      type: "number",
+      placeholder: "5",
+      help: "Makes the first N ranked images available as Selected ranked images and Selected image URLs.",
     },
   ],
   configSchema: rankImagesConfigSchema,

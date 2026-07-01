@@ -269,7 +269,10 @@ export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
 
     if (candidates.length === 0) {
       ctx.log("No image candidates were available to rank.");
-      return { type: "output", outputs: { ranked: [], best: "" } };
+      return {
+        type: "output",
+        outputs: { ranked: [], selected: [], selectedUrls: [], best: "" },
+      };
     }
 
     const connection = await getConnection(ctx.config.connectionId);
@@ -316,9 +319,16 @@ export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
     // Append any candidates the model omitted so nothing is lost.
     for (const c of candidates) if (!ranked.includes(c)) ranked.push(c);
 
+    const selected = ranked.slice(0, ctx.config.selectionCount);
+
     return {
       type: "output",
-      outputs: { ranked, best: ranked[0]?.url ?? "" },
+      outputs: {
+        ranked,
+        selected,
+        selectedUrls: selected.map((candidate) => candidate.url),
+        best: ranked[0]?.url ?? "",
+      },
     };
   },
 };

@@ -39,6 +39,7 @@ import {
   type NotionPropertyType,
   type NotionPropertyUpdate,
 } from "@/lib/nodes/notion-update-page/meta";
+import { CURATE_IMAGES_TYPE_ID } from "@/lib/nodes/curate-images/meta";
 import { RENDER_TEMPLATE_BATCH_TYPE_ID } from "@/lib/nodes/render-template-batch/meta";
 import { useWorkflowEditor } from "@/lib/workflows/store";
 import {
@@ -681,7 +682,8 @@ export function NodeConfigPanel({
       ))}
 
       {node.type === "render-template" ||
-      node.type === RENDER_TEMPLATE_BATCH_TYPE_ID ? (
+      node.type === RENDER_TEMPLATE_BATCH_TYPE_ID ||
+      node.type === CURATE_IMAGES_TYPE_ID ? (
         <RenderTemplatePlaceholders
           templateId={String(config.templateId ?? "")}
           templates={templates}
@@ -905,7 +907,7 @@ function NotionPropertiesEditor({
   );
 }
 
-/** Per-placeholder binding rows for the selected template (Render Template). */
+/** Per-placeholder binding rows for the selected template. */
 function RenderTemplatePlaceholders({
   templateId,
   templates,

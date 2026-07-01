@@ -343,6 +343,59 @@ function isImageRecord(value: unknown): value is { url: string } {
   );
 }
 
+function isPlaceholderRecord(
+  value: unknown,
+): value is { key: string; kind: "text" | "image" } {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    "key" in value &&
+    typeof value.key === "string" &&
+    "kind" in value &&
+    (value.kind === "text" || value.kind === "image")
+  );
+}
+
+function valueToOutputText(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (Array.isArray(value)) return value.map(valueToOutputText).join(", ");
+  return JSON.stringify(value);
+}
+
+function templateDataForCuratedImages(
+  pausedState: NodeOutputs | undefined,
+  selectedUrls: string[],
+): Record<string, string> {
+  const placeholders = Array.isArray(pausedState?.previewPlaceholders)
+    ? pausedState.previewPlaceholders.filter(isPlaceholderRecord)
+    : [];
+  const bindings =
+    pausedState?.previewBindings &&
+    typeof pausedState.previewBindings === "object" &&
+    !Array.isArray(pausedState.previewBindings)
+      ? (pausedState.previewBindings as Record<string, unknown>)
+      : {};
+  const data: Record<string, string> = {};
+  let imageIndex = 0;
+
+  for (const placeholder of placeholders) {
+    const bound = bindings[placeholder.key];
+    const value =
+      bound !== undefined && bound !== "" ? valueToOutputText(bound) : "";
+    if (placeholder.kind === "image") {
+      data[placeholder.key] = value || selectedUrls[imageIndex] || "";
+      imageIndex += 1;
+    } else {
+      data[placeholder.key] = value;
+    }
+  }
+  return data;
+}
+
 function outputForCuratedImages(
   pausedState: NodeOutputs | undefined,
   selectedUrls: string[],
@@ -371,6 +424,10 @@ function outputForCuratedImages(
     ranked: curatedRanked,
     selected,
     selectedUrls: selected.map((candidate) => candidate.url),
+    templateData: templateDataForCuratedImages(
+      pausedState,
+      selected.map((candidate) => candidate.url),
+    ),
     best: selected[0]?.url ?? "",
   };
 }

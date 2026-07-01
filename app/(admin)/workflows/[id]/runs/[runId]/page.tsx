@@ -80,6 +80,24 @@ export default async function RunDetailPage({
     run.status === "waiting" && run.waitingNodeId
       ? Number(run.nodeOutputs[run.waitingNodeId]?.selectionCount ?? 10)
       : 10;
+  const previewTemplateId =
+    run.status === "waiting" && run.waitingNodeId
+      ? String(run.nodeOutputs[run.waitingNodeId]?.previewTemplateId ?? "")
+      : "";
+  const previewPlaceholders =
+    run.status === "waiting" && run.waitingNodeId
+      ? ((run.nodeOutputs[run.waitingNodeId]?.previewPlaceholders ?? []) as {
+          key: string;
+          kind: "text" | "image";
+        }[])
+      : [];
+  const previewBindings =
+    run.status === "waiting" && run.waitingNodeId
+      ? ((run.nodeOutputs[run.waitingNodeId]?.previewBindings ?? {}) as Record<
+          string,
+          unknown
+        >)
+      : {};
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -123,6 +141,9 @@ export default async function RunDetailPage({
             selected={waitingSelected}
             alternates={waitingAlternates}
             selectionCount={waitingSelectionCount}
+            previewTemplateId={previewTemplateId}
+            previewPlaceholders={previewPlaceholders}
+            previewBindings={previewBindings}
           />
         </section>
       ) : null}

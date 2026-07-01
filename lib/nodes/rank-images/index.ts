@@ -80,9 +80,35 @@ interface SelectedCandidate {
   rotationDegrees: RotationDegrees;
 }
 
+interface PreparedAzureImage {
+  candidate: ImageCandidate;
+  dataUrl: string;
+}
+
+type ChatMessages = { role: "user"; content: unknown[] }[];
+type ResponseFormat = {
+  type: "json_schema";
+  json_schema: {
+    name: string;
+    strict: boolean;
+    schema: unknown;
+  };
+};
+
 const IMAGE_FETCH_USER_AGENT = "Ignis/0.1 (https://github.com/danstta/ignis)";
 const MAX_AZURE_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_NORMALIZED_IMAGE_BYTES = 25 * 1024 * 1024;
+
+class ProviderRequestError extends Error {
+  constructor(
+    message: string,
+    readonly provider: string,
+    readonly status: number,
+    readonly body: string,
+  ) {
+    super(message);
+  }
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -185,13 +211,30 @@ const diverseSelectionResponseFormat = {
 
 async function parseJsonResponse<T>(res: Response, provider: string): Promise<T> {
   if (!res.ok) {
-    throw new Error(`${provider} ${res.status}: ${await res.text()}`);
+    const body = await res.text();
+    throw new ProviderRequestError(
+      `${provider} ${res.status}: ${body}`,
+      provider,
+      res.status,
+      body,
+    );
   }
   const json = (await res.json()) as {
     choices?: { message?: { content?: string } }[];
   };
   const text = json.choices?.[0]?.message?.content ?? "{}";
   return JSON.parse(text) as T;
+}
+
+function isAzureContentPolicyViolation(err: unknown): err is ProviderRequestError {
+  if (!(err instanceof ProviderRequestError)) return false;
+  if (err.provider !== "Azure") return false;
+  const body = err.body.toLowerCase();
+  return (
+    err.status === 400 &&
+    (body.includes("content_policy_violation") ||
+      body.includes("content safety system"))
+  );
 }
 
 async function parseRankingResponse(res: Response, provider: string) {
@@ -319,7 +362,7 @@ async function imageUrlToDataUrl(candidate: ImageCandidate): Promise<string> {
 async function prepareAzureImages(
   candidates: ImageCandidate[],
   log: (message: string) => void,
-): Promise<{ candidate: ImageCandidate; dataUrl: string }[]> {
+): Promise<PreparedAzureImage[]> {
   const settled = await Promise.allSettled(
     candidates.map(async (candidate) => ({
       candidate,
@@ -338,14 +381,12 @@ async function prepareAzureImages(
   });
 }
 
-async function rankWithAzure(
+async function sendAzureChatCompletion(
   config: Record<string, unknown>,
   deploymentName: string,
-  criteria: string,
-  location: string,
-  candidates: ImageCandidate[],
-  log: (message: string) => void,
-): Promise<RankingResult> {
+  messages: ChatMessages,
+  responseFormat: ResponseFormat,
+): Promise<Response> {
   const endpoint = String(config.endpoint ?? "").trim().replace(/\/+$/, "");
   const apiKey = String(config.apiKey ?? "").trim();
   const configuredApiVersion = String(config.apiVersion ?? "").trim();
@@ -369,22 +410,13 @@ async function rankWithAzure(
     );
   }
 
-  const preparedImages = await prepareAzureImages(candidates, log);
-  if (preparedImages.length === 0) {
-    throw new Error("No image candidates could be prepared for Azure vision.");
-  }
-
   const body = {
     ...(usesUnifiedV1Endpoint ? { model: deploymentName } : {}),
-    messages: buildMessages(
-      criteria,
-      location,
-      preparedImages.map((image) => image.dataUrl),
-    ),
+    messages,
     response_format: responseFormat,
   };
 
-  const res = await fetch(url, {
+  return fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -392,9 +424,122 @@ async function rankWithAzure(
     },
     body: JSON.stringify(body),
   });
+}
+
+async function filterAzureContentSafeImages(input: {
+  config: Record<string, unknown>;
+  deploymentName: string;
+  preparedImages: PreparedAzureImage[];
+  location: string;
+  responseFormat: ResponseFormat;
+  log: (message: string) => void;
+}): Promise<PreparedAzureImage[]> {
+  const settled = await Promise.allSettled(
+    input.preparedImages.map(async (image) => {
+      const res = await sendAzureChatCompletion(
+        input.config,
+        input.deploymentName,
+        buildMessages(
+          "Check whether this image can be processed. Return any valid ranking.",
+          input.location,
+          [image.dataUrl],
+        ),
+        input.responseFormat,
+      );
+      await parseJsonResponse<unknown>(res, "Azure");
+      return image;
+    }),
+  );
+
+  return settled.flatMap((result, index) => {
+    if (result.status === "fulfilled") return [result.value];
+    if (isAzureContentPolicyViolation(result.reason)) {
+      input.log(
+        `Skipping image candidate ${index} because Azure content safety blocked it.`,
+      );
+      return [];
+    }
+    throw result.reason;
+  });
+}
+
+async function requestAzureWithContentPolicyRetry<T>(input: {
+  config: Record<string, unknown>;
+  deploymentName: string;
+  preparedImages: PreparedAzureImage[];
+  buildMessages: (dataUrls: string[]) => ChatMessages;
+  responseFormat: ResponseFormat;
+  parse: (res: Response) => Promise<T>;
+  location: string;
+  stage: string;
+  log: (message: string) => void;
+}): Promise<{ value: T; images: PreparedAzureImage[] }> {
+  const send = async (images: PreparedAzureImage[]) => {
+    const res = await sendAzureChatCompletion(
+      input.config,
+      input.deploymentName,
+      input.buildMessages(images.map((image) => image.dataUrl)),
+      input.responseFormat,
+    );
+    return input.parse(res);
+  };
+
+  try {
+    return { value: await send(input.preparedImages), images: input.preparedImages };
+  } catch (err) {
+    if (!isAzureContentPolicyViolation(err)) throw err;
+    input.log(
+      `Azure content safety blocked at least one image during ${input.stage}; probing candidates and retrying without blocked images.`,
+    );
+  }
+
+  const safeImages = await filterAzureContentSafeImages({
+    config: input.config,
+    deploymentName: input.deploymentName,
+    preparedImages: input.preparedImages,
+    location: input.location,
+    responseFormat: input.responseFormat,
+    log: input.log,
+  });
+  if (safeImages.length === 0) {
+    throw new Error(
+      `Azure content safety blocked every image during ${input.stage}.`,
+    );
+  }
+
+  input.log(
+    `Retrying ${input.stage} with ${safeImages.length}/${input.preparedImages.length} image(s).`,
+  );
+  return { value: await send(safeImages), images: safeImages };
+}
+
+async function rankWithAzure(
+  config: Record<string, unknown>,
+  deploymentName: string,
+  criteria: string,
+  location: string,
+  candidates: ImageCandidate[],
+  log: (message: string) => void,
+): Promise<RankingResult> {
+  const preparedImages = await prepareAzureImages(candidates, log);
+  if (preparedImages.length === 0) {
+    throw new Error("No image candidates could be prepared for Azure vision.");
+  }
+
+  const result = await requestAzureWithContentPolicyRetry({
+    config,
+    deploymentName,
+    preparedImages,
+    buildMessages: (dataUrls) => buildMessages(criteria, location, dataUrls),
+    responseFormat,
+    parse: (res) => parseRankingResponse(res, "Azure"),
+    location,
+    stage: "image ranking",
+    log,
+  });
   return {
-    ranking: await parseRankingResponse(res, "Azure"),
-    candidates: preparedImages.map((image) => image.candidate),
+    ranking: result.value,
+    candidates: result.images.map((image) => image.candidate),
   };
 }
 
@@ -407,56 +552,26 @@ async function selectDiverseWithAzure(
   selectionCount: number,
   log: (message: string) => void,
 ): Promise<DiverseSelectionResult> {
-  const endpoint = String(config.endpoint ?? "").trim().replace(/\/+$/, "");
-  const apiKey = String(config.apiKey ?? "").trim();
-  const configuredApiVersion = String(config.apiVersion ?? "").trim();
-
-  if (!endpoint) throw new Error("Azure connection is missing an endpoint.");
-  if (!apiKey) throw new Error("Azure connection is missing an API key.");
-  if (!deploymentName) {
-    throw new Error("Azure connection is missing a deployment name.");
-  }
-
-  const usesUnifiedV1Endpoint = /\/openai\/v1$/i.test(endpoint);
-  const url = new URL(
-    usesUnifiedV1Endpoint
-      ? `${endpoint}/chat/completions`
-      : `${endpoint}/openai/deployments/${encodeURIComponent(deploymentName)}/chat/completions`,
-  );
-  if (!usesUnifiedV1Endpoint) {
-    url.searchParams.set(
-      "api-version",
-      configuredApiVersion || "2025-01-01-preview",
-    );
-  }
-
   const preparedImages = await prepareAzureImages(candidates, log);
   if (preparedImages.length === 0) {
     throw new Error("No image candidates could be prepared for Azure vision.");
   }
 
-  const body = {
-    ...(usesUnifiedV1Endpoint ? { model: deploymentName } : {}),
-    messages: buildDiverseSelectionMessages(
-      criteria,
-      location,
-      selectionCount,
-      preparedImages.map((image) => image.dataUrl),
-    ),
-    response_format: diverseSelectionResponseFormat,
-  };
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "api-key": apiKey,
-    },
-    body: JSON.stringify(body),
+  const result = await requestAzureWithContentPolicyRetry({
+    config,
+    deploymentName,
+    preparedImages,
+    buildMessages: (dataUrls) =>
+      buildDiverseSelectionMessages(criteria, location, selectionCount, dataUrls),
+    responseFormat: diverseSelectionResponseFormat,
+    parse: (res) => parseDiverseSelectionResponse(res, "Azure"),
+    location,
+    stage: "diverse image selection",
+    log,
   });
   return {
-    selection: await parseDiverseSelectionResponse(res, "Azure"),
-    candidates: preparedImages.map((image) => image.candidate),
+    selection: result.value,
+    candidates: result.images.map((image) => image.candidate),
   };
 }
 

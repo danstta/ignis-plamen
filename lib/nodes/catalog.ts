@@ -11,6 +11,8 @@ import { rehostImageMeta } from "./rehost-image/meta";
 import { runLinkMeta } from "./run-link/meta";
 import { routerMeta } from "./router/meta";
 import { notionUpdatePageMeta } from "./notion-update-page/meta";
+import { googleDriveListImagesMeta } from "./google-drive-list-images/meta";
+import { googleDriveUploadFilesMeta } from "./google-drive-upload-files/meta";
 
 /**
  * Client-safe node catalog: metadata only (no run()), so the canvas palette,
@@ -31,6 +33,8 @@ const catalog: NodeMeta[] = [
   runLinkMeta as unknown as NodeMeta,
   routerMeta as unknown as NodeMeta,
   notionUpdatePageMeta as unknown as NodeMeta,
+  googleDriveListImagesMeta as unknown as NodeMeta,
+  googleDriveUploadFilesMeta as unknown as NodeMeta,
 ];
 
 const byId = new Map(catalog.map((m) => [m.id, m]));

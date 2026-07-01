@@ -44,6 +44,13 @@ const definitions: PluginDefinition[] = [
     nodeTypeIds: ["notion-update-page"],
     defaultEnabled: true,
   },
+  {
+    id: "google-drive",
+    name: "Google Drive",
+    description: "Reads and writes Google Drive folders and files from workflows.",
+    nodeTypeIds: ["google-drive-list-images", "google-drive-upload-files"],
+    defaultEnabled: true,
+  },
 ];
 
 const byId = new Map(definitions.map((d) => [d.id, d]));

@@ -11,6 +11,8 @@ import { rehostImageNode } from "./rehost-image";
 import { runLinkNode } from "./run-link";
 import { routerNode } from "./router";
 import { notionUpdatePageNode } from "./notion-update-page";
+import { googleDriveListImagesNode } from "./google-drive-list-images";
+import { googleDriveUploadFilesNode } from "./google-drive-upload-files";
 
 /**
  * Registry of available workflow node types. To add a node, implement a
@@ -30,6 +32,8 @@ const definitions: NodeDefinition[] = [
   runLinkNode as unknown as NodeDefinition,
   routerNode as unknown as NodeDefinition,
   notionUpdatePageNode as unknown as NodeDefinition,
+  googleDriveListImagesNode as unknown as NodeDefinition,
+  googleDriveUploadFilesNode as unknown as NodeDefinition,
 ];
 
 const byId = new Map(definitions.map((d) => [d.id, d]));

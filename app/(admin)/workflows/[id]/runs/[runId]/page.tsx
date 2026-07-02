@@ -4,23 +4,16 @@ import { ArrowLeft, ChevronDown } from "lucide-react";
 import { getRun } from "@/lib/workflows/runs-service";
 import { getWorkflow } from "@/lib/workflows/service";
 import { getNodeType } from "@/lib/nodes/registry";
+import { formatRelativeTime } from "@/lib/format";
 import type { WorkflowGraph } from "@/lib/workflows/types";
 import { RunStatusBadge } from "@/components/workflow/run-status-badge";
 import { CurateImagesPicker } from "@/components/workflow/curate-images-picker";
 import { ManualReviewPicker } from "@/components/workflow/manual-review-picker";
 import { Button } from "@/components/ui/button";
 import { RunLive } from "./run-live";
-import { RunNodeLogPanel } from "./run-node-log-panel";
+import { RunNodeCard } from "./run-node-card";
 
 export const dynamic = "force-dynamic";
-
-const STATE_LABEL: Record<string, string> = {
-  pending: "Pending",
-  running: "Active",
-  done: "Done",
-  error: "Error",
-  waiting: "Waiting",
-};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -215,11 +208,68 @@ export default async function RunDetailPage({
         <ArrowLeft className="size-4" /> Back to runs
       </Button>
 
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold">Run detail</h1>
-        <RunStatusBadge status={run.status} />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Run detail</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            in{" "}
+            <Link
+              href={`/workflows/${id}`}
+              className="underline-offset-4 hover:text-foreground hover:underline"
+            >
+              {workflow.name}
+            </Link>
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {run.status === "running" || run.status === "waiting" ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground">
+              <span className="relative flex size-1.5">
+                <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-500 opacity-75" />
+                <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400" />
+              </span>
+              Live
+            </span>
+          ) : null}
+          <RunStatusBadge status={run.status} />
+        </div>
       </div>
-      <p className="mt-1 font-mono text-xs text-muted-foreground">{run.id}</p>
+
+      <dl className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-border ring-1 ring-foreground/10 sm:grid-cols-4">
+        <div className="flex flex-col gap-0.5 bg-card p-3">
+          <dt className="text-xs text-muted-foreground">Started</dt>
+          <dd
+            className="truncate text-sm font-medium"
+            title={run.createdAt.toLocaleString()}
+          >
+            {formatRelativeTime(run.createdAt)}
+          </dd>
+        </div>
+        <div className="flex flex-col gap-0.5 bg-card p-3">
+          <dt className="text-xs text-muted-foreground">Updated</dt>
+          <dd
+            className="truncate text-sm font-medium"
+            title={run.updatedAt.toLocaleString()}
+          >
+            {formatRelativeTime(run.updatedAt)}
+          </dd>
+        </div>
+        <div className="flex flex-col gap-0.5 bg-card p-3">
+          <dt className="text-xs text-muted-foreground">Nodes</dt>
+          <dd className="text-sm font-medium tabular-nums">
+            {graph.nodes.length}
+          </dd>
+        </div>
+        <div className="flex flex-col gap-0.5 bg-card p-3">
+          <dt className="text-xs text-muted-foreground">Run ID</dt>
+          <dd
+            className="truncate font-mono text-xs font-medium"
+            title={run.id}
+          >
+            {run.id}
+          </dd>
+        </div>
+      </dl>
 
       {run.error ? (
         <div className="mt-4 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
@@ -321,40 +371,27 @@ export default async function RunDetailPage({
       ) : null}
 
       <section className="mt-7">
-        <div className="flex items-baseline justify-between gap-3">
+        <div className="mb-2 flex items-baseline justify-between gap-3">
           <h2 className="text-sm font-semibold">Nodes</h2>
           <span className="text-xs text-muted-foreground">
             {graph.nodes.length} total
           </span>
         </div>
-        <div className="mt-2 divide-y border-y">
+        <div className="flex flex-col gap-2">
           {graph.nodes.map((n) => {
             const def = getNodeType(n.type);
             const state = run.nodeStates[n.id] ?? "pending";
             const outputs = run.nodeOutputs[n.id];
             const logs = run.nodeLogs?.[n.id] ?? [];
             return (
-              <div key={n.id} className="px-1 py-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium">
-                    {def?.label ?? n.type}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {STATE_LABEL[state] ?? state}
-                  </span>
-                </div>
-                <RunNodeLogPanel
-                  nodeLabel={def?.label ?? n.type}
-                  state={state}
-                  logs={logs}
-                  isLlmNode={n.type === "llm-prompt"}
-                />
-                {outputs ? (
-                  <JsonDisclosure title="Output" className="group mt-1">
-                    {JSON.stringify(outputs, null, 2)}
-                  </JsonDisclosure>
-                ) : null}
-              </div>
+              <RunNodeCard
+                key={n.id}
+                nodeLabel={def?.label ?? n.type}
+                state={state}
+                logs={logs}
+                isLlmNode={n.type === "llm-prompt"}
+                outputs={outputs}
+              />
             );
           })}
         </div>

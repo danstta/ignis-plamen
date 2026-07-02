@@ -16,7 +16,7 @@ import { WorkflowTestDialog } from "./workflow-test-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { SaveStatusDot } from "@/components/ui/save-status-dot";
+import { cn } from "@/lib/utils";
 
 const WorkflowCanvas = dynamic(
   () => import("./workflow-canvas").then((m) => m.WorkflowCanvas),
@@ -103,6 +103,21 @@ export function WorkflowEditor({
     store: useWorkflowEditor,
     save,
   });
+  const saveStatusLabel =
+    status === "saved"
+      ? "All changes saved"
+      : status === "saving"
+        ? "Saving changes"
+        : "Unsaved changes";
+  const saveStatusClassName = cn(
+    "border transition-colors disabled:opacity-100",
+    status === "saved" &&
+      "border-emerald-500/15 bg-emerald-500/[0.08] text-emerald-700 hover:bg-emerald-500/[0.12] dark:text-emerald-300",
+    status === "saving" &&
+      "border-sky-500/15 bg-sky-500/[0.08] text-sky-700 hover:bg-sky-500/[0.12] dark:text-sky-300",
+    status === "unsaved" &&
+      "border-amber-500/20 bg-amber-500/[0.09] text-amber-700 hover:bg-amber-500/[0.13] dark:text-amber-300",
+  );
 
   return (
     <div className="-m-8 flex h-svh">
@@ -123,6 +138,14 @@ export function WorkflowEditor({
               onChange={(e) => setName(e.target.value)}
               className="h-8 min-w-0 flex-1 rounded-md font-medium"
             />
+            <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+              <Switch
+                size="sm"
+                checked={active}
+                onCheckedChange={(v) => setActive(v)}
+              />
+              <span>{active ? "Active" : "Inactive"}</span>
+            </label>
             <Button
               variant="outline"
               size="icon-sm"
@@ -147,30 +170,16 @@ export function WorkflowEditor({
             <Button
               onClick={saveNow}
               disabled={saving}
+              variant="outline"
               size="icon-sm"
-              title={saving ? "Saving..." : "Save"}
+              title={saveStatusLabel}
+              aria-label={saveStatusLabel}
+              aria-busy={saving}
+              className={saveStatusClassName}
             >
               <Save className="size-4" />
+              <span className="sr-only">{saveStatusLabel}</span>
             </Button>
-          </div>
-
-          <div className="mt-2 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-            <label className="flex items-center gap-2">
-              <Switch
-                size="sm"
-                checked={active}
-                onCheckedChange={(v) => setActive(v)}
-              />
-              <span>{active ? "Active" : "Inactive"}</span>
-            </label>
-            <span className="flex items-center gap-1.5">
-              <SaveStatusDot status={status} />
-              {status === "saved"
-                ? "Saved"
-                : status === "saving"
-                  ? "Saving..."
-                  : "Unsaved"}
-            </span>
           </div>
         </div>
 

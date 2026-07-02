@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ChevronDown } from "lucide-react";
 import { getRun } from "@/lib/workflows/runs-service";
 import { getWorkflow } from "@/lib/workflows/service";
 import { getNodeType } from "@/lib/nodes/registry";
@@ -22,6 +22,27 @@ const STATE_LABEL: Record<string, string> = {
   waiting: "Waiting",
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function cleanUrl(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function firstUrlFromList(value: unknown): string | undefined {
+  if (!Array.isArray(value)) return undefined;
+  for (const item of value) {
+    const url = cleanUrl(item) ?? (isRecord(item) ? cleanUrl(item.url) : undefined);
+    if (url) return url;
+  }
+  return undefined;
+}
+
+function uniqueUrls(urls: string[]): string[] {
+  return [...new Set(urls.filter((url) => url.trim()).map((url) => url.trim()))];
+}
+
 function findRenderUrls(outputs: Record<string, Record<string, unknown>>): string[] {
   const urls: string[] = [];
   for (const out of Object.values(outputs)) {
@@ -34,7 +55,69 @@ function findRenderUrls(outputs: Record<string, Record<string, unknown>>): strin
     const one = out?.renderUrl;
     if (typeof one === "string" && one) urls.push(one);
   }
-  return urls;
+  return uniqueUrls(urls);
+}
+
+function chosenLabel(type: string): string {
+  if (type === "review-designs") return "Chosen design";
+  if (type === "manual-review") return "Chosen image";
+  return "Chosen image";
+}
+
+function findChosenImage(
+  graph: WorkflowGraph,
+  outputs: Record<string, Record<string, unknown>>,
+): { url: string; label: string; source: string } | undefined {
+  let candidate: { url: string; label: string; source: string } | undefined;
+
+  for (const node of graph.nodes) {
+    const out = outputs[node.id];
+    if (!out) continue;
+
+    const source = getNodeType(node.type)?.label ?? node.type;
+    const chosen =
+      cleanUrl(out.chosen) ??
+      (isRecord(out.chosenDesign) ? cleanUrl(out.chosenDesign.url) : undefined);
+    if (chosen) {
+      candidate = { url: chosen, label: chosenLabel(node.type), source };
+      continue;
+    }
+
+    const best = cleanUrl(out.best);
+    if (best) {
+      candidate = { url: best, label: "Best image", source };
+      continue;
+    }
+
+    const selected = firstUrlFromList(out.selectedUrls) ?? firstUrlFromList(out.selected);
+    if (selected) {
+      candidate = { url: selected, label: "Top selected image", source };
+    }
+  }
+
+  return candidate;
+}
+
+function JsonDisclosure({
+  title,
+  children,
+  className,
+}: {
+  title: string;
+  children: string;
+  className?: string;
+}) {
+  return (
+    <details className={className}>
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 py-1 text-xs font-medium text-muted-foreground outline-none transition hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+        <ChevronDown className="size-3 transition-transform group-open:rotate-180" />
+        {title}
+      </summary>
+      <pre className="max-h-48 overflow-auto border-y bg-muted/45 p-2 text-[11px] leading-relaxed">
+        {children}
+      </pre>
+    </details>
+  );
 }
 
 export default async function RunDetailPage({
@@ -50,6 +133,14 @@ export default async function RunDetailPage({
 
   const graph = workflow.graph as WorkflowGraph;
   const renderUrls = findRenderUrls(run.nodeOutputs);
+  const chosenImage = findChosenImage(graph, run.nodeOutputs);
+  const renderedItems = renderUrls.map((url, index) => ({
+    url,
+    label: `Page ${index + 1}`,
+  }));
+  const renderedGridItems = chosenImage
+    ? renderedItems.filter((item) => item.url !== chosenImage.url)
+    : renderedItems;
 
   const waitingCandidates =
     run.status === "waiting" && run.waitingNodeId
@@ -108,7 +199,7 @@ export default async function RunDetailPage({
       : undefined;
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto max-w-4xl">
       {/* Polls + refreshes this server page while the run is live (execution is async). */}
       <RunLive
         runId={run.id}
@@ -174,35 +265,76 @@ export default async function RunDetailPage({
         </section>
       ) : null}
 
-      {renderUrls.length > 0 ? (
+      {chosenImage ? (
         <section className="mt-6">
-          <h2 className="text-sm font-semibold">
-            Rendered output{renderUrls.length > 1 ? ` (${renderUrls.length} pages)` : ""}
-          </h2>
-          <div className="mt-2 flex flex-wrap gap-3">
-            {renderUrls.map((url, i) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={url}
-                src={url}
-                alt={`Rendered page ${i + 1}`}
-                className="max-w-sm rounded-lg border"
-              />
+          <div className="mb-2 flex items-baseline gap-2">
+            <h2 className="text-sm font-semibold">{chosenImage.label}</h2>
+            <span className="text-xs text-muted-foreground">{chosenImage.source}</span>
+          </div>
+          <a
+            href={chosenImage.url}
+            target="_blank"
+            rel="noreferrer"
+            className="block w-fit outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={chosenImage.url}
+              alt={`${chosenImage.label} from ${chosenImage.source}`}
+              className="max-h-44 w-auto max-w-full rounded-md border bg-muted/20 object-contain"
+            />
+          </a>
+        </section>
+      ) : null}
+
+      {renderedGridItems.length > 0 ? (
+        <section className="mt-6">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-sm font-semibold">
+              Rendered output
+              {renderUrls.length > 1 ? ` (${renderUrls.length} pages)` : ""}
+            </h2>
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-5">
+            {renderedGridItems.map((item) => (
+              <figure key={item.url} className="min-w-0">
+                <a
+                  href={item.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={item.url}
+                    alt={`Rendered output ${item.label}`}
+                    className="h-24 w-full rounded-md border bg-muted/20 object-contain sm:h-28"
+                  />
+                </a>
+                <figcaption className="mt-1 truncate text-[11px] text-muted-foreground">
+                  {item.label}
+                </figcaption>
+              </figure>
             ))}
           </div>
         </section>
       ) : null}
 
-      <section className="mt-6">
-        <h2 className="text-sm font-semibold">Nodes</h2>
-        <div className="mt-2 divide-y rounded-lg border">
+      <section className="mt-7">
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="text-sm font-semibold">Nodes</h2>
+          <span className="text-xs text-muted-foreground">
+            {graph.nodes.length} total
+          </span>
+        </div>
+        <div className="mt-2 divide-y border-y">
           {graph.nodes.map((n) => {
             const def = getNodeType(n.type);
             const state = run.nodeStates[n.id] ?? "pending";
             const outputs = run.nodeOutputs[n.id];
             const logs = run.nodeLogs?.[n.id] ?? [];
             return (
-              <div key={n.id} className="px-4 py-3">
+              <div key={n.id} className="px-1 py-2.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium">
                     {def?.label ?? n.type}
@@ -218,9 +350,9 @@ export default async function RunDetailPage({
                   isLlmNode={n.type === "llm-prompt"}
                 />
                 {outputs ? (
-                  <pre className="mt-2 max-h-40 overflow-auto rounded bg-muted p-2 text-[11px] leading-relaxed">
+                  <JsonDisclosure title="Output" className="group mt-1">
                     {JSON.stringify(outputs, null, 2)}
-                  </pre>
+                  </JsonDisclosure>
                 ) : null}
               </div>
             );
@@ -230,9 +362,9 @@ export default async function RunDetailPage({
 
       <section className="mt-6">
         <h2 className="text-sm font-semibold">Trigger payload</h2>
-        <pre className="mt-2 max-h-60 overflow-auto rounded-lg border bg-muted p-3 text-[11px] leading-relaxed">
+        <JsonDisclosure title="Show payload" className="group mt-2">
           {JSON.stringify(run.trigger, null, 2)}
-        </pre>
+        </JsonDisclosure>
       </section>
     </div>
   );

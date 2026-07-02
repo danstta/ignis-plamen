@@ -88,18 +88,18 @@ export function RunNodeLogPanel({
   const StatusIcon = tone.icon;
 
   return (
-    <div className="mt-3 rounded-lg border bg-background/70">
-      <div className="flex min-h-10 items-center gap-2 px-3">
+    <div className="mt-2 border-y border-border/70">
+      <div className="flex min-h-8 items-center gap-2 px-2">
         <StatusIcon
           className={cn(
-            "size-4 shrink-0",
+            "size-3.5 shrink-0",
             tone.className,
             state === "running" && "animate-spin",
           )}
         />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="text-xs font-medium">{tone.label}</span>
+            <span className="text-[11px] font-medium">{tone.label}</span>
             <span className="text-xs text-muted-foreground">
               {isLlmNode ? "LLM trace" : "Node logs"}
             </span>
@@ -123,13 +123,13 @@ export function RunNodeLogPanel({
       </div>
 
       {open ? (
-        <div className="border-t bg-muted/30">
+        <div className="border-t bg-muted/20">
           {logs.length > 0 ? (
-            <ol className="max-h-64 overflow-auto py-1">
+            <ol className="max-h-48 overflow-auto py-1">
               {logs.map((entry) => (
                 <li
                   key={entry.id}
-                  className="grid grid-cols-[4.5rem_1fr] gap-3 px-3 py-2 text-xs"
+                  className="grid grid-cols-[4rem_1fr] gap-2 px-2 py-1.5 text-xs"
                 >
                   <time className="font-mono text-[11px] text-muted-foreground">
                     {logTime(entry.timestamp)}

@@ -4,11 +4,6 @@ import { storage } from "@/lib/storage";
 import type { ImageCandidate, NodeDefinition } from "../types";
 import { rankImagesMeta, type RankImagesConfig } from "./meta";
 
-/**
- * Ranks candidate images with a configured vision-capable AI connection. Sends
- * every candidate URL plus the location + criteria, and asks for a structured
- * ranking (json_schema) so we get a deterministic ordered list back.
- */
 const responseSchema = {
   type: "object",
   additionalProperties: false,
@@ -80,10 +75,22 @@ interface SelectedCandidate {
   rotationDegrees: RotationDegrees;
 }
 
-interface PreparedAzureImage {
+interface PreparedProviderImage {
   candidate: ImageCandidate;
-  dataUrl: string;
+  visionUrl: string;
   sourceIndex: number;
+}
+
+interface ScoredPreparedImage {
+  image: PreparedProviderImage;
+  score: number;
+  reason: string;
+}
+
+interface SelectedPreparedImage {
+  image: PreparedProviderImage;
+  reason: string;
+  rotationDegrees: RotationDegrees;
 }
 
 type ChatMessages = { role: "user"; content: unknown[] }[];
@@ -96,9 +103,23 @@ type ResponseFormat = {
   };
 };
 
+type LogFn = (message: string) => void | Promise<void>;
+type CheckpointFn = () => Promise<void>;
+
 const IMAGE_FETCH_USER_AGENT = "Ignis/0.1 (https://github.com/danstta/ignis)";
+const MAX_CANDIDATES = 100;
 const MAX_AZURE_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_NORMALIZED_IMAGE_BYTES = 25 * 1024 * 1024;
+const IMAGE_FETCH_TIMEOUT_MS = 20_000;
+const CHAT_COMPLETION_TIMEOUT_MS = 45_000;
+const AZURE_RANK_CHUNK_SIZE = 4;
+const OPENAI_RANK_CHUNK_SIZE = 8;
+const DIVERSITY_CHUNK_SIZE = 6;
+const PROVIDER_CHUNK_CONCURRENCY = 8;
+const IMAGE_FETCH_CONCURRENCY = 12;
+const NORMALIZE_CONCURRENCY = 8;
+
+const noopCheckpoint: CheckpointFn = async () => {};
 
 class ProviderRequestError extends Error {
   constructor(
@@ -107,6 +128,12 @@ class ProviderRequestError extends Error {
     readonly status: number,
     readonly body: string,
   ) {
+    super(message);
+  }
+}
+
+class RequestTimeoutError extends Error {
+  constructor(message: string) {
     super(message);
   }
 }
@@ -136,11 +163,65 @@ function normalizeCandidates(value: unknown): ImageCandidate[] {
   });
 }
 
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const workerCount = Math.min(Math.max(1, concurrency), items.length);
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (true) {
+        const index = next++;
+        if (index >= items.length) return;
+        results[index] = await mapper(items[index], index);
+      }
+    }),
+  );
+  return results;
+}
+
+async function writeLog(log: LogFn, message: string) {
+  await log(message);
+}
+
+async function fetchWithTimeout(
+  input: Parameters<typeof fetch>[0],
+  init: RequestInit,
+  timeoutMs: number,
+  label: string,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (err) {
+    if (controller.signal.aborted) {
+      throw new RequestTimeoutError(
+        `${label} timed out after ${Math.round(timeoutMs / 1000)}s`,
+      );
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function buildMessages(
   criteria: string,
   location: string,
   imageUrls: string[],
-): { role: "user"; content: unknown[] }[] {
+): ChatMessages {
   const content: unknown[] = [
     {
       type: "text",
@@ -148,7 +229,7 @@ function buildMessages(
         `Rank these ${imageUrls.length} candidate photos for the location "${location}".\n` +
         `Criteria: ${criteria}\n` +
         `Each image is given in order, index 0..${imageUrls.length - 1}. ` +
-        `Return a ranking where a higher score is a better fit.`,
+        `Return a ranking where a higher score is a better fit. Use a 0-100 score scale so scores remain comparable across separate batches.`,
     },
     ...imageUrls.map((url) => ({
       type: "image_url",
@@ -164,7 +245,7 @@ function buildDiverseSelectionMessages(
   location: string,
   selectionCount: number,
   imageUrls: string[],
-): { role: "user"; content: unknown[] }[] {
+): ChatMessages {
   const content: unknown[] = [
     {
       type: "text",
@@ -192,27 +273,37 @@ function buildDiverseSelectionMessages(
   return [{ role: "user", content }];
 }
 
-const responseFormat = {
+const responseFormat: ResponseFormat = {
   type: "json_schema",
   json_schema: {
     name: "image_ranking",
     strict: true,
     schema: responseSchema,
   },
-} as const;
+};
 
-const diverseSelectionResponseFormat = {
+const diverseSelectionResponseFormat: ResponseFormat = {
   type: "json_schema",
   json_schema: {
     name: "diverse_image_selection",
     strict: true,
     schema: diverseSelectionSchema,
   },
-} as const;
+};
+
+function parseAssistantJson<T>(text: string, provider: string): T {
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenced) return JSON.parse(fenced[1]) as T;
+    throw new Error(`${provider} returned invalid JSON: ${text.slice(0, 500)}`);
+  }
+}
 
 async function parseJsonResponse<T>(res: Response, provider: string): Promise<T> {
+  const body = await res.text();
   if (!res.ok) {
-    const body = await res.text();
     throw new ProviderRequestError(
       `${provider} ${res.status}: ${body}`,
       provider,
@@ -220,11 +311,13 @@ async function parseJsonResponse<T>(res: Response, provider: string): Promise<T>
       body,
     );
   }
-  const json = (await res.json()) as {
-    choices?: { message?: { content?: string } }[];
+
+  const json = JSON.parse(body) as {
+    choices?: { message?: { content?: string | unknown[] } }[];
   };
-  const text = json.choices?.[0]?.message?.content ?? "{}";
-  return JSON.parse(text) as T;
+  const content = json.choices?.[0]?.message?.content;
+  const text = typeof content === "string" ? content : "{}";
+  return parseAssistantJson<T>(text, provider);
 }
 
 function isAzureContentPolicyViolation(err: unknown): boolean {
@@ -247,12 +340,25 @@ function isAzureContentPolicyViolation(err: unknown): boolean {
   );
 }
 
+function shouldSplitProviderError(err: unknown): boolean {
+  if (!(err instanceof ProviderRequestError)) return false;
+  const body = err.body.toLowerCase();
+  return (
+    err.status === 413 ||
+    body.includes("too many image") ||
+    body.includes("too large") ||
+    body.includes("payload") ||
+    body.includes("maximum context") ||
+    body.includes("context length")
+  );
+}
+
 async function parseRankingResponse(res: Response, provider: string) {
   const parsed = await parseJsonResponse<{ ranking?: RankingEntry[] }>(
     res,
     provider,
   );
-  return parsed.ranking ?? [];
+  return Array.isArray(parsed.ranking) ? parsed.ranking : [];
 }
 
 async function parseDiverseSelectionResponse(res: Response, provider: string) {
@@ -260,16 +366,10 @@ async function parseDiverseSelectionResponse(res: Response, provider: string) {
     res,
     provider,
   );
-  return parsed.selection ?? [];
+  return Array.isArray(parsed.selection) ? parsed.selection : [];
 }
 
-async function rankWithOpenAI(
-  config: Record<string, unknown>,
-  model: string,
-  criteria: string,
-  location: string,
-  candidates: ImageCandidate[],
-): Promise<RankingResult> {
+function openAIHeaders(config: Record<string, unknown>) {
   const apiKey = String(config.apiKey ?? "").trim();
   if (!apiKey) throw new Error("OpenAI connection is missing an API key.");
 
@@ -281,122 +381,36 @@ async function rankWithOpenAI(
   const projectId = String(config.projectId ?? "").trim();
   if (organizationId) headers["OpenAI-Organization"] = organizationId;
   if (projectId) headers["OpenAI-Project"] = projectId;
-
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      model,
-      messages: buildMessages(
-        criteria,
-        location,
-        candidates.map((candidate) => candidate.url),
-      ),
-      response_format: responseFormat,
-    }),
-  });
-  return { ranking: await parseRankingResponse(res, "OpenAI"), candidates };
+  return headers;
 }
 
-async function selectDiverseWithOpenAI(
+async function sendOpenAIChatCompletion(
   config: Record<string, unknown>,
   model: string,
-  criteria: string,
-  location: string,
-  candidates: ImageCandidate[],
-  selectionCount: number,
-): Promise<DiverseSelectionResult> {
-  const apiKey = String(config.apiKey ?? "").trim();
-  if (!apiKey) throw new Error("OpenAI connection is missing an API key.");
-
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${apiKey}`,
-  };
-  const organizationId = String(config.organizationId ?? "").trim();
-  const projectId = String(config.projectId ?? "").trim();
-  if (organizationId) headers["OpenAI-Organization"] = organizationId;
-  if (projectId) headers["OpenAI-Project"] = projectId;
-
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      model,
-      messages: buildDiverseSelectionMessages(
-        criteria,
-        location,
-        selectionCount,
-        candidates.map((candidate) => candidate.url),
-      ),
-      response_format: diverseSelectionResponseFormat,
-    }),
-  });
-  return {
-    selection: await parseDiverseSelectionResponse(res, "OpenAI"),
-    candidates,
-  };
-}
-
-async function imageUrlToDataUrl(candidate: ImageCandidate): Promise<string> {
-  const res = await fetch(candidate.url, {
-    headers: {
-      Accept: "image/*",
-      "User-Agent": IMAGE_FETCH_USER_AGENT,
+  messages: ChatMessages,
+  format: ResponseFormat,
+): Promise<Response> {
+  return fetchWithTimeout(
+    "https://api.openai.com/v1/chat/completions",
+    {
+      method: "POST",
+      headers: openAIHeaders(config),
+      body: JSON.stringify({
+        model,
+        messages,
+        response_format: format,
+      }),
     },
-  });
-  if (!res.ok) {
-    throw new Error(`${res.status}: ${await res.text()}`);
-  }
-
-  const contentType = res.headers.get("content-type")?.split(";")[0] ?? "";
-  if (!contentType.startsWith("image/")) {
-    throw new Error(
-      `expected image content-type, got "${contentType || "unknown"}"`,
-    );
-  }
-
-  const contentLength = Number(res.headers.get("content-length") ?? 0);
-  if (contentLength > MAX_AZURE_IMAGE_BYTES) {
-    throw new Error(`image is ${contentLength} bytes`);
-  }
-
-  const bytes = await res.arrayBuffer();
-  if (bytes.byteLength > MAX_AZURE_IMAGE_BYTES) {
-    throw new Error(`image is ${bytes.byteLength} bytes`);
-  }
-
-  return `data:${contentType};base64,${Buffer.from(bytes).toString("base64")}`;
-}
-
-async function prepareAzureImages(
-  candidates: ImageCandidate[],
-  log: (message: string) => void,
-): Promise<PreparedAzureImage[]> {
-  const settled = await Promise.allSettled(
-    candidates.map(async (candidate, sourceIndex) => ({
-      candidate,
-      dataUrl: await imageUrlToDataUrl(candidate),
-      sourceIndex,
-    })),
+    CHAT_COMPLETION_TIMEOUT_MS,
+    "OpenAI chat completion",
   );
-
-  return settled.flatMap((result, index) => {
-    if (result.status === "fulfilled") return [result.value];
-    const reason =
-      result.reason instanceof Error ? result.reason.message : result.reason;
-    log(
-      `Skipping image candidate ${index} because it could not be prepared for Azure: ${reason}`,
-    );
-    return [];
-  });
 }
 
 async function sendAzureChatCompletion(
   config: Record<string, unknown>,
   deploymentName: string,
   messages: ChatMessages,
-  responseFormat: ResponseFormat,
+  format: ResponseFormat,
 ): Promise<Response> {
   const endpoint = String(config.endpoint ?? "").trim().replace(/\/+$/, "");
   const apiKey = String(config.apiKey ?? "").trim();
@@ -421,141 +435,346 @@ async function sendAzureChatCompletion(
     );
   }
 
-  const body = {
-    ...(usesUnifiedV1Endpoint ? { model: deploymentName } : {}),
-    messages,
-    response_format: responseFormat,
-  };
-
-  return fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "api-key": apiKey,
+  return fetchWithTimeout(
+    url,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "api-key": apiKey,
+      },
+      body: JSON.stringify({
+        ...(usesUnifiedV1Endpoint ? { model: deploymentName } : {}),
+        messages,
+        response_format: format,
+      }),
     },
-    body: JSON.stringify(body),
-  });
-}
-
-async function filterAzureContentSafeImages(input: {
-  config: Record<string, unknown>;
-  deploymentName: string;
-  preparedImages: PreparedAzureImage[];
-  buildProbeMessages: (dataUrl: string) => ChatMessages;
-  responseFormat: ResponseFormat;
-  log: (message: string) => void;
-}): Promise<PreparedAzureImage[]> {
-  const settled = await Promise.allSettled(
-    input.preparedImages.map(async (image) => {
-      const res = await sendAzureChatCompletion(
-        input.config,
-        input.deploymentName,
-        input.buildProbeMessages(image.dataUrl),
-        input.responseFormat,
-      );
-      await parseJsonResponse<unknown>(res, "Azure");
-      return image;
-    }),
+    CHAT_COMPLETION_TIMEOUT_MS,
+    "Azure chat completion",
   );
-
-  return settled.flatMap((result, index) => {
-    if (result.status === "fulfilled") return [result.value];
-    if (isAzureContentPolicyViolation(result.reason)) {
-      const image = input.preparedImages[index];
-      input.log(
-        `Skipping image candidate ${image?.sourceIndex ?? index} because Azure content safety blocked it.`,
-      );
-      return [];
-    }
-    throw result.reason;
-  });
 }
 
-async function requestAzureWithContentPolicyRetry<T>(input: {
-  config: Record<string, unknown>;
-  deploymentName: string;
-  preparedImages: PreparedAzureImage[];
-  buildMessages: (dataUrls: string[]) => ChatMessages;
-  responseFormat: ResponseFormat;
-  parse: (res: Response) => Promise<T>;
-  buildProbeMessages: (dataUrl: string) => ChatMessages;
-  combineIndividualValues: (
-    results: { value: T; image: PreparedAzureImage }[],
-  ) => T;
-  stage: string;
-  log: (message: string) => void;
-}): Promise<{ value: T; images: PreparedAzureImage[] }> {
-  const send = async (images: PreparedAzureImage[]) => {
-    const res = await sendAzureChatCompletion(
-      input.config,
-      input.deploymentName,
-      input.buildMessages(images.map((image) => image.dataUrl)),
-      input.responseFormat,
-    );
-    return input.parse(res);
+function prepareUrlImages(candidates: ImageCandidate[]): PreparedProviderImage[] {
+  return candidates.map((candidate, sourceIndex) => ({
+    candidate,
+    visionUrl: candidate.url,
+    sourceIndex,
+  }));
+}
+
+function parseDataUrl(url: string): { bytes: Buffer; contentType: string } {
+  const match = url.match(/^data:([^;,]+)(;base64)?,(.*)$/);
+  if (!match) throw new Error("invalid data URL");
+  return {
+    contentType: match[1],
+    bytes: Buffer.from(
+      decodeURIComponent(match[3]),
+      match[2] ? "base64" : "utf8",
+    ),
   };
+}
 
-  const safeImages = await filterAzureContentSafeImages({
-    config: input.config,
-    deploymentName: input.deploymentName,
-    preparedImages: input.preparedImages,
-    buildProbeMessages: input.buildProbeMessages,
-    responseFormat: input.responseFormat,
-    log: input.log,
-  });
-  if (safeImages.length === 0) {
-    throw new Error(
-      `Azure content safety blocked every image during ${input.stage}.`,
-    );
+async function fetchImageBytes(
+  candidate: ImageCandidate,
+  maxBytes: number,
+): Promise<{
+  bytes: Buffer;
+  contentType: string;
+}> {
+  if (candidate.url.startsWith("data:")) {
+    const parsed = parseDataUrl(candidate.url);
+    if (parsed.bytes.byteLength > maxBytes) {
+      throw new Error(`image is ${parsed.bytes.byteLength} bytes`);
+    }
+    return parsed;
   }
 
-  if (safeImages.length < input.preparedImages.length) {
-    input.log(
-      `Continuing ${input.stage} with ${safeImages.length}/${input.preparedImages.length} content-safe image(s).`,
-    );
+  if (!/^https?:\/\//i.test(candidate.url)) {
+    throw new Error(`unsupported image URL scheme: ${candidate.url.slice(0, 40)}`);
   }
 
-  try {
-    return { value: await send(safeImages), images: safeImages };
-  } catch (err) {
-    if (!isAzureContentPolicyViolation(err)) throw err;
-    input.log(
-      `Azure content safety still blocked ${input.stage} after preflight; retrying one image at a time and skipping blocked images.`,
-    );
-  }
-
-  const settled = await Promise.allSettled(
-    safeImages.map(async (image) => ({
-      image,
-      value: await send([image]),
-    })),
+  const res = await fetchWithTimeout(
+    candidate.url,
+    {
+      headers: {
+        Accept: "image/*",
+        "User-Agent": IMAGE_FETCH_USER_AGENT,
+      },
+    },
+    IMAGE_FETCH_TIMEOUT_MS,
+    "image fetch",
   );
-  const accepted: { value: T; image: PreparedAzureImage }[] = [];
-  settled.forEach((result, index) => {
-    if (result.status === "fulfilled") {
-      accepted.push(result.value);
-      return;
-    }
-    if (isAzureContentPolicyViolation(result.reason)) {
-      const image = safeImages[index];
-      input.log(
-        `Skipping image candidate ${image?.sourceIndex ?? index} because Azure content safety blocked it.`,
-      );
-      return;
-    }
-    throw result.reason;
-  });
+  if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
 
-  if (accepted.length === 0) {
-    throw new Error(
-      `Azure content safety blocked every image during ${input.stage}.`,
+  const contentType = res.headers.get("content-type")?.split(";")[0] ?? "";
+  if (!contentType.startsWith("image/")) {
+    throw new Error(`expected image content-type, got "${contentType || "unknown"}"`);
+  }
+
+  const contentLength = Number(res.headers.get("content-length") ?? 0);
+  if (contentLength > maxBytes) {
+    throw new Error(`image is ${contentLength} bytes`);
+  }
+
+  const bytes = Buffer.from(await res.arrayBuffer());
+  if (bytes.byteLength > maxBytes) {
+    throw new Error(`image is ${bytes.byteLength} bytes`);
+  }
+
+  return { bytes, contentType };
+}
+
+async function imageUrlToDataUrl(candidate: ImageCandidate): Promise<string> {
+  const { bytes, contentType } = await fetchImageBytes(
+    candidate,
+    MAX_AZURE_IMAGE_BYTES,
+  );
+  return `data:${contentType};base64,${bytes.toString("base64")}`;
+}
+
+async function prepareAzureImages(
+  candidates: ImageCandidate[],
+  log: LogFn,
+  checkpoint: CheckpointFn,
+): Promise<PreparedProviderImage[]> {
+  const prepared = await mapWithConcurrency(
+    candidates,
+    IMAGE_FETCH_CONCURRENCY,
+    async (candidate, sourceIndex) => {
+      await checkpoint();
+      try {
+        return {
+          candidate,
+          visionUrl: await imageUrlToDataUrl(candidate),
+          sourceIndex,
+        };
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err);
+        await writeLog(
+          log,
+          `Skipping image candidate ${sourceIndex} because it could not be prepared for Azure: ${reason}`,
+        );
+        return null;
+      }
+    },
+  );
+  return prepared.filter((image): image is PreparedProviderImage => Boolean(image));
+}
+
+function sanitizeScore(value: unknown): number {
+  const score = Number(value);
+  if (!Number.isFinite(score)) return 0;
+  return Math.max(0, Math.min(100, score));
+}
+
+function sanitizeRotation(value: unknown): RotationDegrees {
+  return value === 90 || value === 180 || value === 270 ? value : 0;
+}
+
+function normalizeRankingEntries(
+  entries: RankingEntry[],
+  images: PreparedProviderImage[],
+): ScoredPreparedImage[] {
+  const seen = new Set<number>();
+  return entries.flatMap((entry) => {
+    const localIndex = Math.trunc(Number(entry.index));
+    const image = images[localIndex];
+    if (!image || seen.has(localIndex)) return [];
+    seen.add(localIndex);
+    return [
+      {
+        image,
+        score: sanitizeScore(entry.score),
+        reason:
+          typeof entry.reason === "string" && entry.reason.trim()
+            ? entry.reason
+            : "Ranked by vision model.",
+      },
+    ];
+  });
+}
+
+function normalizeSelectionEntries(
+  entries: DiverseSelectionEntry[],
+  images: PreparedProviderImage[],
+): SelectedPreparedImage[] {
+  const seen = new Set<number>();
+  return entries.flatMap((entry) => {
+    const localIndex = Math.trunc(Number(entry.index));
+    const image = images[localIndex];
+    if (!image || seen.has(localIndex)) return [];
+    seen.add(localIndex);
+    return [
+      {
+        image,
+        reason:
+          typeof entry.reason === "string" && entry.reason.trim()
+            ? entry.reason
+            : "Selected by vision model.",
+        rotationDegrees: sanitizeRotation(entry.rotationDegrees),
+      },
+    ];
+  });
+}
+
+function uniquePreparedImages(
+  images: PreparedProviderImage[],
+): PreparedProviderImage[] {
+  const bySourceIndex = new Map<number, PreparedProviderImage>();
+  for (const image of images) bySourceIndex.set(image.sourceIndex, image);
+  return [...bySourceIndex.values()].sort((a, b) => a.sourceIndex - b.sourceIndex);
+}
+
+async function rankPreparedChunk(input: {
+  images: PreparedProviderImage[];
+  send: (images: PreparedProviderImage[]) => Promise<RankingEntry[]>;
+  provider: "OpenAI" | "Azure";
+  log: LogFn;
+  checkpoint: CheckpointFn;
+}): Promise<{
+  acceptedImages: PreparedProviderImage[];
+  scored: ScoredPreparedImage[];
+}> {
+  await input.checkpoint();
+  try {
+    const ranking = await input.send(input.images);
+    return {
+      acceptedImages: input.images,
+      scored: normalizeRankingEntries(ranking, input.images),
+    };
+  } catch (err) {
+    if (input.provider === "Azure" && isAzureContentPolicyViolation(err)) {
+      if (input.images.length === 1) {
+        await writeLog(
+          input.log,
+          `Skipping image candidate ${input.images[0].sourceIndex} because Azure content safety blocked it.`,
+        );
+        return { acceptedImages: [], scored: [] };
+      }
+      await writeLog(
+        input.log,
+        `Azure content safety blocked a ${input.images.length}-image ranking chunk; retrying that chunk one image at a time.`,
+      );
+      const results = await mapWithConcurrency(
+        input.images,
+        PROVIDER_CHUNK_CONCURRENCY,
+        (image) => rankPreparedChunk({ ...input, images: [image] }),
+      );
+      return {
+        acceptedImages: results.flatMap((result) => result.acceptedImages),
+        scored: results.flatMap((result) => result.scored),
+      };
+    }
+
+    if (
+      (err instanceof RequestTimeoutError || shouldSplitProviderError(err)) &&
+      input.images.length > 1
+    ) {
+      await writeLog(
+        input.log,
+        `${input.provider} could not rank a ${input.images.length}-image chunk (${err instanceof Error ? err.message : String(err)}); splitting it into smaller chunks.`,
+      );
+      const midpoint = Math.ceil(input.images.length / 2);
+      const left = await rankPreparedChunk({
+        ...input,
+        images: input.images.slice(0, midpoint),
+      });
+      const right = await rankPreparedChunk({
+        ...input,
+        images: input.images.slice(midpoint),
+      });
+      return {
+        acceptedImages: [...left.acceptedImages, ...right.acceptedImages],
+        scored: [...left.scored, ...right.scored],
+      };
+    }
+
+    if (err instanceof RequestTimeoutError && input.images.length === 1) {
+      await writeLog(
+        input.log,
+        `Skipping image candidate ${input.images[0].sourceIndex} because ${input.provider} timed out while ranking it.`,
+      );
+      return { acceptedImages: [], scored: [] };
+    }
+
+    throw err;
+  }
+}
+
+async function rankPreparedImages(input: {
+  preparedImages: PreparedProviderImage[];
+  chunkSize: number;
+  send: (images: PreparedProviderImage[]) => Promise<RankingEntry[]>;
+  provider: "OpenAI" | "Azure";
+  log: LogFn;
+  checkpoint: CheckpointFn;
+}): Promise<RankingResult> {
+  const chunks = chunkArray(input.preparedImages, input.chunkSize);
+  if (chunks.length > 1) {
+    await writeLog(
+      input.log,
+      `Ranking ${input.preparedImages.length} image candidate(s) in ${chunks.length} ${input.provider} request chunk(s).`,
     );
   }
+
+  const chunkResults = await mapWithConcurrency(
+    chunks,
+    PROVIDER_CHUNK_CONCURRENCY,
+    (images) => rankPreparedChunk({ ...input, images }),
+  );
+  const acceptedImages = uniquePreparedImages(
+    chunkResults.flatMap((result) => result.acceptedImages),
+  );
+  if (acceptedImages.length === 0) {
+    throw new Error(`${input.provider} could not rank any image candidates.`);
+  }
+
+  const indexBySource = new Map(
+    acceptedImages.map((image, index) => [image.sourceIndex, index]),
+  );
+  const ranking = chunkResults
+    .flatMap((result) => result.scored)
+    .flatMap((scored) => {
+      const index = indexBySource.get(scored.image.sourceIndex);
+      if (index === undefined) return [];
+      return [{ index, score: scored.score, reason: scored.reason }];
+    });
 
   return {
-    value: input.combineIndividualValues(accepted),
-    images: accepted.map((result) => result.image),
+    ranking,
+    candidates: acceptedImages.map((image) => image.candidate),
   };
+}
+
+async function rankWithOpenAI(
+  config: Record<string, unknown>,
+  model: string,
+  criteria: string,
+  location: string,
+  candidates: ImageCandidate[],
+  log: LogFn,
+  checkpoint: CheckpointFn,
+): Promise<RankingResult> {
+  return rankPreparedImages({
+    preparedImages: prepareUrlImages(candidates),
+    chunkSize: OPENAI_RANK_CHUNK_SIZE,
+    provider: "OpenAI",
+    log,
+    checkpoint,
+    send: async (images) => {
+      const res = await sendOpenAIChatCompletion(
+        config,
+        model,
+        buildMessages(
+          criteria,
+          location,
+          images.map((image) => image.visionUrl),
+        ),
+        responseFormat,
+      );
+      return parseRankingResponse(res, "OpenAI");
+    },
+  });
 }
 
 async function rankWithAzure(
@@ -564,42 +783,220 @@ async function rankWithAzure(
   criteria: string,
   location: string,
   candidates: ImageCandidate[],
-  log: (message: string) => void,
+  log: LogFn,
+  checkpoint: CheckpointFn,
 ): Promise<RankingResult> {
-  const preparedImages = await prepareAzureImages(candidates, log);
+  const preparedImages = await prepareAzureImages(candidates, log, checkpoint);
   if (preparedImages.length === 0) {
     throw new Error("No image candidates could be prepared for Azure vision.");
   }
 
-  const result = await requestAzureWithContentPolicyRetry({
-    config,
-    deploymentName,
+  return rankPreparedImages({
     preparedImages,
-    buildMessages: (dataUrls) => buildMessages(criteria, location, dataUrls),
-    responseFormat,
-    parse: (res) => parseRankingResponse(res, "Azure"),
-    buildProbeMessages: (dataUrl) =>
-      buildMessages(
-        "Check whether this image can be processed. Return any valid ranking.",
-        location,
-        [dataUrl],
-      ),
-    combineIndividualValues: (results) =>
-      results.map(({ value }, index) => {
-        const entry = value.find((item) => item.index === 0) ?? value[0];
-        return {
-          index,
-          score: entry?.score ?? 0,
-          reason: entry?.reason ?? "Ranked individually after Azure blocked the batch.",
-        };
-      }),
-    stage: "image ranking",
+    chunkSize: AZURE_RANK_CHUNK_SIZE,
+    provider: "Azure",
     log,
+    checkpoint,
+    send: async (images) => {
+      const res = await sendAzureChatCompletion(
+        config,
+        deploymentName,
+        buildMessages(
+          criteria,
+          location,
+          images.map((image) => image.visionUrl),
+        ),
+        responseFormat,
+      );
+      return parseRankingResponse(res, "Azure");
+    },
   });
+}
+
+function selectionCountForChunk(
+  totalImages: number,
+  totalSelections: number,
+  chunkLength: number,
+) {
+  if (totalImages <= 0) return 0;
+  return Math.min(
+    chunkLength,
+    Math.max(1, Math.ceil((totalSelections * chunkLength) / totalImages) + 1),
+  );
+}
+
+async function selectPreparedChunk(input: {
+  images: PreparedProviderImage[];
+  totalImages: number;
+  selectionCount: number;
+  send: (
+    images: PreparedProviderImage[],
+    selectionCount: number,
+  ) => Promise<DiverseSelectionEntry[]>;
+  provider: "OpenAI" | "Azure";
+  log: LogFn;
+  checkpoint: CheckpointFn;
+}): Promise<{
+  acceptedImages: PreparedProviderImage[];
+  selected: SelectedPreparedImage[];
+}> {
+  await input.checkpoint();
+  try {
+    const count = selectionCountForChunk(
+      input.totalImages,
+      input.selectionCount,
+      input.images.length,
+    );
+    const selection = await input.send(input.images, count);
+    return {
+      acceptedImages: input.images,
+      selected: normalizeSelectionEntries(selection, input.images),
+    };
+  } catch (err) {
+    if (input.provider === "Azure" && isAzureContentPolicyViolation(err)) {
+      if (input.images.length === 1) {
+        await writeLog(
+          input.log,
+          `Skipping image candidate ${input.images[0].sourceIndex} because Azure content safety blocked it.`,
+        );
+        return { acceptedImages: [], selected: [] };
+      }
+      await writeLog(
+        input.log,
+        `Azure content safety blocked a ${input.images.length}-image diversity chunk; retrying that chunk one image at a time.`,
+      );
+      const results = await mapWithConcurrency(
+        input.images,
+        PROVIDER_CHUNK_CONCURRENCY,
+        (image) => selectPreparedChunk({ ...input, images: [image] }),
+      );
+      return {
+        acceptedImages: results.flatMap((result) => result.acceptedImages),
+        selected: results.flatMap((result) => result.selected),
+      };
+    }
+
+    if (
+      (err instanceof RequestTimeoutError || shouldSplitProviderError(err)) &&
+      input.images.length > 1
+    ) {
+      await writeLog(
+        input.log,
+        `${input.provider} could not select from a ${input.images.length}-image diversity chunk (${err instanceof Error ? err.message : String(err)}); splitting it into smaller chunks.`,
+      );
+      const midpoint = Math.ceil(input.images.length / 2);
+      const left = await selectPreparedChunk({
+        ...input,
+        images: input.images.slice(0, midpoint),
+      });
+      const right = await selectPreparedChunk({
+        ...input,
+        images: input.images.slice(midpoint),
+      });
+      return {
+        acceptedImages: [...left.acceptedImages, ...right.acceptedImages],
+        selected: [...left.selected, ...right.selected],
+      };
+    }
+
+    if (err instanceof RequestTimeoutError && input.images.length === 1) {
+      await writeLog(
+        input.log,
+        `Skipping image candidate ${input.images[0].sourceIndex} because ${input.provider} timed out while selecting it.`,
+      );
+      return { acceptedImages: [], selected: [] };
+    }
+
+    throw err;
+  }
+}
+
+async function selectPreparedImages(input: {
+  preparedImages: PreparedProviderImage[];
+  selectionCount: number;
+  send: (
+    images: PreparedProviderImage[],
+    selectionCount: number,
+  ) => Promise<DiverseSelectionEntry[]>;
+  provider: "OpenAI" | "Azure";
+  log: LogFn;
+  checkpoint: CheckpointFn;
+}): Promise<DiverseSelectionResult> {
+  const chunks = chunkArray(input.preparedImages, DIVERSITY_CHUNK_SIZE);
+  if (chunks.length > 1) {
+    await writeLog(
+      input.log,
+      `Selecting diverse images from ${input.preparedImages.length} ranked candidate(s) in ${chunks.length} ${input.provider} request chunk(s).`,
+    );
+  }
+
+  const chunkResults = await mapWithConcurrency(
+    chunks,
+    PROVIDER_CHUNK_CONCURRENCY,
+    (images) =>
+      selectPreparedChunk({
+        ...input,
+        images,
+        totalImages: input.preparedImages.length,
+      }),
+  );
+  const acceptedImages = uniquePreparedImages(
+    chunkResults.flatMap((result) => result.acceptedImages),
+  );
+  const indexBySource = new Map(
+    acceptedImages.map((image, index) => [image.sourceIndex, index]),
+  );
+  const selection = chunkResults
+    .flatMap((result) => result.selected)
+    .flatMap((selected) => {
+      const index = indexBySource.get(selected.image.sourceIndex);
+      if (index === undefined) return [];
+      return [
+        {
+          index,
+          reason: selected.reason,
+          rotationDegrees: selected.rotationDegrees,
+        },
+      ];
+    });
+
   return {
-    ranking: result.value,
-    candidates: result.images.map((image) => image.candidate),
+    selection,
+    candidates: acceptedImages.map((image) => image.candidate),
   };
+}
+
+async function selectDiverseWithOpenAI(
+  config: Record<string, unknown>,
+  model: string,
+  criteria: string,
+  location: string,
+  candidates: ImageCandidate[],
+  selectionCount: number,
+  log: LogFn,
+  checkpoint: CheckpointFn,
+): Promise<DiverseSelectionResult> {
+  return selectPreparedImages({
+    preparedImages: prepareUrlImages(candidates),
+    selectionCount,
+    provider: "OpenAI",
+    log,
+    checkpoint,
+    send: async (images, count) => {
+      const res = await sendOpenAIChatCompletion(
+        config,
+        model,
+        buildDiverseSelectionMessages(
+          criteria,
+          location,
+          count,
+          images.map((image) => image.visionUrl),
+        ),
+        diverseSelectionResponseFormat,
+      );
+      return parseDiverseSelectionResponse(res, "OpenAI");
+    },
+  });
 }
 
 async function selectDiverseWithAzure(
@@ -609,44 +1006,35 @@ async function selectDiverseWithAzure(
   location: string,
   candidates: ImageCandidate[],
   selectionCount: number,
-  log: (message: string) => void,
+  log: LogFn,
+  checkpoint: CheckpointFn,
 ): Promise<DiverseSelectionResult> {
-  const preparedImages = await prepareAzureImages(candidates, log);
+  const preparedImages = await prepareAzureImages(candidates, log, checkpoint);
   if (preparedImages.length === 0) {
     throw new Error("No image candidates could be prepared for Azure vision.");
   }
 
-  const result = await requestAzureWithContentPolicyRetry({
-    config,
-    deploymentName,
+  return selectPreparedImages({
     preparedImages,
-    buildMessages: (dataUrls) =>
-      buildDiverseSelectionMessages(criteria, location, selectionCount, dataUrls),
-    responseFormat: diverseSelectionResponseFormat,
-    parse: (res) => parseDiverseSelectionResponse(res, "Azure"),
-    buildProbeMessages: (dataUrl) =>
-      buildDiverseSelectionMessages(criteria, location, 1, [dataUrl]),
-    combineIndividualValues: (results) =>
-      results.flatMap(({ value }, index) => {
-        const entry = value.find((item) => item.index === 0) ?? value[0];
-        if (!entry) return [];
-        return [
-          {
-            index,
-            reason:
-              entry.reason ??
-              "Selected individually after Azure blocked the batch.",
-            rotationDegrees: entry.rotationDegrees,
-          },
-        ];
-      }),
-    stage: "diverse image selection",
+    selectionCount,
+    provider: "Azure",
     log,
+    checkpoint,
+    send: async (images, count) => {
+      const res = await sendAzureChatCompletion(
+        config,
+        deploymentName,
+        buildDiverseSelectionMessages(
+          criteria,
+          location,
+          count,
+          images.map((image) => image.visionUrl),
+        ),
+        diverseSelectionResponseFormat,
+      );
+      return parseDiverseSelectionResponse(res, "Azure");
+    },
   });
-  return {
-    selection: result.value,
-    candidates: result.images.map((image) => image.candidate),
-  };
 }
 
 function selectFromDiversityPlan(
@@ -678,59 +1066,21 @@ function selectFromDiversityPlan(
   return selected;
 }
 
-async function fetchImageBytes(candidate: ImageCandidate): Promise<{
-  bytes: Buffer;
-  contentType: string;
-}> {
-  if (candidate.url.startsWith("data:")) {
-    const match = candidate.url.match(/^data:([^;,]+)(;base64)?,(.*)$/);
-    if (!match) throw new Error("invalid data URL");
-    const contentType = match[1];
-    const bytes = Buffer.from(
-      decodeURIComponent(match[3]),
-      match[2] ? "base64" : "utf8",
-    );
-    return { bytes, contentType };
-  }
-
-  if (!/^https?:\/\//i.test(candidate.url)) {
-    throw new Error(`unsupported image URL scheme: ${candidate.url.slice(0, 40)}`);
-  }
-
-  const res = await fetch(candidate.url, {
-    headers: {
-      Accept: "image/*",
-      "User-Agent": IMAGE_FETCH_USER_AGENT,
-    },
-  });
-  if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
-
-  const contentType = res.headers.get("content-type")?.split(";")[0] ?? "";
-  if (!contentType.startsWith("image/")) {
-    throw new Error(`expected image content-type, got "${contentType || "unknown"}"`);
-  }
-
-  const contentLength = Number(res.headers.get("content-length") ?? 0);
-  if (contentLength > MAX_NORMALIZED_IMAGE_BYTES) {
-    throw new Error(`image is ${contentLength} bytes`);
-  }
-
-  const bytes = Buffer.from(await res.arrayBuffer());
-  if (bytes.byteLength > MAX_NORMALIZED_IMAGE_BYTES) {
-    throw new Error(`image is ${bytes.byteLength} bytes`);
-  }
-
-  return { bytes, contentType };
-}
-
 async function normalizeSelectedImages(
   selected: SelectedCandidate[],
-  log: (message: string) => void,
+  log: LogFn,
+  checkpoint: CheckpointFn,
 ): Promise<ImageCandidate[]> {
-  return Promise.all(
-    selected.map(async ({ candidate, rotationDegrees }, index) => {
+  return mapWithConcurrency(
+    selected,
+    NORMALIZE_CONCURRENCY,
+    async ({ candidate, rotationDegrees }, index) => {
+      await checkpoint();
       try {
-        const { bytes, contentType } = await fetchImageBytes(candidate);
+        const { bytes, contentType } = await fetchImageBytes(
+          candidate,
+          MAX_NORMALIZED_IMAGE_BYTES,
+        );
         if (contentType === "image/svg+xml" || contentType === "image/gif") {
           return candidate;
         }
@@ -747,16 +1097,20 @@ async function normalizeSelectedImages(
           normalized,
           "image/jpeg",
         );
-        log(
+        await writeLog(
+          log,
           `normalized selected image ${index + 1} (${rotationDegrees}deg) -> ${url}`,
         );
         return { ...candidate, url };
       } catch (err) {
         const reason = err instanceof Error ? err.message : String(err);
-        log(`Could not normalize selected image ${index + 1}: ${reason}`);
+        await writeLog(
+          log,
+          `Could not normalize selected image ${index + 1}: ${reason}`,
+        );
         return candidate;
       }
-    }),
+    },
   );
 }
 
@@ -764,15 +1118,23 @@ export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
   ...rankImagesMeta,
 
   async run(ctx) {
-    const candidates = normalizeCandidates(ctx.inputs.candidates);
+    const allCandidates = normalizeCandidates(ctx.inputs.candidates);
     const location = String(ctx.inputs.location ?? "");
+    const checkpoint = ctx.throwIfStopped ?? noopCheckpoint;
 
-    if (candidates.length === 0) {
-      ctx.log("No image candidates were available to rank.");
+    if (allCandidates.length === 0) {
+      await ctx.log("No image candidates were available to rank.");
       return {
         type: "output",
         outputs: { ranked: [], selected: [], selectedUrls: [], best: "" },
       };
+    }
+
+    const candidates = allCandidates.slice(0, MAX_CANDIDATES);
+    if (allCandidates.length > candidates.length) {
+      await ctx.log(
+        `Rank Images received ${allCandidates.length} candidates; using the first ${MAX_CANDIDATES}.`,
+      );
     }
 
     const connection = await getConnection(ctx.config.connectionId);
@@ -788,6 +1150,7 @@ export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
       );
     }
 
+    await checkpoint();
     const ranking =
       connection.type === "openai"
         ? await rankWithOpenAI(
@@ -796,6 +1159,8 @@ export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
             ctx.config.criteria,
             location,
             candidates,
+            ctx.log,
+            checkpoint,
           )
         : connection.type === "azure-foundry"
           ? await rankWithAzure(
@@ -805,21 +1170,23 @@ export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
               location,
               candidates,
               ctx.log,
+              checkpoint,
             )
           : (() => {
               throw new Error(
                 `Unsupported AI connection type: ${connection.type}`,
               );
             })();
+
+    await checkpoint();
     const ranked = ranking.ranking
       .slice()
       .sort((a, b) => b.score - a.score)
       .map((r) => ranking.candidates[r.index])
       .filter((c): c is ImageCandidate => Boolean(c));
-    // Append any candidates the model omitted, but only from the provider-accepted set.
     for (const c of ranking.candidates) if (!ranked.includes(c)) ranked.push(c);
 
-    const selectionCount = ctx.config.selectionCount;
+    const selectionCount = Math.min(ctx.config.selectionCount, ranked.length);
     let selectedPlan: SelectedCandidate[] = ranked
       .slice(0, selectionCount)
       .map((candidate) => ({ candidate, rotationDegrees: 0 as const }));
@@ -831,6 +1198,7 @@ export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
       );
       const pool = ranked.slice(0, poolSize);
       try {
+        await checkpoint();
         const diverseSelection =
           connection.type === "openai"
             ? await selectDiverseWithOpenAI(
@@ -840,6 +1208,8 @@ export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
                 location,
                 pool,
                 selectionCount,
+                ctx.log,
+                checkpoint,
               )
             : connection.type === "azure-foundry"
               ? await selectDiverseWithAzure(
@@ -850,6 +1220,7 @@ export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
                   pool,
                   selectionCount,
                   ctx.log,
+                  checkpoint,
                 )
               : { selection: [], candidates: [] };
         selectedPlan = selectFromDiversityPlan(
@@ -859,16 +1230,21 @@ export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
         );
       } catch (err) {
         const reason = err instanceof Error ? err.message : String(err);
-        ctx.log(
+        await ctx.log(
           `Diverse selection failed; using the score-ranked top ${selectionCount}: ${reason}`,
         );
       }
     }
 
+    await checkpoint();
     const selectedOriginals = new Set(
       selectedPlan.map((selected) => selected.candidate),
     );
-    const selected = await normalizeSelectedImages(selectedPlan, ctx.log);
+    const selected = await normalizeSelectedImages(
+      selectedPlan,
+      ctx.log,
+      checkpoint,
+    );
     const finalRanked = [
       ...selected,
       ...ranked.filter((candidate) => !selectedOriginals.has(candidate)),

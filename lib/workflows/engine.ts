@@ -69,7 +69,14 @@ type LocalState = {
 type NodeOutcome =
   | { type: "output"; outputs: NodeOutputs }
   | { type: "pause"; state: Record<string, unknown> }
+  | { type: "stopped" }
   | { type: "error"; error: string };
+
+class RunStoppedError extends Error {
+  constructor() {
+    super("Run stopped");
+  }
+}
 
 async function execute(
   runId: string,
@@ -89,13 +96,15 @@ async function execute(
   const trigger = run.trigger ?? {};
   const nodeVisitCounts: Record<string, number> = {};
   const redoCounts: Record<string, number> = {};
-  let stopCheckCount = 0;
 
   const currentRunStatus = async (): Promise<RunStatus | null> => {
-    const current = await step(`execute:stop-check:${stopCheckCount++}`, () =>
-      getRun(runId),
-    );
+    const current = await getRun(runId);
     return current?.status ?? null;
+  };
+
+  const isStopped = async () => (await currentRunStatus()) === "stopped";
+  const throwIfStopped = async () => {
+    if (await isStopped()) throw new RunStoppedError();
   };
 
   const visitStepId = (nodeId: string, phase: "run" | "persist") => {
@@ -158,6 +167,7 @@ async function execute(
       try {
         state.nodeStates[node.id] = "running";
         await logNode(node.id, `Started ${def.label}.`);
+        await throwIfStopped();
         await saveRunState(runId, {
           nodeStates: state.nodeStates,
           nodeLogs: state.nodeLogs,
@@ -165,6 +175,7 @@ async function execute(
 
         // Substitute {{nodeId.path}} references from upstream outputs, then validate.
         await logNode(node.id, "Resolving inputs and validating configuration.");
+        await throwIfStopped();
         const resolvedConfig = resolveReferences(
           node.config,
           state.nodeOutputs,
@@ -177,8 +188,11 @@ async function execute(
           trigger,
           runId,
           log: (msg) => logNode(node.id, msg),
+          isStopped,
+          throwIfStopped,
         };
         const result: RunResult = await def.run(ctx);
+        await throwIfStopped();
         await logNode(
           node.id,
           result.type === "pause"
@@ -189,6 +203,10 @@ async function execute(
           ? { type: "pause", state: result.state }
           : { type: "output", outputs: result.outputs };
       } catch (err) {
+        if (err instanceof RunStoppedError) {
+          await logNode(node.id, "Stopped by user.");
+          return { type: "stopped" };
+        }
         const message = err instanceof Error ? err.message : String(err);
         await logNode(node.id, message, "error");
         return {
@@ -204,6 +222,10 @@ async function execute(
     outcome: NodeOutcome,
   ): Promise<"continue" | "stop"> => {
     if ((await currentRunStatus()) === "stopped") {
+      return "stop";
+    }
+
+    if (outcome.type === "stopped") {
       return "stop";
     }
 

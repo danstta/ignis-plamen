@@ -71,6 +71,10 @@ export interface NodeRunContext<C = Record<string, unknown>> {
   runId: string;
   /** Append a line to the run log (best-effort; never throws). */
   log: (message: string) => void | Promise<void>;
+  /** True when the user has stopped the run while this node is still working. */
+  isStopped?: () => Promise<boolean>;
+  /** Throws a cooperative stop signal when the run has been stopped. */
+  throwIfStopped?: () => Promise<void>;
 }
 
 /**

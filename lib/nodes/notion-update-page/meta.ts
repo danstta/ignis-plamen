@@ -59,6 +59,7 @@ export const notionUpdatePageMeta: NodeMeta<NotionUpdatePageConfig> = {
   label: "Update Notion Page",
   description: "Updates selected Notion page properties from webhook or step data.",
   category: "output",
+  group: "notion",
   inputs: [],
   outputs: [
     { id: "pageId", label: "Page ID", kind: "text" },

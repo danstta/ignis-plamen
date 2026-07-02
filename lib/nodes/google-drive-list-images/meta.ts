@@ -18,6 +18,7 @@ export const googleDriveListImagesMeta: NodeMeta<GoogleDriveListImagesConfig> = 
   label: "List Drive Images",
   description: "Lists image files inside a Google Drive folder and its subfolders.",
   category: "source",
+  group: "google-drive",
   inputs: [],
   outputs: [
     { id: "links", label: "Image links", kind: "data" },

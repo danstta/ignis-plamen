@@ -19,6 +19,7 @@ export const curateImagesMeta: NodeMeta<CurateImagesConfig> = {
   description:
     "Pauses so you can swap similar ranked images with alternates before continuing.",
   category: "control",
+  group: "media",
   inputs: [{ id: "ranked", label: "Ranked images", kind: "data" }],
   outputs: [
     { id: "ranked", label: "Curated ranked images", kind: "data" },

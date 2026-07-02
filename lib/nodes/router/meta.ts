@@ -35,6 +35,7 @@ export const routerMeta: NodeMeta<RouterConfig> = {
   description:
     "Routes the workflow down one of several branches based on conditions over upstream data. The first matching branch wins; otherwise the Else branch runs.",
   category: "control",
+  group: "flow",
   inputs: [],
   // `branch` is the chosen branch id — the engine reads it to pick which lane to run.
   outputs: [{ id: "branch", label: "Chosen branch", kind: "data" }],

@@ -148,7 +148,7 @@ export function WorkflowEditor({
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <aside className="w-56 shrink-0 overflow-auto border-r bg-sidebar p-3">
+        <aside className="scrollbar-thin-muted w-56 shrink-0 overflow-auto border-r bg-sidebar p-3">
           <NodePalette enabledNodeTypeIds={enabledNodeTypeIds} />
         </aside>
         <div className="relative min-w-0 flex-1">

@@ -26,6 +26,7 @@ export const findLocationImagesMeta: NodeMeta<FindLocationImagesConfig> = {
   description:
     "Searches free/open image sources for real, reusable photos near the location.",
   category: "source",
+  group: "media",
   inputs: [],
   outputs: [{ id: "candidates", label: "Candidates", kind: "data" }],
   configFields: [

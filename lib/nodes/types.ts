@@ -45,6 +45,16 @@ export type NodeCategory =
   | "control"
   | "output";
 
+export type NodeGroup =
+  | "trigger"
+  | "media"
+  | "ai"
+  | "design"
+  | "flow"
+  | "google-drive"
+  | "notion"
+  | "utility";
+
 /** What a node's run produced: resolved outputs, or a pause for human input. */
 export type RunResult =
   | { type: "output"; outputs: NodeOutputs }
@@ -74,6 +84,8 @@ export interface NodeMeta<C extends Record<string, unknown> = Record<string, unk
   label: string;
   description: string;
   category: NodeCategory;
+  /** User-facing palette group. Runtime behavior is driven by `category`. */
+  group: NodeGroup;
   inputs: NodePort[];
   outputs: NodePort[];
   configFields: NodeConfigField[];

@@ -13,6 +13,7 @@ export const runLinkMeta: NodeMeta<RunLinkConfig> = {
   description:
     "Outputs a link to the current workflow run so you can inspect progress and review paused steps.",
   category: "transform",
+  group: "utility",
   inputs: [],
   outputs: [
     { id: "url", label: "Run URL", kind: "text" },

@@ -7,6 +7,7 @@ import { currentPage, useEditor } from "@/lib/editor/store";
 import { useAutosave } from "@/lib/hooks/use-autosave";
 import type { TemplateDoc } from "@/lib/editor/types";
 import type { Brand } from "@/lib/brand/types";
+import { Input } from "@/components/ui/input";
 import { EditorToolbar } from "./editor-toolbar";
 import { PageStrip } from "./page-strip";
 import { PropertiesPanel } from "./properties-panel";
@@ -76,6 +77,8 @@ export function Editor({
   }, []);
 
   const { status, saveNow } = useAutosave({ store: useEditor, save });
+  const name = useEditor((s) => s.name);
+  const setName = useEditor((s) => s.setName);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -143,19 +146,27 @@ export function Editor({
   }, [saveNow]);
 
   return (
-    <div className="flex h-svh flex-col">
-      <EditorToolbar onSave={saveNow} status={status} />
-      <div className="flex min-h-0 flex-1">
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="relative min-h-0 flex-1">
-            <EditorCanvas />
-          </div>
-          <PageStrip />
+    <div className="flex h-svh">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="relative min-h-0 flex-1">
+          <EditorCanvas />
+          <EditorToolbar onSave={saveNow} status={status} />
         </div>
-        <aside className="w-72 shrink-0 overflow-auto border-l bg-background">
-          <PropertiesPanel />
-        </aside>
+        <PageStrip />
       </div>
+      <aside className="flex w-72 shrink-0 flex-col overflow-hidden border-l bg-background">
+        <div className="shrink-0 border-b p-3">
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="h-8 w-full font-medium"
+            aria-label="Template name"
+          />
+        </div>
+        <div className="min-h-0 flex-1 overflow-auto">
+          <PropertiesPanel />
+        </div>
+      </aside>
     </div>
   );
 }

@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { toast } from "sonner";
-import { FlaskConical, ListChecks } from "lucide-react";
+import { FlaskConical, ListChecks, Save } from "lucide-react";
 import { useWorkflowEditor } from "@/lib/workflows/store";
 import { useAutosave } from "@/lib/hooks/use-autosave";
 import type { WorkflowGraph } from "@/lib/workflows/types";
@@ -18,7 +18,6 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { SaveStatusDot } from "@/components/ui/save-status-dot";
 
-// The canvas pulls in @xyflow/react (touches window) — load it client-only.
 const WorkflowCanvas = dynamic(
   () => import("./workflow-canvas").then((m) => m.WorkflowCanvas),
   { ssr: false },
@@ -95,8 +94,6 @@ export function WorkflowEditor({
       useWorkflowEditor.setState({ workflowId: data.id });
       window.history.replaceState(null, "", `/workflows/${data.id}`);
     }
-    // Only mark clean if nothing changed while the request was in flight,
-    // so edits made mid-save aren't dropped (a follow-up autosave catches them).
     const after = useWorkflowEditor.getState();
     if (JSON.stringify(build(after)) === snapshot) after.markSaved();
     if (!auto) toast.success("Workflow saved");
@@ -108,61 +105,85 @@ export function WorkflowEditor({
   });
 
   return (
-    // Fit within the admin layout's p-8 (4rem vertical) padding without scroll.
-    <div className="-m-8 flex h-svh flex-col">
-      <header className="flex flex-wrap items-center gap-3 border-b px-4 py-2.5">
-        <Input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="h-9 max-w-xs font-medium"
-        />
-        <div className="flex items-center gap-2">
-          <Switch checked={active} onCheckedChange={(v) => setActive(v)} />
-          <span className="text-sm">{active ? "Active" : "Inactive"}</span>
-        </div>
-        <div className="ml-auto flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setTestTargetNodeId(null);
-              setTestOpen(true);
-            }}
-          >
-            <FlaskConical className="size-4" /> Test workflow
-          </Button>
-          {workflowId ? (
+    <div className="-m-8 flex h-svh">
+      <aside className="scrollbar-thin-muted w-56 shrink-0 overflow-auto border-r bg-sidebar p-3">
+        <NodePalette enabledNodeTypeIds={enabledNodeTypeIds} />
+      </aside>
+
+      <div className="relative min-w-0 flex-1">
+        <WorkflowCanvas />
+      </div>
+
+      <aside className="flex w-[28rem] shrink-0 flex-col overflow-hidden border-l bg-background 2xl:w-[32rem]">
+        <div className="shrink-0 border-b bg-background/95 p-3">
+          <div className="flex items-center gap-2">
+            <Input
+              aria-label="Workflow name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="h-8 min-w-0 flex-1 rounded-md font-medium"
+            />
             <Button
               variant="outline"
-              size="sm"
-              render={<Link href={`/workflows/${workflowId}/runs`} />}
+              size="icon-sm"
+              title="Test workflow"
+              onClick={() => {
+                setTestTargetNodeId(null);
+                setTestOpen(true);
+              }}
             >
-              <ListChecks className="size-4" /> Runs
+              <FlaskConical className="size-4" />
             </Button>
-          ) : null}
-          <SaveStatusDot status={status} />
-          <Button onClick={saveNow} disabled={saving} size="sm">
-            {saving ? "Saving…" : "Save"}
-          </Button>
-        </div>
-      </header>
+            {workflowId ? (
+              <Button
+                variant="outline"
+                size="icon-sm"
+                title="Runs"
+                render={<Link href={`/workflows/${workflowId}/runs`} />}
+              >
+                <ListChecks className="size-4" />
+              </Button>
+            ) : null}
+            <Button
+              onClick={saveNow}
+              disabled={saving}
+              size="icon-sm"
+              title={saving ? "Saving..." : "Save"}
+            >
+              <Save className="size-4" />
+            </Button>
+          </div>
 
-      <div className="flex min-h-0 flex-1">
-        <aside className="scrollbar-thin-muted w-56 shrink-0 overflow-auto border-r bg-sidebar p-3">
-          <NodePalette enabledNodeTypeIds={enabledNodeTypeIds} />
-        </aside>
-        <div className="relative min-w-0 flex-1">
-          <WorkflowCanvas />
+          <div className="mt-2 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+            <label className="flex items-center gap-2">
+              <Switch
+                size="sm"
+                checked={active}
+                onCheckedChange={(v) => setActive(v)}
+              />
+              <span>{active ? "Active" : "Inactive"}</span>
+            </label>
+            <span className="flex items-center gap-1.5">
+              <SaveStatusDot status={status} />
+              {status === "saved"
+                ? "Saved"
+                : status === "saving"
+                  ? "Saving..."
+                  : "Unsaved"}
+            </span>
+          </div>
         </div>
-        <aside className="w-[28rem] shrink-0 overflow-auto border-l bg-background 2xl:w-[32rem]">
+
+        <div className="scrollbar-thin-muted min-h-0 flex-1 overflow-auto">
           <NodeConfigPanel
             connections={connections}
             templates={templates}
             webhookBaseUrl={webhookBaseUrl}
             enabledNodeTypeIds={enabledNodeTypeIds}
           />
-        </aside>
-      </div>
+        </div>
+      </aside>
+
       <WorkflowTestDialog
         open={testOpen}
         onOpenChange={setTestOpen}

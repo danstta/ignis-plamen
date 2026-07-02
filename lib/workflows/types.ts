@@ -50,7 +50,8 @@ export type NodeRunState =
   | "running"
   | "done"
   | "error"
-  | "waiting";
+  | "waiting"
+  | "stopped";
 
 export type RunLogLevel = "info" | "warn" | "error";
 
@@ -65,4 +66,4 @@ export interface RunLogEntry {
 export type NodeOutputs = Record<string, unknown>;
 
 /** Run status. `waiting` = paused on a Manual Review node for human input. */
-export type RunStatus = "running" | "waiting" | "success" | "error";
+export type RunStatus = "running" | "waiting" | "success" | "error" | "stopped";

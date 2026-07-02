@@ -142,7 +142,7 @@ export const workflowRuns = pgTable("workflow_runs", {
     .references(() => workflows.id, { onDelete: "cascade" }),
   /** "waiting" = paused on a Manual Review node for human selection. */
   status: text("status", {
-    enum: ["running", "waiting", "success", "error"],
+    enum: ["running", "waiting", "success", "error", "stopped"],
   })
     .notNull()
     .default("running"),

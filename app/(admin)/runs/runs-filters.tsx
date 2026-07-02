@@ -19,6 +19,7 @@ const STATUS_OPTIONS = [
   { value: "waiting", label: "Waiting" },
   { value: "success", label: "Success" },
   { value: "error", label: "Error" },
+  { value: "stopped", label: "Stopped" },
 ];
 
 /**

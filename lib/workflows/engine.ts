@@ -16,6 +16,7 @@ import type {
   NodeRunState,
   RunLogEntry,
   RunLogLevel,
+  RunStatus,
   WorkflowGraph,
   WorkflowNode,
 } from "./types";
@@ -88,6 +89,14 @@ async function execute(
   const trigger = run.trigger ?? {};
   const nodeVisitCounts: Record<string, number> = {};
   const redoCounts: Record<string, number> = {};
+  let stopCheckCount = 0;
+
+  const currentRunStatus = async (): Promise<RunStatus | null> => {
+    const current = await step(`execute:stop-check:${stopCheckCount++}`, () =>
+      getRun(runId),
+    );
+    return current?.status ?? null;
+  };
 
   const visitStepId = (nodeId: string, phase: "run" | "persist") => {
     const visit = nodeVisitCounts[nodeId] ?? 1;
@@ -194,6 +203,10 @@ async function execute(
     node: WorkflowNode,
     outcome: NodeOutcome,
   ): Promise<"continue" | "stop"> => {
+    if ((await currentRunStatus()) === "stopped") {
+      return "stop";
+    }
+
     if (outcome.type === "error") {
       state.nodeStates[node.id] = "error";
       await step(visitStepId(node.id, "persist"), () =>
@@ -244,6 +257,9 @@ async function execute(
     node: WorkflowNode,
     options: { force?: boolean } = {},
   ): Promise<"continue" | "stop"> => {
+    if ((await currentRunStatus()) === "stopped") {
+      return "stop";
+    }
     if (!options.force && state.nodeStates[node.id] === "done") {
       return "continue";
     }
@@ -327,6 +343,7 @@ async function execute(
     orderLane(trunkSteps(graph), graph.edges),
   );
   if (!finished) return;
+  if ((await currentRunStatus()) === "stopped") return;
 
   await step("execute:finish", () => saveRunState(runId, { status: "success" }));
 }

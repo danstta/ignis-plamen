@@ -12,6 +12,7 @@ import { ManualReviewPicker } from "@/components/workflow/manual-review-picker";
 import { Button } from "@/components/ui/button";
 import { RunLive } from "./run-live";
 import { RunNodeCard } from "./run-node-card";
+import { StopRunButton } from "./stop-run-button";
 
 export const dynamic = "force-dynamic";
 
@@ -222,6 +223,9 @@ export default async function RunDetailPage({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {run.status === "running" || run.status === "waiting" ? (
+            <StopRunButton runId={run.id} />
+          ) : null}
           {run.status === "running" || run.status === "waiting" ? (
             <span className="inline-flex items-center gap-1.5 rounded-full border bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground">
               <span className="relative flex size-1.5">

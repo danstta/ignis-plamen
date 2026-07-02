@@ -10,7 +10,13 @@ import { RunsFilters } from "./runs-filters";
 
 export const dynamic = "force-dynamic";
 
-const STATUSES: RunStatus[] = ["running", "waiting", "success", "error"];
+const STATUSES: RunStatus[] = [
+  "running",
+  "waiting",
+  "success",
+  "error",
+  "stopped",
+];
 
 export default async function RunsPage({
   searchParams,

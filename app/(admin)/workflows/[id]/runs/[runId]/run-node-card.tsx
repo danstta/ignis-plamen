@@ -10,6 +10,7 @@ import {
   Clock3,
   LoaderCircle,
   PauseCircle,
+  Square,
   Terminal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -48,6 +49,11 @@ const STATE_TONE: Record<
     icon: PauseCircle,
     className: "text-amber-600 dark:text-amber-400",
   },
+  stopped: {
+    label: "Stopped",
+    icon: Square,
+    className: "text-muted-foreground",
+  },
 };
 
 function logTime(timestamp: string) {
@@ -63,6 +69,7 @@ function logTime(timestamp: string) {
 function emptyMessage(state: NodeRunState) {
   if (state === "pending") return "No logs yet. This node has not started.";
   if (state === "running") return "Active now. Waiting for the next log line.";
+  if (state === "stopped") return "Stopped before this node could finish.";
   return "No logs were recorded for this node.";
 }
 

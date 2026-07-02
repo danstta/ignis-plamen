@@ -495,15 +495,6 @@ async function requestAzureWithContentPolicyRetry<T>(input: {
     return input.parse(res);
   };
 
-  try {
-    return { value: await send(input.preparedImages), images: input.preparedImages };
-  } catch (err) {
-    if (!isAzureContentPolicyViolation(err)) throw err;
-    input.log(
-      `Azure content safety blocked at least one image during ${input.stage}; probing candidates and retrying without blocked images.`,
-    );
-  }
-
   const safeImages = await filterAzureContentSafeImages({
     config: input.config,
     deploymentName: input.deploymentName,
@@ -518,15 +509,18 @@ async function requestAzureWithContentPolicyRetry<T>(input: {
     );
   }
 
-  input.log(
-    `Retrying ${input.stage} with ${safeImages.length}/${input.preparedImages.length} image(s).`,
-  );
+  if (safeImages.length < input.preparedImages.length) {
+    input.log(
+      `Continuing ${input.stage} with ${safeImages.length}/${input.preparedImages.length} content-safe image(s).`,
+    );
+  }
+
   try {
     return { value: await send(safeImages), images: safeImages };
   } catch (err) {
     if (!isAzureContentPolicyViolation(err)) throw err;
     input.log(
-      `Azure content safety still blocked ${input.stage}; retrying one image at a time and skipping blocked images.`,
+      `Azure content safety still blocked ${input.stage} after preflight; retrying one image at a time and skipping blocked images.`,
     );
   }
 

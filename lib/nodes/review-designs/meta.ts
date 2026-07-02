@@ -18,6 +18,7 @@ export const reviewDesignsMeta: NodeMeta<ReviewDesignsConfig> = {
   description:
     "Pauses the workflow so you can pick one generated design, then continues with that choice.",
   category: "control",
+  group: "design",
   inputs: [{ id: "designs", label: "Designs", kind: "data" }],
   outputs: [
     { id: "chosen", label: "Chosen design URL", kind: "image" },

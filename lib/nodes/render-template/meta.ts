@@ -19,6 +19,7 @@ export const renderTemplateMeta: NodeMeta<RenderTemplateConfig> = {
   label: "Render Template",
   description: "Fills a template's placeholders and renders the final PNG.",
   category: "output",
+  group: "design",
   inputs: [],
   outputs: [
     // First page, kept for single-image consumers and backward compatibility.

@@ -20,6 +20,7 @@ export const llmPromptMeta: NodeMeta<LlmPromptConfig> = {
   label: "LLM Prompt",
   description: "Calls an AI model with a custom prompt and returns generated text.",
   category: "transform",
+  group: "ai",
   inputs: [{ id: "input", label: "Input", kind: "data" }],
   outputs: [
     { id: "text", label: "Text", kind: "text" },

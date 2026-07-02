@@ -29,6 +29,7 @@ export const rankImagesMeta: NodeMeta<RankImagesConfig> = {
   label: "Rank Images",
   description: "Ranks candidate photos with GPT vision against your criteria.",
   category: "transform",
+  group: "ai",
   inputs: [
     { id: "candidates", label: "Candidates", kind: "data" },
     { id: "location", label: "Location", kind: "text" },

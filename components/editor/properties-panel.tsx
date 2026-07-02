@@ -20,6 +20,8 @@ import {
 import { activeBrand, currentPage, useEditor } from "@/lib/editor/store";
 import type { BrandColor, BrandFont } from "@/lib/brand/types";
 import {
+  CANVAS_PRESETS,
+  type CanvasPreset,
   type BorderStyle,
   type Fill,
   type Gradient,
@@ -346,10 +348,41 @@ function CanvasPanel() {
   const setCanvasSize = useEditor((s) => s.setCanvasSize);
   const brands = useEditor((s) => s.brands);
   const setBrandId = useEditor((s) => s.setBrandId);
+  const currentPreset = (Object.keys(CANVAS_PRESETS) as CanvasPreset[]).find(
+    (p) =>
+      CANVAS_PRESETS[p].width === doc.width &&
+      CANVAS_PRESETS[p].height === doc.height,
+  );
 
   return (
     <Panel>
       <SectionTitle>Canvas</SectionTitle>
+      <Field label="Ratio">
+        <Select
+          value={currentPreset ?? "custom"}
+          onValueChange={(v) => {
+            if (!v || v === "custom") return;
+            const preset = CANVAS_PRESETS[v as CanvasPreset];
+            setCanvasSize(preset.width, preset.height);
+          }}
+        >
+          <SelectTrigger size="sm" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {(Object.keys(CANVAS_PRESETS) as CanvasPreset[]).map((p) => (
+              <SelectItem key={p} value={p}>
+                {CANVAS_PRESETS[p].label}
+              </SelectItem>
+            ))}
+            {!currentPreset ? (
+              <SelectItem value="custom">
+                Custom ({doc.width}x{doc.height})
+              </SelectItem>
+            ) : null}
+          </SelectContent>
+        </Select>
+      </Field>
       {brands.length > 0 ? (
         <Field label="Brand">
           <Select

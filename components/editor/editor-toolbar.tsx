@@ -44,7 +44,6 @@ import { generateReactComponent } from "@/lib/codegen/react";
 import { generateHtml } from "@/lib/codegen/html";
 import { toComponentName } from "@/lib/codegen/serialize";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { AssetsPanel } from "./assets-panel";
 import type { SaveStatus } from "@/lib/hooks/use-autosave";
@@ -91,8 +90,6 @@ export function EditorToolbar({
   status: SaveStatus;
 }) {
   const saving = status === "saving";
-  const name = useEditor((s) => s.name);
-  const setName = useEditor((s) => s.setName);
   const undo = useEditor((s) => s.undo);
   const redo = useEditor((s) => s.redo);
   const canUndo = useEditor((s) => s.past.length > 0);
@@ -215,7 +212,8 @@ export function EditorToolbar({
   );
 
   return (
-    <div className="relative flex h-14 shrink-0 items-center gap-2 border-b bg-background/95 px-3">
+    <div className="pointer-events-none absolute left-3 right-3 top-3 z-20 flex justify-center">
+      <div className="pointer-events-auto flex max-w-full items-center gap-1 overflow-x-auto rounded-full border bg-background/90 p-1 shadow-sm shadow-black/10 backdrop-blur">
       <Button
         variant="ghost"
         size="icon"
@@ -225,7 +223,6 @@ export function EditorToolbar({
         <ArrowLeft className="size-4" />
       </Button>
 
-      <div className="flex items-center gap-1 rounded-full border bg-background/90 p-1 shadow-sm shadow-black/5 backdrop-blur">
         <DropdownMenu>
         <DropdownMenuTrigger
           render={<Button variant="outline" size="sm" className="h-8 gap-1" />}
@@ -332,15 +329,9 @@ export function EditorToolbar({
           ) : null}
         </SelectContent>
       </Select>
-      </div>
 
-      <div className="ml-auto flex items-center gap-2">
-        <Input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="h-8 w-56"
-          aria-label="Template name"
-        />
+      <Separator orientation="vertical" className="mx-1 h-5" />
+
         <DropdownMenu>
           <DropdownMenuTrigger
             render={

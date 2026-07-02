@@ -83,6 +83,7 @@ interface SelectedCandidate {
 interface PreparedAzureImage {
   candidate: ImageCandidate;
   dataUrl: string;
+  sourceIndex: number;
 }
 
 type ChatMessages = { role: "user"; content: unknown[] }[];
@@ -226,12 +227,21 @@ async function parseJsonResponse<T>(res: Response, provider: string): Promise<T>
   return JSON.parse(text) as T;
 }
 
-function isAzureContentPolicyViolation(err: unknown): err is ProviderRequestError {
-  if (!(err instanceof ProviderRequestError)) return false;
-  if (err.provider !== "Azure") return false;
-  const body = err.body.toLowerCase();
+function isAzureContentPolicyViolation(err: unknown): boolean {
+  if (err instanceof ProviderRequestError) {
+    if (err.provider !== "Azure") return false;
+    const body = err.body.toLowerCase();
+    return (
+      err.status === 400 &&
+      (body.includes("content_policy_violation") ||
+        body.includes("content safety system"))
+    );
+  }
+
+  const message = err instanceof Error ? err.message : String(err);
+  const body = message.toLowerCase();
   return (
-    err.status === 400 &&
+    body.includes("azure 400") &&
     (body.includes("content_policy_violation") ||
       body.includes("content safety system"))
   );
@@ -364,9 +374,10 @@ async function prepareAzureImages(
   log: (message: string) => void,
 ): Promise<PreparedAzureImage[]> {
   const settled = await Promise.allSettled(
-    candidates.map(async (candidate) => ({
+    candidates.map(async (candidate, sourceIndex) => ({
       candidate,
       dataUrl: await imageUrlToDataUrl(candidate),
+      sourceIndex,
     })),
   );
 
@@ -430,7 +441,7 @@ async function filterAzureContentSafeImages(input: {
   config: Record<string, unknown>;
   deploymentName: string;
   preparedImages: PreparedAzureImage[];
-  location: string;
+  buildProbeMessages: (dataUrl: string) => ChatMessages;
   responseFormat: ResponseFormat;
   log: (message: string) => void;
 }): Promise<PreparedAzureImage[]> {
@@ -439,11 +450,7 @@ async function filterAzureContentSafeImages(input: {
       const res = await sendAzureChatCompletion(
         input.config,
         input.deploymentName,
-        buildMessages(
-          "Check whether this image can be processed. Return any valid ranking.",
-          input.location,
-          [image.dataUrl],
-        ),
+        input.buildProbeMessages(image.dataUrl),
         input.responseFormat,
       );
       await parseJsonResponse<unknown>(res, "Azure");
@@ -454,8 +461,9 @@ async function filterAzureContentSafeImages(input: {
   return settled.flatMap((result, index) => {
     if (result.status === "fulfilled") return [result.value];
     if (isAzureContentPolicyViolation(result.reason)) {
+      const image = input.preparedImages[index];
       input.log(
-        `Skipping image candidate ${index} because Azure content safety blocked it.`,
+        `Skipping image candidate ${image?.sourceIndex ?? index} because Azure content safety blocked it.`,
       );
       return [];
     }
@@ -470,7 +478,10 @@ async function requestAzureWithContentPolicyRetry<T>(input: {
   buildMessages: (dataUrls: string[]) => ChatMessages;
   responseFormat: ResponseFormat;
   parse: (res: Response) => Promise<T>;
-  location: string;
+  buildProbeMessages: (dataUrl: string) => ChatMessages;
+  combineIndividualValues: (
+    results: { value: T; image: PreparedAzureImage }[],
+  ) => T;
   stage: string;
   log: (message: string) => void;
 }): Promise<{ value: T; images: PreparedAzureImage[] }> {
@@ -497,7 +508,7 @@ async function requestAzureWithContentPolicyRetry<T>(input: {
     config: input.config,
     deploymentName: input.deploymentName,
     preparedImages: input.preparedImages,
-    location: input.location,
+    buildProbeMessages: input.buildProbeMessages,
     responseFormat: input.responseFormat,
     log: input.log,
   });
@@ -510,7 +521,47 @@ async function requestAzureWithContentPolicyRetry<T>(input: {
   input.log(
     `Retrying ${input.stage} with ${safeImages.length}/${input.preparedImages.length} image(s).`,
   );
-  return { value: await send(safeImages), images: safeImages };
+  try {
+    return { value: await send(safeImages), images: safeImages };
+  } catch (err) {
+    if (!isAzureContentPolicyViolation(err)) throw err;
+    input.log(
+      `Azure content safety still blocked ${input.stage}; retrying one image at a time and skipping blocked images.`,
+    );
+  }
+
+  const settled = await Promise.allSettled(
+    safeImages.map(async (image) => ({
+      image,
+      value: await send([image]),
+    })),
+  );
+  const accepted: { value: T; image: PreparedAzureImage }[] = [];
+  settled.forEach((result, index) => {
+    if (result.status === "fulfilled") {
+      accepted.push(result.value);
+      return;
+    }
+    if (isAzureContentPolicyViolation(result.reason)) {
+      const image = safeImages[index];
+      input.log(
+        `Skipping image candidate ${image?.sourceIndex ?? index} because Azure content safety blocked it.`,
+      );
+      return;
+    }
+    throw result.reason;
+  });
+
+  if (accepted.length === 0) {
+    throw new Error(
+      `Azure content safety blocked every image during ${input.stage}.`,
+    );
+  }
+
+  return {
+    value: input.combineIndividualValues(accepted),
+    images: accepted.map((result) => result.image),
+  };
 }
 
 async function rankWithAzure(
@@ -533,7 +584,21 @@ async function rankWithAzure(
     buildMessages: (dataUrls) => buildMessages(criteria, location, dataUrls),
     responseFormat,
     parse: (res) => parseRankingResponse(res, "Azure"),
-    location,
+    buildProbeMessages: (dataUrl) =>
+      buildMessages(
+        "Check whether this image can be processed. Return any valid ranking.",
+        location,
+        [dataUrl],
+      ),
+    combineIndividualValues: (results) =>
+      results.map(({ value }, index) => {
+        const entry = value.find((item) => item.index === 0) ?? value[0];
+        return {
+          index,
+          score: entry?.score ?? 0,
+          reason: entry?.reason ?? "Ranked individually after Azure blocked the batch.",
+        };
+      }),
     stage: "image ranking",
     log,
   });
@@ -565,7 +630,22 @@ async function selectDiverseWithAzure(
       buildDiverseSelectionMessages(criteria, location, selectionCount, dataUrls),
     responseFormat: diverseSelectionResponseFormat,
     parse: (res) => parseDiverseSelectionResponse(res, "Azure"),
-    location,
+    buildProbeMessages: (dataUrl) =>
+      buildDiverseSelectionMessages(criteria, location, 1, [dataUrl]),
+    combineIndividualValues: (results) =>
+      results.flatMap(({ value }, index) => {
+        const entry = value.find((item) => item.index === 0) ?? value[0];
+        if (!entry) return [];
+        return [
+          {
+            index,
+            reason:
+              entry.reason ??
+              "Selected individually after Azure blocked the batch.",
+            rotationDegrees: entry.rotationDegrees,
+          },
+        ];
+      }),
     stage: "diverse image selection",
     log,
   });
@@ -742,8 +822,8 @@ export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
       .sort((a, b) => b.score - a.score)
       .map((r) => ranking.candidates[r.index])
       .filter((c): c is ImageCandidate => Boolean(c));
-    // Append any candidates the model omitted so nothing is lost.
-    for (const c of candidates) if (!ranked.includes(c)) ranked.push(c);
+    // Append any candidates the model omitted, but only from the provider-accepted set.
+    for (const c of ranking.candidates) if (!ranked.includes(c)) ranked.push(c);
 
     const selectionCount = ctx.config.selectionCount;
     let selectedPlan: SelectedCandidate[] = ranked

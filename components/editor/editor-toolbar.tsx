@@ -47,8 +47,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { AssetsPanel } from "./assets-panel";
-import { SaveStatusDot } from "@/components/ui/save-status-dot";
 import type { SaveStatus } from "@/lib/hooks/use-autosave";
+import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -101,6 +101,21 @@ export function EditorToolbar({
   const setCanvasSize = useEditor((s) => s.setCanvasSize);
   const brandLogoUrl = useEditor((s) => activeBrand(s)?.logoUrl ?? null);
   const [exporting, setExporting] = useState(false);
+  const saveStatusLabel =
+    status === "saved"
+      ? "All changes saved"
+      : status === "saving"
+        ? "Saving changes"
+        : "Unsaved changes";
+  const saveStatusClassName = cn(
+    "h-8 gap-1 border transition-colors disabled:opacity-100",
+    status === "saved" &&
+      "border-emerald-500/15 bg-emerald-500/[0.08] text-emerald-700 hover:bg-emerald-500/[0.12] dark:text-emerald-300",
+    status === "saving" &&
+      "border-sky-500/15 bg-sky-500/[0.08] text-sky-700 hover:bg-sky-500/[0.12] dark:text-sky-300",
+    status === "unsaved" &&
+      "border-amber-500/20 bg-amber-500/[0.09] text-amber-700 hover:bg-amber-500/[0.13] dark:text-amber-300",
+  );
 
   async function exportPng() {
     const st = useEditor.getState();
@@ -200,7 +215,7 @@ export function EditorToolbar({
   );
 
   return (
-    <div className="flex h-14 shrink-0 items-center gap-2 border-b bg-background px-3">
+    <div className="relative flex h-14 shrink-0 items-center gap-2 border-b bg-background/95 px-3">
       <Button
         variant="ghost"
         size="icon"
@@ -210,16 +225,8 @@ export function EditorToolbar({
         <ArrowLeft className="size-4" />
       </Button>
 
-      <Input
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        className="h-8 w-56"
-        aria-label="Template name"
-      />
-
-      <Separator orientation="vertical" className="mx-1 h-6" />
-
-      <DropdownMenu>
+      <div className="flex items-center gap-1 rounded-full border bg-background/90 p-1 shadow-sm shadow-black/5 backdrop-blur">
+        <DropdownMenu>
         <DropdownMenuTrigger
           render={<Button variant="outline" size="sm" className="h-8 gap-1" />}
         >
@@ -299,7 +306,7 @@ export function EditorToolbar({
         <Redo2 className="size-4" />
       </Button>
 
-      <Separator orientation="vertical" className="mx-1 h-6" />
+      <Separator orientation="vertical" className="mx-1 h-5" />
 
       <Select
         value={currentPreset ?? "custom"}
@@ -325,8 +332,15 @@ export function EditorToolbar({
           ) : null}
         </SelectContent>
       </Select>
+      </div>
 
       <div className="ml-auto flex items-center gap-2">
+        <Input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="h-8 w-56"
+          aria-label="Template name"
+        />
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -349,8 +363,16 @@ export function EditorToolbar({
             <DropdownMenuItem onClick={exportHtml}>HTML (.html)</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <SaveStatusDot status={status} />
-        <Button size="sm" className="h-8 gap-1" onClick={onSave} disabled={saving}>
+        <Button
+          size="sm"
+          variant="outline"
+          className={saveStatusClassName}
+          onClick={onSave}
+          disabled={saving}
+          title={saveStatusLabel}
+          aria-label={saveStatusLabel}
+          aria-busy={saving}
+        >
           <Save className="size-4" />
           {saving ? "Saving…" : "Save"}
         </Button>

@@ -108,12 +108,12 @@ type CheckpointFn = () => Promise<void>;
 
 const IMAGE_FETCH_USER_AGENT = "Ignis/0.1 (https://github.com/danstta/ignis)";
 const MAX_CANDIDATES = 100;
-const MAX_AZURE_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_PROVIDER_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_NORMALIZED_IMAGE_BYTES = 25 * 1024 * 1024;
 const IMAGE_FETCH_TIMEOUT_MS = 20_000;
 const CHAT_COMPLETION_TIMEOUT_MS = 45_000;
 const AZURE_RANK_CHUNK_SIZE = 4;
-const OPENAI_RANK_CHUNK_SIZE = 8;
+const OPENAI_RANK_CHUNK_SIZE = 4;
 const DIVERSITY_CHUNK_SIZE = 6;
 const PROVIDER_CHUNK_CONCURRENCY = 8;
 const IMAGE_FETCH_CONCURRENCY = 12;
@@ -454,14 +454,6 @@ async function sendAzureChatCompletion(
   );
 }
 
-function prepareUrlImages(candidates: ImageCandidate[]): PreparedProviderImage[] {
-  return candidates.map((candidate, sourceIndex) => ({
-    candidate,
-    visionUrl: candidate.url,
-    sourceIndex,
-  }));
-}
-
 function parseDataUrl(url: string): { bytes: Buffer; contentType: string } {
   const match = url.match(/^data:([^;,]+)(;base64)?,(.*)$/);
   if (!match) throw new Error("invalid data URL");
@@ -527,13 +519,14 @@ async function fetchImageBytes(
 async function imageUrlToDataUrl(candidate: ImageCandidate): Promise<string> {
   const { bytes, contentType } = await fetchImageBytes(
     candidate,
-    MAX_AZURE_IMAGE_BYTES,
+    MAX_PROVIDER_IMAGE_BYTES,
   );
   return `data:${contentType};base64,${bytes.toString("base64")}`;
 }
 
-async function prepareAzureImages(
+async function prepareProviderImages(
   candidates: ImageCandidate[],
+  provider: "OpenAI" | "Azure",
   log: LogFn,
   checkpoint: CheckpointFn,
 ): Promise<PreparedProviderImage[]> {
@@ -552,7 +545,7 @@ async function prepareAzureImages(
         const reason = err instanceof Error ? err.message : String(err);
         await writeLog(
           log,
-          `Skipping image candidate ${sourceIndex} because it could not be prepared for Azure: ${reason}`,
+          `Skipping image candidate ${sourceIndex} because it could not be prepared for ${provider}: ${reason}`,
         );
         return null;
       }
@@ -755,8 +748,18 @@ async function rankWithOpenAI(
   log: LogFn,
   checkpoint: CheckpointFn,
 ): Promise<RankingResult> {
+  const preparedImages = await prepareProviderImages(
+    candidates,
+    "OpenAI",
+    log,
+    checkpoint,
+  );
+  if (preparedImages.length === 0) {
+    throw new Error("No image candidates could be prepared for OpenAI vision.");
+  }
+
   return rankPreparedImages({
-    preparedImages: prepareUrlImages(candidates),
+    preparedImages,
     chunkSize: OPENAI_RANK_CHUNK_SIZE,
     provider: "OpenAI",
     log,
@@ -786,7 +789,12 @@ async function rankWithAzure(
   log: LogFn,
   checkpoint: CheckpointFn,
 ): Promise<RankingResult> {
-  const preparedImages = await prepareAzureImages(candidates, log, checkpoint);
+  const preparedImages = await prepareProviderImages(
+    candidates,
+    "Azure",
+    log,
+    checkpoint,
+  );
   if (preparedImages.length === 0) {
     throw new Error("No image candidates could be prepared for Azure vision.");
   }
@@ -976,8 +984,18 @@ async function selectDiverseWithOpenAI(
   log: LogFn,
   checkpoint: CheckpointFn,
 ): Promise<DiverseSelectionResult> {
+  const preparedImages = await prepareProviderImages(
+    candidates,
+    "OpenAI",
+    log,
+    checkpoint,
+  );
+  if (preparedImages.length === 0) {
+    throw new Error("No image candidates could be prepared for OpenAI vision.");
+  }
+
   return selectPreparedImages({
-    preparedImages: prepareUrlImages(candidates),
+    preparedImages,
     selectionCount,
     provider: "OpenAI",
     log,
@@ -1009,7 +1027,12 @@ async function selectDiverseWithAzure(
   log: LogFn,
   checkpoint: CheckpointFn,
 ): Promise<DiverseSelectionResult> {
-  const preparedImages = await prepareAzureImages(candidates, log, checkpoint);
+  const preparedImages = await prepareProviderImages(
+    candidates,
+    "Azure",
+    log,
+    checkpoint,
+  );
   if (preparedImages.length === 0) {
     throw new Error("No image candidates could be prepared for Azure vision.");
   }

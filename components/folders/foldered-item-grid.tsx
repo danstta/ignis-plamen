@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Folder, FolderOpen, FolderPlus } from "lucide-react";
+import { Folder, FolderPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -91,14 +91,14 @@ export function FolderedItemGrid<TItem extends FolderItem>({
     folder,
     title,
     items: sectionItems,
-    unfiled,
+    topLevel,
   }: {
     id: string;
     folderId: string | null;
     folder?: FolderSummary;
     title: string;
     items: TItem[];
-    unfiled?: boolean;
+    topLevel?: boolean;
   }) => (
     <section
       key={id}
@@ -137,7 +137,7 @@ export function FolderedItemGrid<TItem extends FolderItem>({
           />
         </FolderContextMenu>
       ) : (
-        <SectionHeader title={title} count={sectionItems.length} unfiled={unfiled} />
+        <SectionHeader title={title} count={sectionItems.length} topLevel={topLevel} />
       )}
 
       {sectionItems.length === 0 ? (
@@ -194,13 +194,15 @@ export function FolderedItemGrid<TItem extends FolderItem>({
             items: itemsByFolder.get(folder.id) ?? [],
           }),
         )}
-        {renderSection({
-          id: "unfiled",
-          folderId: null,
-          title: folders.length > 0 ? "Unfiled" : "All items",
-          items: unfiled,
-          unfiled: true,
-        })}
+        {unfiled.length > 0 || folders.length === 0
+          ? renderSection({
+              id: "top-level",
+              folderId: null,
+              title: kind === "design" ? "Designs" : "Workflows",
+              items: unfiled,
+              topLevel: true,
+            })
+          : null}
       </div>
     </div>
   );
@@ -210,19 +212,19 @@ function SectionHeader({
   title,
   count,
   folder,
-  unfiled,
+  topLevel,
 }: {
   title: string;
   count: number;
   folder?: FolderSummary;
-  unfiled?: boolean;
+  topLevel?: boolean;
 }) {
   return (
     <div className="mb-3 flex items-center gap-2">
       {folder ? (
         <FolderVisual folder={folder} className="size-4 text-muted-foreground" />
-      ) : unfiled ? (
-        <FolderOpen className="size-4 text-muted-foreground" />
+      ) : topLevel ? (
+        null
       ) : (
         <Folder className="size-4 text-muted-foreground" />
       )}

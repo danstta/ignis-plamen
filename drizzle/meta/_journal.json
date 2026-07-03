@@ -50,6 +50,20 @@
       "when": 1782935538781,
       "tag": "0006_adorable_corsair",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1783089010155,
+      "tag": "0007_certain_vengeance",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1783089032630,
+      "tag": "0008_light_hardball",
+      "breakpoints": true
     }
   ]
 }

@@ -88,6 +88,14 @@ export function listServerEnvironmentConnections(): ServerEnvironmentConnection[
       env: [{ name: "PEXELS_API_KEY" }],
     }),
     connection({
+      id: "google-maps-env",
+      name: "Google Maps Platform",
+      description: "Optional Places photo provider for location image search.",
+      access:
+        "Text Search and Place Photos access for exact location image candidates; server-only key.",
+      env: [{ name: "GOOGLE_MAPS_API_KEY" }],
+    }),
+    connection({
       id: "supabase-env",
       name: "Supabase Storage",
       providerType: "supabase",

@@ -4,7 +4,6 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Folder,
   FolderPlus,
   FolderOpen,
   LayoutTemplate,
@@ -17,11 +16,19 @@ import {
   moveFolderItemAction,
 } from "@/app/(admin)/folders/actions";
 import { cn } from "@/lib/utils";
+import type { Asset } from "@/lib/assets/types";
 import type { FolderItem, FolderKind, FolderSummary } from "@/lib/folders/types";
 import {
   getFolderDragPayload,
+  hasFolderDragPayload,
+  type FolderDragPayload,
   setFolderDragPayload,
 } from "@/components/folders/drag-data";
+import {
+  FolderContextMenu,
+  FolderItemContextMenu,
+  FolderVisual,
+} from "@/components/folders/folder-context-menu";
 
 export type SidebarFolderItem = FolderItem & {
   href: string;
@@ -33,14 +40,17 @@ export function FolderSidebarList({
   kind,
   folders,
   items,
+  assets,
 }: {
   kind: FolderKind;
   folders: FolderSummary[];
   items: SidebarFolderItem[];
+  assets: Asset[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [activeDrag, setActiveDrag] = useState<FolderDragPayload | null>(null);
   const itemIcon =
     kind === "design" ? (
       <LayoutTemplate className="size-4 shrink-0" />
@@ -100,18 +110,19 @@ export function FolderSidebarList({
     <div
       key={id}
       onDragOver={(event) => {
-        const payload = getFolderDragPayload(event);
-        if (payload?.kind !== kind) return;
+        const canDrop = activeDrag?.kind === kind || hasFolderDragPayload(event);
+        if (!canDrop) return;
         event.preventDefault();
         event.dataTransfer.dropEffect = "move";
       }}
       onDragEnter={(event) => {
-        const payload = getFolderDragPayload(event);
-        if (payload?.kind === kind) setDropTarget(id);
+        if (activeDrag?.kind === kind || hasFolderDragPayload(event)) {
+          setDropTarget(id);
+        }
       }}
       onDragLeave={() => setDropTarget(null)}
       onDrop={(event) => {
-        const payload = getFolderDragPayload(event);
+        const payload = activeDrag ?? getFolderDragPayload(event);
         setDropTarget(null);
         if (payload?.kind !== kind) return;
         event.preventDefault();
@@ -161,19 +172,24 @@ export function FolderSidebarList({
           folderId: folder.id,
           children: (
             <div className="flex flex-col gap-0.5">
-              <div className="flex items-center gap-2.5 px-2 py-1 text-sm font-medium text-sidebar-foreground">
-                <Folder className="size-4 shrink-0" />
-                <span className="min-w-0 flex-1 truncate">{folder.name}</span>
-                <span className="text-xs tabular-nums text-muted-foreground/70">
-                  {folderItems.length}
-                </span>
-              </div>
+              <FolderContextMenu kind={kind} folder={folder} assets={assets}>
+                <div className="flex items-center gap-2.5 px-2 py-1 text-sm font-medium text-sidebar-foreground">
+                  <FolderVisual folder={folder} className="size-4 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">{folder.name}</span>
+                  <span className="text-xs tabular-nums text-muted-foreground/70">
+                    {folderItems.length}
+                  </span>
+                </div>
+              </FolderContextMenu>
               {folderItems.map((item) => (
                 <FolderItemLink
                   key={item.id}
                   kind={kind}
                   item={item}
                   icon={itemIcon}
+                  folders={folders}
+                  onDragStart={setActiveDrag}
+                  onDragEnd={() => setActiveDrag(null)}
                 />
               ))}
             </div>
@@ -201,6 +217,9 @@ export function FolderSidebarList({
                     kind={kind}
                     item={item}
                     icon={itemIcon}
+                    folders={folders}
+                    onDragStart={setActiveDrag}
+                    onDragEnd={() => setActiveDrag(null)}
                   />
                 ))}
               </div>
@@ -243,30 +262,41 @@ function FolderItemLink({
   kind,
   item,
   icon,
+  folders,
+  onDragStart,
+  onDragEnd,
 }: {
   kind: FolderKind;
   item: SidebarFolderItem;
   icon: React.ReactNode;
+  folders: FolderSummary[];
+  onDragStart: (payload: FolderDragPayload) => void;
+  onDragEnd: () => void;
 }) {
+  const payload = { kind, itemId: item.id };
   return (
-    <Link
-      href={item.href}
-      draggable
-      onDragStart={(event) =>
-        setFolderDragPayload(event, { kind, itemId: item.id })
-      }
-      aria-current={item.active ? "page" : undefined}
-      data-active={item.active || undefined}
-      className={cn(
-        "ml-3 flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground outline-none transition-colors",
-        "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-        "focus-visible:ring-2 focus-visible:ring-sidebar-ring",
-        "data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-accent-foreground",
-      )}
-    >
-      {icon}
-      <span className="min-w-0 flex-1 truncate">{item.name}</span>
-      {item.trailing}
-    </Link>
+    <FolderItemContextMenu kind={kind} item={item} folders={folders}>
+      <Link
+        href={item.href}
+        draggable
+        onDragStart={(event) => {
+          onDragStart(payload);
+          setFolderDragPayload(event, payload);
+        }}
+        onDragEnd={onDragEnd}
+        aria-current={item.active ? "page" : undefined}
+        data-active={item.active || undefined}
+        className={cn(
+          "ml-3 flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground outline-none transition-colors",
+          "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+          "focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+          "data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-accent-foreground",
+        )}
+      >
+        {icon}
+        <span className="min-w-0 flex-1 truncate">{item.name}</span>
+        {item.trailing}
+      </Link>
+    </FolderItemContextMenu>
   );
 }

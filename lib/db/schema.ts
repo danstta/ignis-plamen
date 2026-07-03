@@ -40,6 +40,10 @@ export const folders = pgTable("folders", {
   id: uuid("id").defaultRandom().primaryKey(),
   kind: text("kind", { enum: ["design", "workflow"] }).notNull(),
   name: text("name").notNull(),
+  iconAssetId: uuid("icon_asset_id").references(() => assets.id, {
+    onDelete: "set null",
+  }),
+  iconUrl: text("icon_url"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),

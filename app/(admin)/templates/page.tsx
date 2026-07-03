@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
+import { listAssets } from "@/lib/assets/service";
 import { listFolders } from "@/lib/folders/service";
 import { listTemplates } from "@/lib/templates/service";
 import { FolderedTemplateGrid } from "@/components/templates/foldered-template-grid";
@@ -11,11 +12,13 @@ export const dynamic = "force-dynamic";
 export default async function TemplatesPage() {
   let rows: Awaited<ReturnType<typeof listTemplates>> = [];
   let folders: Awaited<ReturnType<typeof listFolders>> = [];
+  let assets: Awaited<ReturnType<typeof listAssets>> = [];
   let dbError: string | null = null;
   try {
-    [rows, folders] = await Promise.all([
+    [rows, folders, assets] = await Promise.all([
       listTemplates(),
       listFolders("design"),
+      listAssets(),
     ]);
   } catch (err) {
     dbError = err instanceof Error ? err.message : String(err);
@@ -53,7 +56,9 @@ export default async function TemplatesPage() {
             id: f.id,
             kind: f.kind,
             name: f.name,
+            iconUrl: f.iconUrl,
           }))}
+          assets={assets}
           templates={rows.map((t) => ({
             id: t.id,
             name: t.name,

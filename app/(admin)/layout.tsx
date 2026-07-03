@@ -1,5 +1,6 @@
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { CommandPalette } from "@/components/command/command-palette";
+import { listAssets } from "@/lib/assets/service";
 import { listFolders } from "@/lib/folders/service";
 import { listTemplates } from "@/lib/templates/service";
 import { listWorkflows } from "@/lib/workflows/service";
@@ -18,6 +19,7 @@ export default async function AdminLayout({
   let workflows: Awaited<ReturnType<typeof listWorkflows>> = [];
   let designFolders: Awaited<ReturnType<typeof listFolders>> = [];
   let workflowFolders: Awaited<ReturnType<typeof listFolders>> = [];
+  let assets: Awaited<ReturnType<typeof listAssets>> = [];
   try {
     templates = await listTemplates();
   } catch {}
@@ -29,6 +31,9 @@ export default async function AdminLayout({
   } catch {}
   try {
     workflowFolders = await listFolders("workflow");
+  } catch {}
+  try {
+    assets = await listAssets();
   } catch {}
 
   return (
@@ -49,12 +54,15 @@ export default async function AdminLayout({
           id: f.id,
           kind: f.kind,
           name: f.name,
+          iconUrl: f.iconUrl,
         }))}
         workflowFolders={workflowFolders.map((f) => ({
           id: f.id,
           kind: f.kind,
           name: f.name,
+          iconUrl: f.iconUrl,
         }))}
+        assets={assets}
       />
       <main className="flex-1 overflow-auto p-8">{children}</main>
       <CommandPalette

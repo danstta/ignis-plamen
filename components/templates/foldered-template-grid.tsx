@@ -2,6 +2,7 @@
 
 import { FolderedItemGrid } from "@/components/folders/foldered-item-grid";
 import { TemplateCard } from "@/components/templates/template-card";
+import type { Asset } from "@/lib/assets/types";
 import type { FolderSummary } from "@/lib/folders/types";
 import type { TemplateDoc } from "@/lib/editor/types";
 
@@ -17,9 +18,11 @@ export type FolderedTemplate = {
 export function FolderedTemplateGrid({
   folders,
   templates,
+  assets,
 }: {
   folders: FolderSummary[];
   templates: FolderedTemplate[];
+  assets: Asset[];
 }) {
   return (
     <FolderedItemGrid
@@ -28,6 +31,7 @@ export function FolderedTemplateGrid({
       items={templates}
       emptyLabel="No designs yet."
       gridClassName="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+      assets={assets}
       renderItem={(template) => (
         <TemplateCard
           id={template.id}

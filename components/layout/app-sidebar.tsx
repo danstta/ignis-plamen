@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { FolderSidebarList } from "@/components/folders/folder-sidebar-list";
+import type { Asset } from "@/lib/assets/types";
 import type { FolderSummary } from "@/lib/folders/types";
 
 type Mode = "design" | "workflows";
@@ -66,11 +67,13 @@ export function AppSidebar({
   workflows,
   designFolders,
   workflowFolders,
+  assets,
 }: {
   templates: SidebarTemplate[];
   workflows: SidebarWorkflow[];
   designFolders: FolderSummary[];
   workflowFolders: FolderSummary[];
+  assets: Asset[];
 }) {
   const pathname = usePathname();
 
@@ -86,6 +89,7 @@ export function AppSidebar({
       workflows={workflows}
       designFolders={designFolders}
       workflowFolders={workflowFolders}
+      assets={assets}
     />
   );
 }
@@ -126,11 +130,13 @@ function MainSidebar({
   workflows,
   designFolders,
   workflowFolders,
+  assets,
 }: {
   templates: SidebarTemplate[];
   workflows: SidebarWorkflow[];
   designFolders: FolderSummary[];
   workflowFolders: FolderSummary[];
+  assets: Asset[];
 }) {
   const pathname = usePathname();
   const [mode, setMode] = useState<Mode>(() => inferMode(pathname) ?? "design");
@@ -228,6 +234,7 @@ function MainSidebar({
               <FolderSidebarList
                 kind="design"
                 folders={designFolders}
+                assets={assets}
                 items={templates.map((t) => ({
                   id: t.id,
                   name: t.name,
@@ -267,6 +274,7 @@ function MainSidebar({
               <FolderSidebarList
                 kind="workflow"
                 folders={workflowFolders}
+                assets={assets}
                 items={workflows.map((w) => ({
                   id: w.id,
                   name: w.name,

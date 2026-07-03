@@ -1,6 +1,6 @@
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { folders, templates, workflows } from "@/lib/db/schema";
+import { assets, folders, templates, workflows } from "@/lib/db/schema";
 import type { FolderKind } from "@/lib/folders/types";
 
 export type FolderInput = {
@@ -21,6 +21,7 @@ export async function listFolders(kind: FolderKind) {
       id: folders.id,
       kind: folders.kind,
       name: folders.name,
+      iconUrl: folders.iconUrl,
       updatedAt: folders.updatedAt,
     })
     .from(folders)
@@ -33,6 +34,38 @@ export async function createFolder(input: FolderInput) {
     .insert(folders)
     .values({ kind: input.kind, name: normalizeFolderName(input.name) })
     .returning();
+  return rows[0];
+}
+
+export async function renameFolder(id: string, name: string) {
+  const rows = await db()
+    .update(folders)
+    .set({ name: normalizeFolderName(name), updatedAt: new Date() })
+    .where(eq(folders.id, id))
+    .returning();
+  if (!rows[0]) throw new Error("Folder not found");
+  return rows[0];
+}
+
+export async function setFolderIcon(id: string, assetId: string | null) {
+  let iconUrl: string | null = null;
+  if (assetId) {
+    const rows = await db()
+      .select({ id: assets.id, url: assets.url })
+      .from(assets)
+      .where(eq(assets.id, assetId))
+      .limit(1);
+    const asset = rows[0];
+    if (!asset) throw new Error("Asset not found");
+    iconUrl = asset.url;
+  }
+
+  const rows = await db()
+    .update(folders)
+    .set({ iconAssetId: assetId, iconUrl, updatedAt: new Date() })
+    .where(eq(folders.id, id))
+    .returning();
+  if (!rows[0]) throw new Error("Folder not found");
   return rows[0];
 }
 
@@ -65,6 +98,24 @@ export async function moveWorkflowToFolder(id: string, folderId: string | null) 
   const rows = await db()
     .update(workflows)
     .set({ folderId, updatedAt: new Date() })
+    .where(eq(workflows.id, id))
+    .returning({ id: workflows.id });
+  if (!rows[0]) throw new Error("Workflow not found");
+}
+
+export async function renameTemplate(id: string, name: string) {
+  const rows = await db()
+    .update(templates)
+    .set({ name: normalizeFolderName(name), updatedAt: new Date() })
+    .where(eq(templates.id, id))
+    .returning({ id: templates.id });
+  if (!rows[0]) throw new Error("Design not found");
+}
+
+export async function renameWorkflow(id: string, name: string) {
+  const rows = await db()
+    .update(workflows)
+    .set({ name: normalizeFolderName(name), updatedAt: new Date() })
     .where(eq(workflows.id, id))
     .returning({ id: workflows.id });
   if (!rows[0]) throw new Error("Workflow not found");

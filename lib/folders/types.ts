@@ -4,6 +4,7 @@ export type FolderSummary = {
   id: string;
   kind: FolderKind;
   name: string;
+  iconUrl: string | null;
 };
 
 export type FolderItem = {

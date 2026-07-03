@@ -12,10 +12,18 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   getFolderDragPayload,
+  hasFolderDragPayload,
+  type FolderDragPayload,
   setFolderDragPayload,
 } from "@/components/folders/drag-data";
 import { cn } from "@/lib/utils";
+import type { Asset } from "@/lib/assets/types";
 import type { FolderItem, FolderKind, FolderSummary } from "@/lib/folders/types";
+import {
+  FolderContextMenu,
+  FolderItemContextMenu,
+  FolderVisual,
+} from "@/components/folders/folder-context-menu";
 
 export function FolderedItemGrid<TItem extends FolderItem>({
   kind,
@@ -23,6 +31,7 @@ export function FolderedItemGrid<TItem extends FolderItem>({
   items,
   emptyLabel,
   gridClassName,
+  assets,
   renderItem,
 }: {
   kind: FolderKind;
@@ -30,11 +39,13 @@ export function FolderedItemGrid<TItem extends FolderItem>({
   items: TItem[];
   emptyLabel: string;
   gridClassName: string;
+  assets: Asset[];
   renderItem: (item: TItem) => React.ReactNode;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [activeDrag, setActiveDrag] = useState<FolderDragPayload | null>(null);
 
   const itemsByFolder = useMemo(() => {
     const map = new Map<string | null, TItem[]>();
@@ -77,12 +88,14 @@ export function FolderedItemGrid<TItem extends FolderItem>({
   const renderSection = ({
     id,
     folderId,
+    folder,
     title,
     items: sectionItems,
     unfiled,
   }: {
     id: string;
     folderId: string | null;
+    folder?: FolderSummary;
     title: string;
     items: TItem[];
     unfiled?: boolean;
@@ -90,18 +103,19 @@ export function FolderedItemGrid<TItem extends FolderItem>({
     <section
       key={id}
       onDragOver={(event) => {
-        const payload = getFolderDragPayload(event);
-        if (payload?.kind !== kind) return;
+        const canDrop = activeDrag?.kind === kind || hasFolderDragPayload(event);
+        if (!canDrop) return;
         event.preventDefault();
         event.dataTransfer.dropEffect = "move";
       }}
       onDragEnter={(event) => {
-        const payload = getFolderDragPayload(event);
-        if (payload?.kind === kind) setDropTarget(id);
+        if (activeDrag?.kind === kind || hasFolderDragPayload(event)) {
+          setDropTarget(id);
+        }
       }}
       onDragLeave={() => setDropTarget(null)}
       onDrop={(event) => {
-        const payload = getFolderDragPayload(event);
+        const payload = activeDrag ?? getFolderDragPayload(event);
         setDropTarget(null);
         if (payload?.kind !== kind) return;
         event.preventDefault();
@@ -114,19 +128,17 @@ export function FolderedItemGrid<TItem extends FolderItem>({
       )}
       aria-label={`Drop into ${title}`}
     >
-      <div className="mb-3 flex items-center gap-2">
-        {unfiled ? (
-          <FolderOpen className="size-4 text-muted-foreground" />
-        ) : (
-          <Folder className="size-4 text-muted-foreground" />
-        )}
-        <h2 className="min-w-0 flex-1 truncate text-sm font-medium">
-          {title}
-        </h2>
-        <span className="text-xs tabular-nums text-muted-foreground">
-          {sectionItems.length}
-        </span>
-      </div>
+      {folder ? (
+        <FolderContextMenu kind={kind} folder={folder} assets={assets}>
+          <SectionHeader
+            title={title}
+            count={sectionItems.length}
+            folder={folder}
+          />
+        </FolderContextMenu>
+      ) : (
+        <SectionHeader title={title} count={sectionItems.length} unfiled={unfiled} />
+      )}
 
       {sectionItems.length === 0 ? (
         <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -138,12 +150,17 @@ export function FolderedItemGrid<TItem extends FolderItem>({
             <div
               key={item.id}
               draggable
-              onDragStart={(event) =>
-                setFolderDragPayload(event, { kind, itemId: item.id })
-              }
+              onDragStart={(event) => {
+                const payload = { kind, itemId: item.id };
+                setActiveDrag(payload);
+                setFolderDragPayload(event, payload);
+              }}
+              onDragEnd={() => setActiveDrag(null)}
               className="cursor-grab active:cursor-grabbing"
             >
-              {renderItem(item)}
+              <FolderItemContextMenu kind={kind} item={item} folders={folders}>
+                {renderItem(item)}
+              </FolderItemContextMenu>
             </div>
           ))}
         </div>
@@ -172,6 +189,7 @@ export function FolderedItemGrid<TItem extends FolderItem>({
           renderSection({
             id: folder.id,
             folderId: folder.id,
+            folder,
             title: folder.name,
             items: itemsByFolder.get(folder.id) ?? [],
           }),
@@ -184,6 +202,32 @@ export function FolderedItemGrid<TItem extends FolderItem>({
           unfiled: true,
         })}
       </div>
+    </div>
+  );
+}
+
+function SectionHeader({
+  title,
+  count,
+  folder,
+  unfiled,
+}: {
+  title: string;
+  count: number;
+  folder?: FolderSummary;
+  unfiled?: boolean;
+}) {
+  return (
+    <div className="mb-3 flex items-center gap-2">
+      {folder ? (
+        <FolderVisual folder={folder} className="size-4 text-muted-foreground" />
+      ) : unfiled ? (
+        <FolderOpen className="size-4 text-muted-foreground" />
+      ) : (
+        <Folder className="size-4 text-muted-foreground" />
+      )}
+      <h2 className="min-w-0 flex-1 truncate text-sm font-medium">{title}</h2>
+      <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
     </div>
   );
 }

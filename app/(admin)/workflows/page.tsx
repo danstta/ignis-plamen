@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Workflow as WorkflowIcon, Plus } from "lucide-react";
+import { listAssets } from "@/lib/assets/service";
 import { listFolders } from "@/lib/folders/service";
 import { listWorkflows } from "@/lib/workflows/service";
 import { FolderedWorkflowGrid } from "@/components/workflow/foldered-workflow-grid";
@@ -10,11 +11,13 @@ export const dynamic = "force-dynamic";
 export default async function WorkflowsPage() {
   let rows: Awaited<ReturnType<typeof listWorkflows>> = [];
   let folders: Awaited<ReturnType<typeof listFolders>> = [];
+  let assets: Awaited<ReturnType<typeof listAssets>> = [];
   let dbError: string | null = null;
   try {
-    [rows, folders] = await Promise.all([
+    [rows, folders, assets] = await Promise.all([
       listWorkflows(),
       listFolders("workflow"),
+      listAssets(),
     ]);
   } catch (err) {
     dbError = err instanceof Error ? err.message : String(err);
@@ -51,7 +54,9 @@ export default async function WorkflowsPage() {
             id: f.id,
             kind: f.kind,
             name: f.name,
+            iconUrl: f.iconUrl,
           }))}
+          assets={assets}
           workflows={rows.map((w) => ({
             id: w.id,
             name: w.name,

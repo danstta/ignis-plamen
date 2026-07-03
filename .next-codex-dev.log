@@ -1,38 +1,6 @@
 ▲ Next.js 16.2.9 (Turbopack)
-- Local:         http://localhost:3000
-- Network:       http://192.168.100.140:3000
+- Local:         http://localhost:3001
+- Network:       http://192.168.100.140:3001
 - Environments: .env.local
-✓ Ready in 1290ms
-
- GET /login?next=%2Fworkflows%2Fnew 200 in 723ms (next.js: 209ms, application-code: 514ms)
- GET /login?next=%2Fworkflows%2Fnew 200 in 322ms (next.js: 8ms, application-code: 314ms)
- POST /login?next=%2Fworkflows%2Fnew 200 in 38ms (next.js: 4ms, application-code: 34ms)
-  └─ ƒ loginAction({"error":null}, {}) in 1ms lib/auth/actions.ts
- GET /login?next=%2Fworkflows%2Fnew 200 in 241ms (next.js: 7ms, application-code: 234ms)
-○ Compiling /workflows/[id] ...
- GET /workflows/new 200 in 8.2s (next.js: 7.5s, proxy.ts: 8ms, application-code: 607ms)
- POST /login?next=%2Fworkflows%2Fnew 303 in 8.2s (next.js: 5ms, application-code: 8.2s)
-  └─ ƒ loginAction({"error":null}, {}) in 16ms lib/auth/actions.ts
-○ Compiling /settings/connections ...
- GET /settings/connections 200 in 9.4s (next.js: 8.1s, proxy.ts: 59ms, application-code: 1247ms)
- GET /settings/connections?create=1 200 in 465ms (next.js: 10ms, proxy.ts: 19ms, application-code: 436ms)
- GET /settings/connections?create=1 200 in 305ms (next.js: 122ms, proxy.ts: 65ms, application-code: 118ms)
-✓ Compiled in 586ms
- GET /settings/connections?create=1 200 in 2.1s (next.js: 626ms, proxy.ts: 121ms, application-code: 1311ms)
-✓ Compiled in 663ms
- GET /settings/connections?create=1 200 in 715ms (next.js: 6ms, proxy.ts: 9ms, application-code: 700ms)
- GET /settings/connections 200 in 22ms (next.js: 7ms, proxy.ts: 7ms, application-code: 9ms)
- GET /settings/connections 200 in 472ms (next.js: 5ms, proxy.ts: 9ms, application-code: 458ms)
-○ Compiling /settings ...
- GET /settings 200 in 5.6s (next.js: 5.5s, proxy.ts: 9ms, application-code: 114ms)
- GET /settings/connections?create=1&scope=team 200 in 282ms (next.js: 63ms, proxy.ts: 9ms, application-code: 211ms)
-○ Compiling /api/connections/oauth/[provider]/start ...
- GET /settings/connections?create=1&auth=keys 200 in 400ms (next.js: 203ms, proxy.ts: 7ms, application-code: 190ms)
- GET /settings/connections?create=1&auth=oauth 200 in 2.1s (next.js: 10ms, proxy.ts: 7ms, application-code: 2.1s)
- GET /api/connections/oauth/google-drive/start 307 in 13.1s (next.js: 13.1s, proxy.ts: 9ms, application-code: 27ms)
- GET /settings/connections/15eecc54-ad3d-4aa7-a8a8-3dcdaf7a468e 200 in 8.0s (next.js: 7.4s, proxy.ts: 13ms, application-code: 547ms)
- POST /settings/connections?create=1&auth=keys 303 in 8.5s (next.js: 242ms, proxy.ts: 13ms, application-code: 8.3s)
-  └─ ƒ createConnectionAction({}) in 121ms app/(admin)/settings/connections/actions.ts
-✓ Compiled in 105ms
-✓ Compiled in 277ms
-✓ Compiled in 154ms
+✓ Ready in 5.6s
+[?25h

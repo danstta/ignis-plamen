@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import {
   createFolder,
+  deleteFolder,
   moveTemplateToFolder,
   moveWorkflowToFolder,
   renameFolder,
@@ -34,6 +35,11 @@ export async function setFolderIconAction(
   assetId: string | null,
 ) {
   await setFolderIcon(id, assetId);
+  revalidateFolderSurfaces(kind);
+}
+
+export async function deleteFolderAction(kind: FolderKind, id: string) {
+  await deleteFolder(id, kind);
   revalidateFolderSurfaces(kind);
 }
 

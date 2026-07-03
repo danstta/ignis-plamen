@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Check,
@@ -9,10 +9,12 @@ import {
   ImageIcon,
   ImageOff,
   Pencil,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  deleteFolderAction,
   moveFolderItemAction,
   renameFolderAction,
   renameFolderItemAction,
@@ -31,6 +33,7 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { ConfirmDeleteDialog } from "@/components/ui/confirm-delete-dialog";
 
 export function FolderContextMenu({
   kind,
@@ -44,6 +47,7 @@ export function FolderContextMenu({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const rename = () => {
@@ -70,42 +74,82 @@ export function FolderContextMenu({
     });
   };
 
+  const deleteFolder = async () => {
+    try {
+      await deleteFolderAction(kind, folder.id);
+      toast.success("Folder deleted", {
+        description:
+          kind === "design"
+            ? "Designs were moved to No folder."
+            : "Workflows were moved to No folder.",
+      });
+      router.refresh();
+    } catch (err) {
+      toast.error("Folder not deleted", { description: String(err) });
+      throw err;
+    }
+  };
+
   return (
-    <ContextMenu>
-      <ContextMenuTrigger>{children}</ContextMenuTrigger>
-      <ContextMenuContent className="min-w-48">
-        <ContextMenuItem onClick={rename} disabled={isPending}>
-          <Pencil className="size-4" /> Rename
-        </ContextMenuItem>
-        <ContextMenuSub>
-          <ContextMenuSubTrigger>
-            <ImageIcon className="size-4" /> Folder icon
-          </ContextMenuSubTrigger>
-          <ContextMenuSubContent className="max-h-72 min-w-56">
-            <ContextMenuItem onClick={() => setIcon(null)} disabled={isPending}>
-              <ImageOff className="size-4" /> No icon
-            </ContextMenuItem>
-            <ContextMenuSeparator />
-            {assets.length === 0 ? (
-              <ContextMenuItem disabled>No assets yet</ContextMenuItem>
-            ) : (
-              assets.map((asset) => (
-                <ContextMenuItem
-                  key={asset.id}
-                  onClick={() => setIcon(asset.id)}
-                  disabled={isPending}
-                  className="min-w-0"
-                >
-                  <FolderAssetIcon asset={asset} />
-                  <span className="min-w-0 flex-1 truncate">{asset.name}</span>
-                  {folder.iconUrl === asset.url ? <Check className="size-4" /> : null}
-                </ContextMenuItem>
-              ))
-            )}
-          </ContextMenuSubContent>
-        </ContextMenuSub>
-      </ContextMenuContent>
-    </ContextMenu>
+    <>
+      <ContextMenu>
+        <ContextMenuTrigger>{children}</ContextMenuTrigger>
+        <ContextMenuContent className="min-w-48">
+          <ContextMenuItem onClick={rename} disabled={isPending}>
+            <Pencil className="size-4" /> Rename
+          </ContextMenuItem>
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>
+              <ImageIcon className="size-4" /> Folder icon
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent className="max-h-72 min-w-56">
+              <ContextMenuItem onClick={() => setIcon(null)} disabled={isPending}>
+                <ImageOff className="size-4" /> No icon
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+              {assets.length === 0 ? (
+                <ContextMenuItem disabled>No assets yet</ContextMenuItem>
+              ) : (
+                assets.map((asset) => (
+                  <ContextMenuItem
+                    key={asset.id}
+                    onClick={() => setIcon(asset.id)}
+                    disabled={isPending}
+                    className="min-w-0"
+                  >
+                    <FolderAssetIcon asset={asset} />
+                    <span className="min-w-0 flex-1 truncate">{asset.name}</span>
+                    {folder.iconUrl === asset.url ? (
+                      <Check className="size-4" />
+                    ) : null}
+                  </ContextMenuItem>
+                ))
+              )}
+            </ContextMenuSubContent>
+          </ContextMenuSub>
+          <ContextMenuSeparator />
+          <ContextMenuItem
+            variant="destructive"
+            onClick={() => setDeleteOpen(true)}
+            disabled={isPending}
+          >
+            <Trash2 className="size-4" /> Delete folder
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+      <ConfirmDeleteDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        itemLabel="folder"
+        itemName={folder.name}
+        detail={
+          kind === "design"
+            ? "Designs inside this folder will be moved to No folder."
+            : "Workflows inside this folder will be moved to No folder."
+        }
+        onConfirm={deleteFolder}
+      />
+    </>
   );
 }
 

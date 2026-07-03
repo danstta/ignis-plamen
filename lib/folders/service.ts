@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { assets, folders, templates, workflows } from "@/lib/db/schema";
 import type { FolderKind } from "@/lib/folders/types";
@@ -67,6 +67,39 @@ export async function setFolderIcon(id: string, assetId: string | null) {
     .returning();
   if (!rows[0]) throw new Error("Folder not found");
   return rows[0];
+}
+
+export async function deleteFolder(id: string, kind: FolderKind) {
+  return db().transaction(async (tx) => {
+    const folderRows = await tx
+      .select({ id: folders.id, kind: folders.kind, name: folders.name })
+      .from(folders)
+      .where(and(eq(folders.id, id), eq(folders.kind, kind)))
+      .limit(1);
+    const folder = folderRows[0];
+    if (!folder) throw new Error("Folder not found");
+
+    const now = new Date();
+    if (kind === "design") {
+      await tx
+        .update(templates)
+        .set({ folderId: null, updatedAt: now })
+        .where(eq(templates.folderId, id));
+    } else {
+      await tx
+        .update(workflows)
+        .set({ folderId: null, updatedAt: now })
+        .where(eq(workflows.folderId, id));
+    }
+
+    const deletedRows = await tx
+      .delete(folders)
+      .where(and(eq(folders.id, id), eq(folders.kind, kind)))
+      .returning({ id: folders.id });
+    if (!deletedRows[0]) throw new Error("Folder not found");
+
+    return folder;
+  });
 }
 
 async function assertFolderKind(folderId: string | null, kind: FolderKind) {

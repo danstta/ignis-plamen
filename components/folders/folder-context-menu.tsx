@@ -165,7 +165,7 @@ export function FolderItemContextMenu({
           <ContextMenuSubContent className="max-h-72 min-w-56">
             <ContextMenuLabel>Folders</ContextMenuLabel>
             <ContextMenuItem onClick={() => move(null)} disabled={isPending}>
-              <FolderOpen className="size-4" /> Unfiled
+              <FolderOpen className="size-4" /> No folder
               {item.folderId === null ? <Check className="ml-auto size-4" /> : null}
             </ContextMenuItem>
             <ContextMenuSeparator />

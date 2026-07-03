@@ -4,8 +4,8 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  ChevronRight,
   FolderPlus,
-  FolderOpen,
   LayoutTemplate,
   Workflow,
 } from "lucide-react";
@@ -51,6 +51,9 @@ export function FolderSidebarList({
   const [isPending, startTransition] = useTransition();
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [activeDrag, setActiveDrag] = useState<FolderDragPayload | null>(null);
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(
+    () => new Set(),
+  );
   const itemIcon =
     kind === "design" ? (
       <LayoutTemplate className="size-4 shrink-0" />
@@ -140,6 +143,17 @@ export function FolderSidebarList({
   );
 
   const unfiled = itemsByFolder.get(null) ?? [];
+  const toggleFolder = (id: string) => {
+    setCollapsedFolders((current) => {
+      const next = new Set(current);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   if (folders.length === 0 && items.length === 0) {
     return (
@@ -166,6 +180,7 @@ export function FolderSidebarList({
 
       {folders.map((folder) => {
         const folderItems = itemsByFolder.get(folder.id) ?? [];
+        const collapsed = collapsedFolders.has(folder.id);
         return renderDropTarget({
           id: folder.id,
           label: folder.name,
@@ -173,44 +188,50 @@ export function FolderSidebarList({
           children: (
             <div className="flex flex-col gap-0.5">
               <FolderContextMenu kind={kind} folder={folder} assets={assets}>
-                <div className="flex items-center gap-2.5 px-2 py-1 text-sm font-medium text-sidebar-foreground">
+                <button
+                  type="button"
+                  onClick={() => toggleFolder(folder.id)}
+                  aria-expanded={!collapsed}
+                  className="flex w-full items-center gap-2 px-2 py-1 text-left text-sm font-medium text-sidebar-foreground outline-none transition-colors hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                >
+                  <ChevronRight
+                    className={cn(
+                      "size-3.5 shrink-0 text-muted-foreground transition-transform",
+                      !collapsed && "rotate-90",
+                    )}
+                  />
                   <FolderVisual folder={folder} className="size-4 shrink-0" />
                   <span className="min-w-0 flex-1 truncate">{folder.name}</span>
                   <span className="text-xs tabular-nums text-muted-foreground/70">
                     {folderItems.length}
                   </span>
-                </div>
+                </button>
               </FolderContextMenu>
-              {folderItems.map((item) => (
-                <FolderItemLink
-                  key={item.id}
-                  kind={kind}
-                  item={item}
-                  icon={itemIcon}
-                  folders={folders}
-                  onDragStart={setActiveDrag}
-                  onDragEnd={() => setActiveDrag(null)}
-                />
-              ))}
+              {collapsed
+                ? null
+                : folderItems.map((item) => (
+                    <FolderItemLink
+                      key={item.id}
+                      kind={kind}
+                      item={item}
+                      icon={itemIcon}
+                      folders={folders}
+                      onDragStart={setActiveDrag}
+                      onDragEnd={() => setActiveDrag(null)}
+                    />
+                  ))}
             </div>
           ),
         });
       })}
 
-      {folders.length > 0 || unfiled.length > 0
+      {unfiled.length > 0
         ? renderDropTarget({
-            id: "unfiled",
-            label: "Unfiled",
+            id: "top-level",
+            label: kind === "design" ? "Designs" : "Workflows",
             folderId: null,
             children: (
               <div className="flex flex-col gap-0.5">
-                <div className="flex items-center gap-2.5 px-2 py-1 text-sm font-medium text-muted-foreground">
-                  <FolderOpen className="size-4 shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">Unfiled</span>
-                  <span className="text-xs tabular-nums">
-                    {unfiled.length}
-                  </span>
-                </div>
                 {unfiled.map((item) => (
                   <FolderItemLink
                     key={item.id}

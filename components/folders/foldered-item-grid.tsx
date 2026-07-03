@@ -198,7 +198,7 @@ export function FolderedItemGrid<TItem extends FolderItem>({
           ? renderSection({
               id: "top-level",
               folderId: null,
-              title: kind === "design" ? "Designs" : "Workflows",
+              title: "No folder",
               items: unfiled,
               topLevel: true,
             })

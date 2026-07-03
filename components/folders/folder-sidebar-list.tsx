@@ -188,24 +188,38 @@ export function FolderSidebarList({
           children: (
             <div className="flex flex-col gap-0.5">
               <FolderContextMenu kind={kind} folder={folder} assets={assets}>
-                <button
-                  type="button"
-                  onClick={() => toggleFolder(folder.id)}
-                  aria-expanded={!collapsed}
-                  className="flex w-full items-center gap-2 px-2 py-1 text-left text-sm font-medium text-sidebar-foreground outline-none transition-colors hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-                >
-                  <ChevronRight
-                    className={cn(
-                      "size-3.5 shrink-0 text-muted-foreground transition-transform",
-                      !collapsed && "rotate-90",
-                    )}
-                  />
-                  <FolderVisual folder={folder} className="size-4 shrink-0" />
-                  <span className="min-w-0 flex-1 truncate">{folder.name}</span>
-                  <span className="text-xs tabular-nums text-muted-foreground/70">
-                    {folderItems.length}
-                  </span>
-                </button>
+                <div className="group/folder-row flex w-full items-center gap-1 rounded-md px-1 py-0.5 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground focus-within:bg-sidebar-accent/60">
+                  <button
+                    type="button"
+                    onClick={() => toggleFolder(folder.id)}
+                    aria-expanded={!collapsed}
+                    title={collapsed ? "Expand folder" : "Collapse folder"}
+                    aria-label={`${collapsed ? "Expand" : "Collapse"} ${folder.name}`}
+                    className="relative flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                  >
+                    <FolderVisual
+                      folder={folder}
+                      className="size-4 shrink-0 transition-opacity group-hover/folder-row:opacity-0 group-focus-within/folder-row:opacity-0"
+                    />
+                    <ChevronRight
+                      className={cn(
+                        "absolute size-3.5 opacity-0 transition-[opacity,transform] group-hover/folder-row:opacity-100 group-focus-within/folder-row:opacity-100",
+                        !collapsed && "rotate-90",
+                      )}
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleFolder(folder.id)}
+                    aria-expanded={!collapsed}
+                    className="flex min-w-0 flex-1 items-center gap-2 rounded-sm px-1 py-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                  >
+                    <span className="min-w-0 flex-1 truncate">{folder.name}</span>
+                    <span className="text-xs tabular-nums text-muted-foreground/70">
+                      {folderItems.length}
+                    </span>
+                  </button>
+                </div>
               </FolderContextMenu>
               {collapsed
                 ? null
@@ -226,28 +240,43 @@ export function FolderSidebarList({
       })}
 
       {unfiled.length > 0
-        ? renderDropTarget({
-            id: "top-level",
-            label: kind === "design" ? "Designs" : "Workflows",
-            folderId: null,
-            children: (
-              <div className="flex flex-col gap-0.5">
-                {unfiled.map((item) => (
-                  <FolderItemLink
-                    key={item.id}
-                    kind={kind}
-                    item={item}
-                    icon={itemIcon}
-                    folders={folders}
-                    onDragStart={setActiveDrag}
-                    onDragEnd={() => setActiveDrag(null)}
-                  />
-                ))}
-              </div>
-            ),
-          })
+        ? (
+            <>
+              {folders.length > 0 ? <NoFolderDivider /> : null}
+              {renderDropTarget({
+                id: "top-level",
+                label: "No folder",
+                folderId: null,
+                children: (
+                  <div className="flex flex-col gap-0.5">
+                    {unfiled.map((item) => (
+                      <FolderItemLink
+                        key={item.id}
+                        kind={kind}
+                        item={item}
+                        icon={itemIcon}
+                        folders={folders}
+                        onDragStart={setActiveDrag}
+                        onDragEnd={() => setActiveDrag(null)}
+                      />
+                    ))}
+                  </div>
+                ),
+              })}
+            </>
+          )
         : null}
     </>
+  );
+}
+
+function NoFolderDivider() {
+  return (
+    <div className="flex items-center gap-2 px-2 py-1.5 text-[0.68rem] font-medium text-muted-foreground/60">
+      <span className="h-px flex-1 bg-sidebar-border/70" />
+      <span>No folder</span>
+      <span className="h-px flex-1 bg-sidebar-border/70" />
+    </div>
   );
 }
 

@@ -24,5 +24,7 @@ export const config = {
   // POST/PUT here with no session cookie and verify their own signing key), the
   // login page, Next internals, and any path with a file extension (static
   // assets, /uploads/*.png).
-  matcher: ["/((?!api/auth|api/editor-fonts|api/hooks|api/inngest|login|_next|.*\\..*).*)"],
+  matcher: [
+    "/((?!api/auth|api/editor-fonts|api/location-images|api/hooks|api/inngest|login|_next|.*\\..*).*)",
+  ],
 };

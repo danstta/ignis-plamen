@@ -24,11 +24,22 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { FolderSidebarList } from "@/components/folders/folder-sidebar-list";
+import type { FolderSummary } from "@/lib/folders/types";
 
 type Mode = "design" | "workflows";
 
-export type SidebarTemplate = { id: string; name: string };
-export type SidebarWorkflow = { id: string; name: string; active: boolean };
+export type SidebarTemplate = {
+  id: string;
+  name: string;
+  folderId: string | null;
+};
+export type SidebarWorkflow = {
+  id: string;
+  name: string;
+  folderId: string | null;
+  active: boolean;
+};
 
 /** Which mode a path belongs to, or null for shared routes (dashboard, settings). */
 function inferMode(pathname: string): Mode | null {
@@ -53,9 +64,13 @@ function inferMode(pathname: string): Mode | null {
 export function AppSidebar({
   templates,
   workflows,
+  designFolders,
+  workflowFolders,
 }: {
   templates: SidebarTemplate[];
   workflows: SidebarWorkflow[];
+  designFolders: FolderSummary[];
+  workflowFolders: FolderSummary[];
 }) {
   const pathname = usePathname();
 
@@ -65,7 +80,14 @@ export function AppSidebar({
     return <SettingsSidebar />;
   }
 
-  return <MainSidebar templates={templates} workflows={workflows} />;
+  return (
+    <MainSidebar
+      templates={templates}
+      workflows={workflows}
+      designFolders={designFolders}
+      workflowFolders={workflowFolders}
+    />
+  );
 }
 
 const COLLAPSE_KEY = "sidebar-collapsed";
@@ -102,9 +124,13 @@ function useSidebarCollapsed(): [boolean, () => void] {
 function MainSidebar({
   templates,
   workflows,
+  designFolders,
+  workflowFolders,
 }: {
   templates: SidebarTemplate[];
   workflows: SidebarWorkflow[];
+  designFolders: FolderSummary[];
+  workflowFolders: FolderSummary[];
 }) {
   const pathname = usePathname();
   const [mode, setMode] = useState<Mode>(() => inferMode(pathname) ?? "design");
@@ -179,7 +205,7 @@ function MainSidebar({
                 className="w-full justify-start"
                 render={<Link href="/editor/new" />}
               >
-                <Plus /> New template
+                <Plus /> New design
               </Button>
 
               <div className="mt-2 flex flex-col gap-0.5">
@@ -199,21 +225,17 @@ function MainSidebar({
                 </SidebarLink>
               </div>
 
-              <SectionLabel>Templates</SectionLabel>
-              {templates.length === 0 ? (
-                <EmptyHint>No templates yet.</EmptyHint>
-              ) : (
-                templates.map((t) => (
-                  <SidebarLink
-                    key={t.id}
-                    href={`/editor/${t.id}`}
-                    active={isActive(`/editor/${t.id}`)}
-                    icon={<LayoutTemplate className="size-4 shrink-0" />}
-                  >
-                    {t.name}
-                  </SidebarLink>
-                ))
-              )}
+              <FolderSidebarList
+                kind="design"
+                folders={designFolders}
+                items={templates.map((t) => ({
+                  id: t.id,
+                  name: t.name,
+                  folderId: t.folderId,
+                  href: `/editor/${t.id}`,
+                  active: isActive(`/editor/${t.id}`),
+                }))}
+              />
             </>
           ) : (
             <>
@@ -242,30 +264,26 @@ function MainSidebar({
                 </SidebarLink>
               </div>
 
-              <SectionLabel>Workflows</SectionLabel>
-              {workflows.length === 0 ? (
-                <EmptyHint>No workflows yet.</EmptyHint>
-              ) : (
-                workflows.map((w) => (
-                  <SidebarLink
-                    key={w.id}
-                    href={`/workflows/${w.id}`}
-                    active={isActive(`/workflows/${w.id}`)}
-                    icon={<Workflow className="size-4 shrink-0" />}
-                    trailing={
-                      <span
-                        title={w.active ? "Active" : "Inactive"}
-                        className={cn(
-                          "size-1.5 shrink-0 rounded-full",
-                          w.active ? "bg-green-500" : "bg-muted-foreground/40",
-                        )}
-                      />
-                    }
-                  >
-                    {w.name}
-                  </SidebarLink>
-                ))
-              )}
+              <FolderSidebarList
+                kind="workflow"
+                folders={workflowFolders}
+                items={workflows.map((w) => ({
+                  id: w.id,
+                  name: w.name,
+                  folderId: w.folderId,
+                  href: `/workflows/${w.id}`,
+                  active: isActive(`/workflows/${w.id}`),
+                  trailing: (
+                    <span
+                      title={w.active ? "Active" : "Inactive"}
+                      className={cn(
+                        "size-1.5 shrink-0 rounded-full",
+                        w.active ? "bg-green-500" : "bg-muted-foreground/40",
+                      )}
+                    />
+                  ),
+                }))}
+              />
             </>
           )}
         </div>
@@ -342,7 +360,7 @@ function CollapsedRail({
       <div className="flex flex-col gap-1">
         <RailLink
           href={mode === "design" ? "/editor/new" : "/workflows/new"}
-          title={mode === "design" ? "New template" : "New workflow"}
+          title={mode === "design" ? "New design" : "New workflow"}
           icon={<Plus className="size-4" />}
         />
         {mode === "design" ? (
@@ -575,8 +593,3 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function EmptyHint({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="px-2.5 py-1.5 text-sm text-muted-foreground/60">{children}</p>
-  );
-}

@@ -1,6 +1,7 @@
 import {
   pgTable,
   uuid,
+  index,
   text,
   integer,
   boolean,
@@ -34,10 +35,28 @@ export const brands = pgTable("brands", {
     .notNull(),
 });
 
+/** Sidebar/list folders. Kind keeps designs and workflows in separate spaces. */
+export const folders = pgTable("folders", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  kind: text("kind", { enum: ["design", "workflow"] }).notNull(),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+}, (table) => [
+  index("folders_kind_name_idx").on(table.kind, table.name),
+]);
+
 /** Design templates authored in the editor. */
 export const templates = pgTable("templates", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(),
+  folderId: uuid("folder_id").references(() => folders.id, {
+    onDelete: "set null",
+  }),
   width: integer("width").notNull().default(1080),
   height: integer("height").notNull().default(1080),
   doc: jsonb("doc").$type<TemplateDoc>().notNull(),
@@ -47,7 +66,9 @@ export const templates = pgTable("templates", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
-});
+}, (table) => [
+  index("templates_folder_id_idx").on(table.folderId),
+]);
 
 /**
  * A connected account: a configured instance of a connection provider (e.g. a
@@ -119,6 +140,9 @@ export const assets = pgTable("assets", {
 export const workflows = pgTable("workflows", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(),
+  folderId: uuid("folder_id").references(() => folders.id, {
+    onDelete: "set null",
+  }),
   /** Only active workflows are started when their trigger connection fires. */
   active: boolean("active").notNull().default(false),
   /** Nodes + edges; round-tripped to the @xyflow/react canvas. */
@@ -132,7 +156,9 @@ export const workflows = pgTable("workflows", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
-});
+}, (table) => [
+  index("workflows_folder_id_idx").on(table.folderId),
+]);
 
 /** One execution of a workflow. Holds enough state to pause and resume. */
 export const workflowRuns = pgTable("workflow_runs", {
@@ -211,6 +237,8 @@ export const webhookEvents = pgTable("webhook_events", {
 
 export type BrandRow = typeof brands.$inferSelect;
 export type NewBrand = typeof brands.$inferInsert;
+export type Folder = typeof folders.$inferSelect;
+export type NewFolder = typeof folders.$inferInsert;
 export type Template = typeof templates.$inferSelect;
 export type NewTemplate = typeof templates.$inferInsert;
 export type Connection = typeof connections.$inferSelect;

@@ -420,7 +420,9 @@ export function NodeConfigPanel({
   };
 
   const renderField = (f: NodeConfigField) => {
-    const value = config[f.name];
+    const value =
+      config[f.name] ??
+      (f.legacyValueField ? config[f.legacyValueField] : undefined);
     const str = value === undefined || value === null ? "" : String(value);
     const setRef = (el: FieldEl) => {
       fieldEls.current[f.name] = el;
@@ -460,6 +462,56 @@ export function NodeConfigPanel({
             onChange={(e) => set(f.name, e.target.value)}
           />
         );
+      case "checkbox-group": {
+        const options = f.options ?? [];
+        const legacyValue =
+          f.legacyValueMap && typeof config[f.legacyValueMap.field] === "string"
+            ? f.legacyValueMap.values[String(config[f.legacyValueMap.field])]
+            : undefined;
+        const currentValues = Array.isArray(value)
+          ? value
+          : Array.isArray(legacyValue)
+            ? legacyValue
+            : Array.isArray(f.defaultValue)
+              ? f.defaultValue
+              : [];
+        const selectedValues = currentValues
+          .map((item) => String(item))
+          .filter((item) => options.some((option) => option.value === item));
+
+        return (
+          <div className="grid gap-1.5">
+            {options.map((option) => {
+              const checked = selectedValues.includes(option.value);
+              const disableLast = checked && selectedValues.length === 1;
+              return (
+                <label
+                  key={option.value}
+                  className={cn(
+                    "flex min-h-9 cursor-pointer items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent",
+                    checked && "border-ring bg-accent/50",
+                    disableLast && "cursor-default opacity-80",
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    className="size-4 rounded border-input accent-foreground"
+                    checked={checked}
+                    disabled={disableLast}
+                    onChange={(event) => {
+                      const next = event.target.checked
+                        ? [...selectedValues, option.value]
+                        : selectedValues.filter((item) => item !== option.value);
+                      set(f.name, next);
+                    }}
+                  />
+                  <span>{option.label}</span>
+                </label>
+              );
+            })}
+          </div>
+        );
+      }
       case "select": {
         const options = modelOptionsForField(f);
         const selectValue = options.some((o) => o.value === str) ? str : "";

@@ -26,10 +26,17 @@ export interface NodeConfigField {
     | "number"
     | "textarea"
     | "select"
+    | "checkbox-group"
     | "connection"
     | "template";
-  /** Options for `select`. */
+  /** Options for `select` and `checkbox-group`. */
   options?: { value: string; label: string }[];
+  /** Fallback value used by generic field renderers before a config is saved. */
+  defaultValue?: unknown;
+  /** Reads an older config field when this field has not been saved yet. */
+  legacyValueField?: string;
+  /** Maps an older single config value into this field's current shape. */
+  legacyValueMap?: { field: string; values: Record<string, unknown> };
   /** Limits a connection picker to these provider ids. */
   connectionTypes?: string[];
   /** Builds select options from the model list exposed by another connection field. */

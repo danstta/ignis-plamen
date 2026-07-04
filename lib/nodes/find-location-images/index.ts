@@ -439,32 +439,6 @@ function triggerBodyLocation(trigger: Record<string, unknown>): string {
   return stringValue((body as Record<string, unknown>).location);
 }
 
-function providerUsesWikimedia(provider: FindLocationImagesConfig["provider"]) {
-  return (
-    provider === "wikimedia-strict" ||
-    provider === "wikimedia" ||
-    provider === "google-places-wikimedia" ||
-    provider === "wikimedia-openverse" ||
-    provider === "pexels-wikimedia"
-  );
-}
-
-function providerUsesGooglePlaces(provider: FindLocationImagesConfig["provider"]) {
-  return provider === "google-places" || provider === "google-places-wikimedia";
-}
-
-function providerUsesOpenverse(provider: FindLocationImagesConfig["provider"]) {
-  return provider === "openverse" || provider === "wikimedia-openverse";
-}
-
-function providerUsesPexels(provider: FindLocationImagesConfig["provider"]) {
-  return provider === "pexels" || provider === "pexels-wikimedia";
-}
-
-function providerAllowsTextFallback(provider: FindLocationImagesConfig["provider"]) {
-  return provider !== "wikimedia-strict" && provider !== "google-places-wikimedia";
-}
-
 function destinationName(place: NominatimPlace | undefined): string | undefined {
   const address = place?.address;
   if (!address) return undefined;
@@ -506,11 +480,19 @@ export const findLocationImagesNode: NodeDefinition<FindLocationImagesConfig> = 
       triggerBodyLocation(ctx.trigger);
     if (!location) throw new Error("No location provided to search");
 
-    const searchLimit = Math.min(Math.max(ctx.config.maxCandidates * 4, 10), 50);
+    const selectedProviders = new Set(ctx.config.providers);
+    const resultsPerProvider = ctx.config.resultsPerProvider;
+    const searchLimit = Math.min(Math.max(resultsPerProvider * 4, 10), 50);
     const candidates: ImageCandidate[] = [];
     let googlePlace: GooglePlace | undefined;
 
-    if (providerUsesGooglePlaces(ctx.config.provider)) {
+    const addProviderCandidates = (providerCandidates: ImageCandidate[]) => {
+      candidates.push(
+        ...uniqueCandidates(providerCandidates).slice(0, resultsPerProvider),
+      );
+    };
+
+    if (selectedProviders.has("google-places")) {
       googlePlace = await textSearchGooglePlaces(location);
       if (googlePlace) {
         ctx.log(
@@ -521,10 +503,10 @@ export const findLocationImagesNode: NodeDefinition<FindLocationImagesConfig> = 
             "a place"
           }`,
         );
-        candidates.push(
-          ...toGooglePlaceCandidates(
+        addProviderCandidates(
+          toGooglePlaceCandidates(
             googlePlace,
-            ctx.config.maxCandidates,
+            resultsPerProvider,
             ctx.config.maxWidthPx,
           ),
         );
@@ -533,12 +515,16 @@ export const findLocationImagesNode: NodeDefinition<FindLocationImagesConfig> = 
       }
     }
 
-    const place = await geocodeLocation(location);
+    const needsGeocode =
+      selectedProviders.has("wikimedia") ||
+      selectedProviders.has("openverse") ||
+      selectedProviders.has("pexels");
+    const place = needsGeocode ? await geocodeLocation(location) : undefined;
     if (place) {
       ctx.log(
         `geocoded "${location}" to ${place.display_name ?? `${place.lat}, ${place.lon}`}`,
       );
-      if (providerUsesWikimedia(ctx.config.provider)) {
+      if (selectedProviders.has("wikimedia")) {
         const googleLat = googlePlace?.location?.latitude;
         const googleLon = googlePlace?.location?.longitude;
         const nearbyPages = await searchNearbyCommons(
@@ -547,9 +533,18 @@ export const findLocationImagesNode: NodeDefinition<FindLocationImagesConfig> = 
           searchLimit,
           ctx.config.maxWidthPx,
         );
-        candidates.push(...nearbyPages.map(toCandidate).filter(isCandidate));
+        const wikimediaCandidates = nearbyPages.map(toCandidate).filter(isCandidate);
+        if (wikimediaCandidates.length < resultsPerProvider) {
+          const textPages = await searchCommonsText(
+            place.display_name ?? location,
+            searchLimit,
+            ctx.config.maxWidthPx,
+          );
+          wikimediaCandidates.push(...textPages.map(toCandidate).filter(isCandidate));
+        }
+        addProviderCandidates(wikimediaCandidates);
       }
-    } else {
+    } else if (needsGeocode) {
       ctx.log(`could not geocode "${location}", using text search only`);
     }
 
@@ -560,47 +555,47 @@ export const findLocationImagesNode: NodeDefinition<FindLocationImagesConfig> = 
         all.indexOf(query) === index,
     );
 
-    if (providerUsesPexels(ctx.config.provider)) {
+    if (selectedProviders.has("wikimedia") && !place) {
+      const wikimediaCandidates: ImageCandidate[] = [];
+      for (const query of textQueries) {
+        const textPages = await searchCommonsText(
+          query,
+          searchLimit,
+          ctx.config.maxWidthPx,
+        );
+        wikimediaCandidates.push(...textPages.map(toCandidate).filter(isCandidate));
+        if (uniqueCandidates(wikimediaCandidates).length >= resultsPerProvider) break;
+      }
+      addProviderCandidates(wikimediaCandidates);
+    }
+
+    if (selectedProviders.has("pexels")) {
+      const pexelsCandidates: ImageCandidate[] = [];
       for (const query of pexelsQueries(location, place)) {
-        candidates.push(
+        pexelsCandidates.push(
           ...(await searchPexels(query, searchLimit))
             .map((photo) => toPexelsCandidate(photo, ctx.config.maxWidthPx))
             .filter(isCandidate),
         );
-        if (uniqueCandidates(candidates).length >= ctx.config.maxCandidates) break;
+        if (uniqueCandidates(pexelsCandidates).length >= resultsPerProvider) break;
       }
+      addProviderCandidates(pexelsCandidates);
     }
 
-    if (providerAllowsTextFallback(ctx.config.provider)) {
+    if (selectedProviders.has("openverse")) {
+      const openverseCandidates: ImageCandidate[] = [];
       for (const query of textQueries) {
-        if (
-          providerUsesWikimedia(ctx.config.provider) &&
-          uniqueCandidates(candidates).length < ctx.config.maxCandidates
-        ) {
-          const textPages = await searchCommonsText(
-            query,
-            searchLimit,
-            ctx.config.maxWidthPx,
-          );
-          candidates.push(...textPages.map(toCandidate).filter(isCandidate));
-        }
-
-        if (
-          providerUsesOpenverse(ctx.config.provider) &&
-          uniqueCandidates(candidates).length < ctx.config.maxCandidates
-        ) {
-          candidates.push(
-            ...(await searchOpenverse(query, searchLimit))
-              .map(toOpenverseCandidate)
-              .filter(isCandidate),
-          );
-        }
-
-        if (uniqueCandidates(candidates).length >= ctx.config.maxCandidates) break;
+        openverseCandidates.push(
+          ...(await searchOpenverse(query, searchLimit))
+            .map(toOpenverseCandidate)
+            .filter(isCandidate),
+        );
+        if (uniqueCandidates(openverseCandidates).length >= resultsPerProvider) break;
       }
+      addProviderCandidates(openverseCandidates);
     }
 
-    const selected = uniqueCandidates(candidates).slice(0, ctx.config.maxCandidates);
+    const selected = uniqueCandidates(candidates);
     if (selected.length === 0) {
       ctx.log(`No reusable photos found for "${location}"`);
     }

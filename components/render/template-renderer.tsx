@@ -61,6 +61,8 @@ export function ElementView({
           <img
             src={image.src}
             alt=""
+            width={Math.round(el.width * image.scale)}
+            height={Math.round(el.height * image.scale)}
             style={imageContentStyle(el, image)}
           />
         ) : (

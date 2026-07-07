@@ -40,6 +40,7 @@ import {
   type NotionPropertyUpdate,
 } from "@/lib/nodes/notion-update-page/meta";
 import { CURATE_IMAGES_TYPE_ID } from "@/lib/nodes/curate-images/meta";
+import { PREVIEW_DESIGN_IMAGE_TYPE_ID } from "@/lib/nodes/preview-design-image/meta";
 import { RENDER_TEMPLATE_BATCH_TYPE_ID } from "@/lib/nodes/render-template-batch/meta";
 import { useWorkflowEditor } from "@/lib/workflows/store";
 import {
@@ -749,6 +750,7 @@ export function NodeConfigPanel({
 
       {node.type === "render-template" ||
       node.type === RENDER_TEMPLATE_BATCH_TYPE_ID ||
+      node.type === PREVIEW_DESIGN_IMAGE_TYPE_ID ||
       node.type === CURATE_IMAGES_TYPE_ID ? (
         <RenderTemplatePlaceholders
           templateId={String(config.templateId ?? "")}

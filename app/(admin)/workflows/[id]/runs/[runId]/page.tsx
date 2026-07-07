@@ -9,6 +9,7 @@ import type { WorkflowGraph } from "@/lib/workflows/types";
 import { RunStatusBadge } from "@/components/workflow/run-status-badge";
 import { CurateImagesPicker } from "@/components/workflow/curate-images-picker";
 import { ManualReviewPicker } from "@/components/workflow/manual-review-picker";
+import { PreviewDesignImagePicker } from "@/components/workflow/preview-design-image-picker";
 import { Button } from "@/components/ui/button";
 import { RunLive } from "./run-live";
 import { RunNodeCard } from "./run-node-card";
@@ -54,6 +55,7 @@ function findRenderUrls(outputs: Record<string, Record<string, unknown>>): strin
 
 function chosenLabel(type: string): string {
   if (type === "review-designs") return "Chosen design";
+  if (type === "preview-design-image") return "Locked image";
   if (type === "manual-review") return "Chosen image";
   return "Chosen image";
 }
@@ -191,6 +193,12 @@ export default async function RunDetailPage({
           username?: string;
         })
       : undefined;
+  const dynamicImagePlaceholderKey =
+    run.status === "waiting" && run.waitingNodeId
+      ? String(
+          run.nodeOutputs[run.waitingNodeId]?.dynamicImagePlaceholderKey ?? "",
+        )
+      : "";
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -301,7 +309,30 @@ export default async function RunDetailPage({
         </section>
       ) : null}
 
-      {run.status === "waiting" && run.resumeToken && reviewKind !== "image-set" ? (
+      {run.status === "waiting" &&
+      run.resumeToken &&
+      reviewKind === "design-image" ? (
+        <section className="mt-6">
+          <h2 className="text-sm font-semibold">Preview design image</h2>
+          <p className="mb-3 mt-0.5 text-xs text-muted-foreground">
+            Swap the dynamic placeholder in the design preview, then lock the image.
+          </p>
+          <PreviewDesignImagePicker
+            runId={run.id}
+            resumeToken={run.resumeToken}
+            candidates={waitingCandidates}
+            previewTemplateId={previewTemplateId}
+            previewPlaceholders={previewPlaceholders}
+            previewBindings={previewBindings}
+            dynamicImagePlaceholderKey={dynamicImagePlaceholderKey}
+          />
+        </section>
+      ) : null}
+
+      {run.status === "waiting" &&
+      run.resumeToken &&
+      reviewKind !== "image-set" &&
+      reviewKind !== "design-image" ? (
         <section className="mt-6">
           <h2 className="text-sm font-semibold">
             Pick the final {reviewItemLabel}

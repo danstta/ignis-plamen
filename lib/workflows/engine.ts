@@ -487,6 +487,36 @@ function templateDataForCuratedImages(
   return data;
 }
 
+function templateDataForDesignImage(
+  pausedState: NodeOutputs | undefined,
+  selectedUrl: string,
+): Record<string, string> {
+  const placeholders = Array.isArray(pausedState?.previewPlaceholders)
+    ? pausedState.previewPlaceholders.filter(isPlaceholderRecord)
+    : [];
+  const bindings =
+    pausedState?.previewBindings &&
+    typeof pausedState.previewBindings === "object" &&
+    !Array.isArray(pausedState.previewBindings)
+      ? (pausedState.previewBindings as Record<string, unknown>)
+      : {};
+  const dynamicKey =
+    typeof pausedState?.dynamicImagePlaceholderKey === "string"
+      ? pausedState.dynamicImagePlaceholderKey
+      : "";
+  const data: Record<string, string> = {};
+
+  for (const placeholder of placeholders) {
+    const bound = bindings[placeholder.key];
+    const value =
+      bound !== undefined && bound !== "" ? valueToOutputText(bound) : "";
+    data[placeholder.key] =
+      placeholder.key === dynamicKey ? selectedUrl : value;
+  }
+
+  return data;
+}
+
 function outputForCuratedImages(
   pausedState: NodeOutputs | undefined,
   selectedUrls: string[],
@@ -532,6 +562,25 @@ function outputForHumanChoice(
   }
 
   const choiceUrl = choice.choiceUrl;
+  if (pausedState?.reviewKind === "design-image") {
+    const candidates = pausedState?.candidates;
+    const chosenImage = Array.isArray(candidates)
+      ? candidates.find(
+          (candidate) =>
+            candidate &&
+            typeof candidate === "object" &&
+            "url" in candidate &&
+            candidate.url === choiceUrl,
+        )
+      : undefined;
+
+    return {
+      chosen: choiceUrl,
+      chosenImage: chosenImage ?? { url: choiceUrl },
+      templateData: templateDataForDesignImage(pausedState, choiceUrl),
+    };
+  }
+
   const candidates = pausedState?.candidates;
   const chosenDesign = Array.isArray(candidates)
     ? candidates.find(

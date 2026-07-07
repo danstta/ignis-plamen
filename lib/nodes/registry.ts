@@ -8,6 +8,7 @@ import { manualReviewNode } from "./manual-review";
 import { renderTemplateNode } from "./render-template";
 import { renderTemplateBatchNode } from "./render-template-batch";
 import { reviewDesignsNode } from "./review-designs";
+import { previewDesignImageNode } from "./preview-design-image";
 import { rehostImageNode } from "./rehost-image";
 import { runLinkNode } from "./run-link";
 import { routerNode } from "./router";
@@ -29,6 +30,7 @@ const definitions: NodeDefinition[] = [
   manualReviewNode as unknown as NodeDefinition,
   renderTemplateNode as unknown as NodeDefinition,
   renderTemplateBatchNode as unknown as NodeDefinition,
+  previewDesignImageNode as unknown as NodeDefinition,
   reviewDesignsNode as unknown as NodeDefinition,
   rehostImageNode as unknown as NodeDefinition,
   runLinkNode as unknown as NodeDefinition,

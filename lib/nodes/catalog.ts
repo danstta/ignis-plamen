@@ -8,6 +8,7 @@ import { manualReviewMeta } from "./manual-review/meta";
 import { renderTemplateMeta } from "./render-template/meta";
 import { renderTemplateBatchMeta } from "./render-template-batch/meta";
 import { reviewDesignsMeta } from "./review-designs/meta";
+import { previewDesignImageMeta } from "./preview-design-image/meta";
 import { rehostImageMeta } from "./rehost-image/meta";
 import { runLinkMeta } from "./run-link/meta";
 import { routerMeta } from "./router/meta";
@@ -30,6 +31,7 @@ const catalog: NodeMeta[] = [
   manualReviewMeta as unknown as NodeMeta,
   renderTemplateMeta as unknown as NodeMeta,
   renderTemplateBatchMeta as unknown as NodeMeta,
+  previewDesignImageMeta as unknown as NodeMeta,
   reviewDesignsMeta as unknown as NodeMeta,
   rehostImageMeta as unknown as NodeMeta,
   runLinkMeta as unknown as NodeMeta,

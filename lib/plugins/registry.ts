@@ -18,6 +18,7 @@ const definitions: PluginDefinition[] = [
       "curate-images",
       "render-template",
       "render-template-batch",
+      "preview-design-image",
       "review-designs",
       "run-link",
     ],

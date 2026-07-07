@@ -9,6 +9,7 @@ import {
   buildPlaceholderData,
   renderTemplateToStorage,
 } from "../render-template/shared";
+import { normalizeImageCandidates } from "../image-input";
 
 export type RenderedDesign = {
   index: number;
@@ -18,47 +19,6 @@ export type RenderedDesign = {
   templateId: string;
   input: PlaceholderData;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function urlFromValue(value: unknown): string | undefined {
-  if (typeof value === "string") return value.trim() || undefined;
-  if (!isRecord(value)) return undefined;
-  const url = value.url ?? value.renderUrl ?? value.primaryUrl ?? value.chosen;
-  return typeof url === "string" && url.trim() ? url.trim() : undefined;
-}
-
-function imageListFrom(value: unknown): string[] {
-  const raw =
-    isRecord(value) && Array.isArray(value.images)
-      ? value.images
-      : isRecord(value) && Array.isArray(value.candidates)
-        ? value.candidates
-        : isRecord(value) && Array.isArray(value.ranked)
-          ? value.ranked
-          : isRecord(value) && Array.isArray(value.renderUrls)
-            ? value.renderUrls
-            : isRecord(value) && Array.isArray(value.designs)
-              ? value.designs
-              : value;
-
-  if (!Array.isArray(raw)) {
-    const one = urlFromValue(raw);
-    return one ? [one] : [];
-  }
-
-  const seen = new Set<string>();
-  const urls: string[] = [];
-  for (const item of raw) {
-    const url = urlFromValue(item);
-    if (!url || seen.has(url)) continue;
-    seen.add(url);
-    urls.push(url);
-  }
-  return urls;
-}
 
 export const renderTemplateBatchNode: NodeDefinition<RenderTemplateBatchConfig> = {
   ...renderTemplateBatchMeta,
@@ -76,7 +36,9 @@ export const renderTemplateBatchNode: NodeDefinition<RenderTemplateBatchConfig> 
       throw new Error("The selected template has no image placeholder.");
     }
 
-    const images = imageListFrom(ctx.inputs.images).slice(0, ctx.config.count);
+    const images = normalizeImageCandidates(ctx.inputs.images)
+      .map((image) => image.url)
+      .slice(0, ctx.config.count);
     if (images.length === 0) {
       throw new Error("No input images were available to render.");
     }

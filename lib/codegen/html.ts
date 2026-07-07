@@ -8,7 +8,9 @@ import {
   baseStyle,
   fillToStyle,
   imageContainerStyle,
-  resolveImageSrc,
+  imageContentStyle,
+  imagePlacementContainerStyle,
+  resolveImage,
   resolveText,
   shapeStyle,
   textContentStyle,
@@ -38,17 +40,14 @@ function elementHtml(el: TemplateElement, data?: PlaceholderData): string {
   }
 
   if (el.type === "image") {
+    const image = resolveImage(el, data);
     const containerStyle = styleToInlineCss({
       ...baseStyle(el),
       ...imageContainerStyle(el),
+      ...imagePlacementContainerStyle(image),
     });
-    const imgStyle = styleToInlineCss({
-      width: "100%",
-      height: "100%",
-      objectFit: el.objectFit ?? "cover",
-      display: "block",
-    });
-    const src = resolveImageSrc(el, data) ?? "";
+    const imgStyle = styleToInlineCss(imageContentStyle(el, image));
+    const src = image.src ?? "";
     return `<div style="${containerStyle}"><img alt="" src="${escapeHtml(src)}" style="${imgStyle}" /></div>`;
   }
 

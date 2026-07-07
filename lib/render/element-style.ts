@@ -9,6 +9,8 @@ import {
   type TemplateElement,
   type TextElement,
   isGradient,
+  isPlaceholderImageValue,
+  placeholderValueToText,
 } from "@/lib/editor/types";
 import { shapeGeometryStyle } from "@/lib/editor/shapes";
 
@@ -161,12 +163,85 @@ export function imageClipStyle(el: ImageElement): CSSProperties {
   return { borderRadius: imageBorderRadius(el) };
 }
 
+export type ResolvedImage = {
+  src?: string;
+  objectPosition?: string;
+  scale: number;
+};
+
+function normalizedScale(value: unknown): number {
+  const scale = typeof value === "number" && Number.isFinite(value) ? value : 1;
+  return Math.min(4, Math.max(1, scale));
+}
+
+function alignmentFromObjectPosition(position: string | undefined): {
+  justifyContent: CSSProperties["justifyContent"];
+  alignItems: CSSProperties["alignItems"];
+} {
+  const normalized = position?.toLowerCase() ?? "center center";
+  const justifyContent = normalized.includes("left")
+    ? "flex-start"
+    : normalized.includes("right")
+      ? "flex-end"
+      : "center";
+  const alignItems = normalized.includes("top")
+    ? "flex-start"
+    : normalized.includes("bottom")
+      ? "flex-end"
+      : "center";
+  return { justifyContent, alignItems };
+}
+
+export function imageContentStyle(
+  el: ImageElement,
+  image: ResolvedImage,
+): CSSProperties {
+  const scale = image.scale || 1;
+  return {
+    width: `${scale * 100}%`,
+    height: `${scale * 100}%`,
+    objectFit: el.objectFit ?? "cover",
+    objectPosition: image.objectPosition ?? "center center",
+    display: "block",
+    flexShrink: 0,
+    ...imageClipStyle(el),
+  };
+}
+
+export function imagePlacementContainerStyle(
+  image: ResolvedImage,
+): CSSProperties {
+  return alignmentFromObjectPosition(image.objectPosition);
+}
+
 /** Resolve the text shown for a text element given (optional) placeholder data. */
 export function resolveText(el: TextElement, data?: PlaceholderData): string {
   if (el.placeholderKey) {
-    return data?.[el.placeholderKey] ?? `{${el.placeholderKey}}`;
+    return placeholderValueToText(data?.[el.placeholderKey]) || `{${el.placeholderKey}}`;
   }
   return el.text;
+}
+
+/** Resolve the image and crop controls for an image element. */
+export function resolveImage(
+  el: ImageElement,
+  data?: PlaceholderData,
+): ResolvedImage {
+  if (el.placeholderKey) {
+    const value = data?.[el.placeholderKey];
+    if (isPlaceholderImageValue(value)) {
+      return {
+        src: value.url || el.src,
+        objectPosition: value.objectPosition,
+        scale: normalizedScale(value.scale),
+      };
+    }
+    return {
+      src: placeholderValueToText(value) || el.src,
+      scale: 1,
+    };
+  }
+  return { src: el.src, scale: 1 };
 }
 
 /** Resolve the image src for an image element given (optional) placeholder data. */
@@ -174,8 +249,5 @@ export function resolveImageSrc(
   el: ImageElement,
   data?: PlaceholderData,
 ): string | undefined {
-  if (el.placeholderKey) {
-    return data?.[el.placeholderKey] ?? el.src;
-  }
-  return el.src;
+  return resolveImage(el, data).src;
 }

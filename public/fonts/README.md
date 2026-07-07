@@ -17,7 +17,11 @@ match whatever you actually add):
 | Family     | Files                                                        |
 | ---------- | ------------------------------------------------------------ |
 | Canva Sans | `canva-sans-400.woff`, `canva-sans-500.woff`, `canva-sans-700.woff` |
-| Garet      | `garet-400.woff`, `garet-500.woff`, `garet-700.woff`         |
+| Garet      | `garet-400.otf`, `garet-700.otf`                             |
+
+The checked-in Garet files are the free Book and Heavy weights. They are mapped
+to `400` and `700` so normal and bold text render close to the Garet available in
+Canva while keeping the editor and PNG renderer on the same files.
 
 A missing file is not an error — the renderer just falls back to Inter for that
 family until the file is added. The editor's font picker shows a note for any

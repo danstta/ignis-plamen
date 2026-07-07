@@ -92,8 +92,8 @@ export const FONTS: Record<string, FontDef> = {
   Garet: {
     family: "Garet",
     kind: "local",
-    file: (w) => `garet-${w}.woff`,
-    weights: [400, 500, 700],
+    file: (w) => `garet-${w}.otf`,
+    weights: [400, 700],
   },
 };
 

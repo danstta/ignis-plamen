@@ -198,8 +198,8 @@ export function imageContentStyle(
 ): CSSProperties {
   const scale = image.scale || 1;
   return {
-    width: `${scale * 100}%`,
-    height: `${scale * 100}%`,
+    width: el.width * scale,
+    height: el.height * scale,
     objectFit: el.objectFit ?? "cover",
     objectPosition: image.objectPosition ?? "center center",
     display: "block",

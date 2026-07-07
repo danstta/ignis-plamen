@@ -11,6 +11,13 @@ import {
 } from "./control-flow";
 import { resolveInputs } from "./input-resolution";
 import { resolveReferences, validateLockedPaths } from "./references";
+import {
+  isPlaceholderImageValue,
+  placeholderValueToText,
+  type PlaceholderData,
+  type PlaceholderImageValue,
+  type PlaceholderValue,
+} from "@/lib/editor/types";
 import type {
   NodeOutputs,
   NodeRunState,
@@ -423,7 +430,14 @@ export async function startRun(
 
 type ResumeChoice =
   | { choiceUrl: string }
-  | { selectedUrls: string[] };
+  | { selectedUrls: string[] }
+  | { selectedImages: SelectedImageChoice[] };
+
+type SelectedImageChoice = {
+  url: string;
+  objectPosition?: string;
+  scale?: number;
+};
 
 function isImageRecord(value: unknown): value is { url: string } {
   return (
@@ -457,10 +471,45 @@ function valueToOutputText(value: unknown): string {
   return JSON.stringify(value);
 }
 
+function valueForImagePlaceholder(value: unknown): PlaceholderValue {
+  if (isPlaceholderImageValue(value)) return value;
+  if (typeof value === "string") return value;
+  return value !== undefined && value !== "" ? valueToOutputText(value) : "";
+}
+
+function valueForTextPlaceholder(value: unknown): string {
+  if (isPlaceholderImageValue(value) || typeof value === "string") {
+    return placeholderValueToText(value);
+  }
+  return value !== undefined && value !== "" ? valueToOutputText(value) : "";
+}
+
+function normalizeImageScale(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  return Math.min(4, Math.max(1, value));
+}
+
+function imageChoiceToPlaceholderValue(
+  choice: SelectedImageChoice | undefined,
+): PlaceholderValue {
+  if (!choice?.url) return "";
+  const scale = normalizeImageScale(choice.scale);
+  const objectPosition = choice.objectPosition?.trim();
+  const hasCustomPosition =
+    !!objectPosition && objectPosition !== "center center";
+  const hasCustomScale = scale !== undefined && scale !== 1;
+  if (!hasCustomPosition && !hasCustomScale) return choice.url;
+
+  const value: PlaceholderImageValue = { url: choice.url };
+  if (hasCustomPosition) value.objectPosition = objectPosition;
+  if (hasCustomScale) value.scale = scale;
+  return value;
+}
+
 function templateDataForCuratedImages(
   pausedState: NodeOutputs | undefined,
-  selectedUrls: string[],
-): Record<string, string> {
+  selectedImages: SelectedImageChoice[],
+): PlaceholderData {
   const placeholders = Array.isArray(pausedState?.previewPlaceholders)
     ? pausedState.previewPlaceholders.filter(isPlaceholderRecord)
     : [];
@@ -470,18 +519,18 @@ function templateDataForCuratedImages(
     !Array.isArray(pausedState.previewBindings)
       ? (pausedState.previewBindings as Record<string, unknown>)
       : {};
-  const data: Record<string, string> = {};
+  const data: PlaceholderData = {};
   let imageIndex = 0;
 
   for (const placeholder of placeholders) {
     const bound = bindings[placeholder.key];
-    const value =
-      bound !== undefined && bound !== "" ? valueToOutputText(bound) : "";
     if (placeholder.kind === "image") {
-      data[placeholder.key] = value || selectedUrls[imageIndex] || "";
+      const value = valueForImagePlaceholder(bound);
+      data[placeholder.key] =
+        value || imageChoiceToPlaceholderValue(selectedImages[imageIndex]);
       imageIndex += 1;
     } else {
-      data[placeholder.key] = value;
+      data[placeholder.key] = valueForTextPlaceholder(bound);
     }
   }
   return data;
@@ -519,7 +568,7 @@ function templateDataForDesignImage(
 
 function outputForCuratedImages(
   pausedState: NodeOutputs | undefined,
-  selectedUrls: string[],
+  selectedImages: SelectedImageChoice[],
 ): NodeOutputs {
   const ranked = Array.isArray(pausedState?.ranked)
     ? pausedState.ranked.filter(isImageRecord)
@@ -528,12 +577,24 @@ function outputForCuratedImages(
       : [];
   const byUrl = new Map(ranked.map((candidate) => [candidate.url, candidate]));
   const seen = new Set<string>();
-  const selected = selectedUrls.flatMap((url) => {
-    if (seen.has(url)) return [];
-    const candidate = byUrl.get(url);
+  const selectedChoices = selectedImages.filter((choice) => {
+    if (!choice.url || seen.has(choice.url)) return false;
+    seen.add(choice.url);
+    return true;
+  });
+  const selected = selectedChoices.flatMap((choice) => {
+    const candidate = byUrl.get(choice.url);
     if (!candidate) return [];
-    seen.add(url);
-    return [candidate];
+    const scale = normalizeImageScale(choice.scale);
+    return [
+      {
+        ...candidate,
+        ...(choice.objectPosition
+          ? { objectPosition: choice.objectPosition }
+          : {}),
+        ...(scale !== undefined ? { scale } : {}),
+      },
+    ];
   });
   const selectedSet = new Set(selected.map((candidate) => candidate.url));
   const curatedRanked = [
@@ -547,7 +608,7 @@ function outputForCuratedImages(
     selectedUrls: selected.map((candidate) => candidate.url),
     templateData: templateDataForCuratedImages(
       pausedState,
-      selected.map((candidate) => candidate.url),
+      selectedChoices,
     ),
     best: selected[0]?.url ?? "",
   };
@@ -557,8 +618,15 @@ function outputForHumanChoice(
   pausedState: NodeOutputs | undefined,
   choice: ResumeChoice,
 ): NodeOutputs {
+  if ("selectedImages" in choice) {
+    return outputForCuratedImages(pausedState, choice.selectedImages);
+  }
+
   if ("selectedUrls" in choice) {
-    return outputForCuratedImages(pausedState, choice.selectedUrls);
+    return outputForCuratedImages(
+      pausedState,
+      choice.selectedUrls.map((url) => ({ url })),
+    );
   }
 
   const choiceUrl = choice.choiceUrl;

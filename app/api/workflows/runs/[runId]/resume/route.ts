@@ -20,16 +20,40 @@ export async function POST(
     resumeToken?: string;
     url?: string;
     selectedUrls?: string[];
+    selectedImages?: {
+      url?: string;
+      objectPosition?: string;
+      scale?: number;
+    }[];
   } | null;
 
   const hasSingleChoice = typeof body?.url === "string" && body.url.trim() !== "";
+  const selectedImages = Array.isArray(body?.selectedImages)
+    ? body.selectedImages
+        .map((image) => ({
+          url: typeof image.url === "string" ? image.url.trim() : "",
+          objectPosition:
+            typeof image.objectPosition === "string"
+              ? image.objectPosition.trim()
+              : undefined,
+          scale:
+            typeof image.scale === "number" && Number.isFinite(image.scale)
+              ? Math.min(4, Math.max(1, image.scale))
+              : undefined,
+        }))
+        .filter((image) => image.url)
+    : [];
+  const hasCuratedImages = selectedImages.length > 0;
   const hasCuratedSelection =
     Array.isArray(body?.selectedUrls) &&
     body.selectedUrls.some((url) => typeof url === "string" && url.trim() !== "");
 
-  if (!body?.resumeToken || (!hasSingleChoice && !hasCuratedSelection)) {
+  if (
+    !body?.resumeToken ||
+    (!hasSingleChoice && !hasCuratedImages && !hasCuratedSelection)
+  ) {
     return NextResponse.json(
-      { error: "resumeToken and url or selectedUrls are required" },
+      { error: "resumeToken and url, selectedImages, or selectedUrls are required" },
       { status: 400 },
     );
   }
@@ -50,18 +74,20 @@ export async function POST(
 
   // Dedupe on the single-use token, so a double-click (or a sender retry) enqueues
   // exactly one resume regardless of the async gap before the run leaves `waiting`.
+  const choice = hasSingleChoice
+    ? { choiceUrl: body.url!.trim() }
+    : hasCuratedImages
+      ? { selectedImages }
+      : {
+          selectedUrls: body.selectedUrls!.map((url) => url.trim()).filter(Boolean),
+        };
+
   await inngest.send(
     runResumeEvent.create(
       {
         runId,
         resumeToken: body.resumeToken,
-        ...(hasSingleChoice
-          ? { choiceUrl: body.url!.trim() }
-          : {
-              selectedUrls: body.selectedUrls!
-                .map((url) => url.trim())
-                .filter(Boolean),
-            }),
+        ...choice,
       },
       { id: `${runId}:resume:${body.resumeToken}` },
     ),

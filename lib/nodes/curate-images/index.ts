@@ -1,4 +1,10 @@
-import { collectPlaceholders, type PlaceholderData } from "@/lib/editor/types";
+import {
+  collectPlaceholders,
+  isPlaceholderImageValue,
+  placeholderValueToText,
+  type PlaceholderData,
+  type PlaceholderValue,
+} from "@/lib/editor/types";
 import { getTemplate } from "@/lib/templates/service";
 import { valueToText } from "@/lib/workflows/references";
 import type { ImageCandidate, NodeDefinition } from "../types";
@@ -77,15 +83,28 @@ function buildTemplateData(
   let imageIndex = 0;
   for (const placeholder of placeholders) {
     const bound = bindings[placeholder.key];
-    const value = bound !== undefined && bound !== "" ? valueToText(bound) : "";
     if (placeholder.kind === "image") {
+      const value = valueForImagePlaceholder(bound);
       data[placeholder.key] = value || selectedUrls[imageIndex] || "";
       imageIndex += 1;
     } else {
-      data[placeholder.key] = value;
+      data[placeholder.key] = valueForTextPlaceholder(bound);
     }
   }
   return data;
+}
+
+function valueForImagePlaceholder(value: unknown): PlaceholderValue {
+  if (isPlaceholderImageValue(value)) return value;
+  if (typeof value === "string") return value;
+  return value !== undefined && value !== "" ? valueToText(value) : "";
+}
+
+function valueForTextPlaceholder(value: unknown): string {
+  if (isPlaceholderImageValue(value) || typeof value === "string") {
+    return placeholderValueToText(value);
+  }
+  return value !== undefined && value !== "" ? valueToText(value) : "";
 }
 
 export const curateImagesNode: NodeDefinition<CurateImagesConfig> = {

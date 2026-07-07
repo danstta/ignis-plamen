@@ -53,7 +53,9 @@ export const runResume = inngest.createFunction(
       event.data.resumeToken,
       event.data.choiceUrl
         ? { choiceUrl: event.data.choiceUrl }
-        : { selectedUrls: event.data.selectedUrls ?? [] },
+        : event.data.selectedImages
+          ? { selectedImages: event.data.selectedImages }
+          : { selectedUrls: event.data.selectedUrls ?? [] },
       runner,
     );
   },

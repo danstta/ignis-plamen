@@ -3,12 +3,59 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Loader2, MoveDown, MoveUp, Plus, RefreshCw, X } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  Check,
+  Crosshair,
+  Loader2,
+  MoveDown,
+  MoveUp,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  X,
+  ZoomIn,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  isPlaceholderImageValue,
+  placeholderValueToText,
+  type PlaceholderData,
+  type PlaceholderValue,
+} from "@/lib/editor/types";
+import { cn } from "@/lib/utils";
 
 type Candidate = { url: string; attribution?: string };
 type PreviewPlaceholder = { key: string; kind: "text" | "image" };
+type ImagePlacement = { objectPosition: string; scale: number };
+type SelectedImageValue = { url: string } & ImagePlacement;
+
+const DEFAULT_PLACEMENT: ImagePlacement = {
+  objectPosition: "center center",
+  scale: 1,
+};
+
+const POSITION_PRESETS = [
+  { value: "left top", label: "Top left", icon: ArrowUp },
+  { value: "center top", label: "Top", icon: ArrowUp },
+  { value: "right top", label: "Top right", icon: ArrowUp },
+  { value: "left center", label: "Left", icon: ArrowLeft },
+  { value: "center center", label: "Center", icon: Crosshair },
+  { value: "right center", label: "Right", icon: ArrowRight },
+  { value: "left bottom", label: "Bottom left", icon: ArrowDown },
+  { value: "center bottom", label: "Bottom", icon: ArrowDown },
+  { value: "right bottom", label: "Bottom right", icon: ArrowDown },
+] as const;
 
 function uniqueByUrl(images: Candidate[]): Candidate[] {
   const seen = new Set<string>();
@@ -17,6 +64,52 @@ function uniqueByUrl(images: Candidate[]): Candidate[] {
     seen.add(image.url);
     return true;
   });
+}
+
+function placementFor(
+  placements: Record<string, ImagePlacement>,
+  url: string,
+): ImagePlacement {
+  return placements[url] ?? DEFAULT_PLACEMENT;
+}
+
+function selectedImageValue(
+  url: string,
+  placement: ImagePlacement,
+): SelectedImageValue {
+  return { url, ...placement };
+}
+
+function hasCustomPlacement(placement: ImagePlacement): boolean {
+  return (
+    placement.objectPosition !== DEFAULT_PLACEMENT.objectPosition ||
+    placement.scale !== DEFAULT_PLACEMENT.scale
+  );
+}
+
+function imagePlaceholderValue(image: SelectedImageValue | undefined): PlaceholderValue {
+  if (!image) return "";
+  if (!hasCustomPlacement(image)) return image.url;
+  return {
+    url: image.url,
+    objectPosition: image.objectPosition,
+    scale: image.scale,
+  };
+}
+
+function valueForImagePlaceholder(value: unknown): PlaceholderValue {
+  if (isPlaceholderImageValue(value)) return value;
+  if (typeof value === "string") return value;
+  if (value === null || value === undefined || value === "") return "";
+  return JSON.stringify(value);
+}
+
+function valueForTextPlaceholder(value: unknown): string {
+  if (isPlaceholderImageValue(value) || typeof value === "string") {
+    return placeholderValueToText(value);
+  }
+  if (value === null || value === undefined || value === "") return "";
+  return JSON.stringify(value);
 }
 
 function ImageTile({
@@ -52,27 +145,150 @@ function ImageTile({
   );
 }
 
+function ToolButton({
+  label,
+  active,
+  disabled,
+  onClick,
+  children,
+  className,
+}: {
+  label: string;
+  active?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            type="button"
+            size="icon-xs"
+            variant={active ? "default" : "secondary"}
+            aria-label={label}
+            disabled={disabled}
+            onClick={onClick}
+            className={className}
+          />
+        }
+      >
+        {children}
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function PlacementControls({
+  image,
+  placement,
+  disabled,
+  onPositionChange,
+  onScaleChange,
+  onReset,
+}: {
+  image?: Candidate;
+  placement: ImagePlacement;
+  disabled?: boolean;
+  onPositionChange: (objectPosition: string) => void;
+  onScaleChange: (scale: number) => void;
+  onReset: () => void;
+}) {
+  return (
+    <div className="mt-3 grid gap-3 rounded-md border bg-card p-3 sm:grid-cols-[88px_minmax(0,1fr)]">
+      <div className="overflow-hidden rounded-md border bg-muted/20">
+        {image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={image.url}
+            alt=""
+            className="aspect-square w-full object-cover"
+            style={{
+              objectPosition: placement.objectPosition,
+              transform: `scale(${placement.scale})`,
+            }}
+          />
+        ) : null}
+      </div>
+
+      <div className="min-w-0 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs font-medium text-muted-foreground">
+            Position
+          </span>
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            onClick={onReset}
+            disabled={disabled || !hasCustomPlacement(placement)}
+          >
+            <RotateCcw className="size-3" />
+            Reset
+          </Button>
+        </div>
+
+        <div className="grid w-fit grid-cols-3 gap-1">
+          {POSITION_PRESETS.map((preset) => {
+            const Icon = preset.icon;
+            return (
+              <ToolButton
+                key={preset.value}
+                label={preset.label}
+                active={placement.objectPosition === preset.value}
+                disabled={disabled}
+                onClick={() => onPositionChange(preset.value)}
+              >
+                <Icon className="size-3" />
+              </ToolButton>
+            );
+          })}
+        </div>
+
+        <div className="grid gap-2">
+          <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1 font-medium">
+              <ZoomIn className="size-3" />
+              Zoom
+            </span>
+            <span className="tabular-nums">{Math.round(placement.scale * 100)}%</span>
+          </div>
+          <Slider
+            value={[placement.scale]}
+            min={1}
+            max={3}
+            step={0.05}
+            disabled={disabled}
+            onValueChange={(value) =>
+              onScaleChange(Array.isArray(value) ? (value[0] ?? 1) : value)
+            }
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function buildPreviewData(
   placeholders: PreviewPlaceholder[],
   bindings: Record<string, unknown>,
-  selectedUrls: string[],
-): Record<string, string> {
-  const data: Record<string, string> = {};
+  selectedImages: SelectedImageValue[],
+): PlaceholderData {
+  const data: PlaceholderData = {};
   let imageIndex = 0;
 
   for (const placeholder of placeholders) {
     const bound = bindings[placeholder.key];
-    const value =
-      bound === null || bound === undefined
-        ? ""
-        : typeof bound === "string"
-          ? bound
-          : JSON.stringify(bound);
     if (placeholder.kind === "image") {
-      data[placeholder.key] = value || selectedUrls[imageIndex] || "";
+      const value = valueForImagePlaceholder(bound);
+      data[placeholder.key] =
+        value || imagePlaceholderValue(selectedImages[imageIndex]);
       imageIndex += 1;
     } else {
-      data[placeholder.key] = value;
+      data[placeholder.key] = valueForTextPlaceholder(bound);
     }
   }
 
@@ -104,6 +320,12 @@ export function CurateImagesPicker({
       .slice(0, selectionCount)
       .map((image) => image.url),
   );
+  const [placements, setPlacements] = useState<Record<string, ImagePlacement>>(
+    {},
+  );
+  const [activePlacementUrl, setActivePlacementUrl] = useState(
+    () => selectedUrls[0] ?? "",
+  );
   const [submitting, setSubmitting] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -121,12 +343,32 @@ export function CurateImagesPicker({
     const image = byUrl.get(url);
     return image ? [image] : [];
   });
+  const selectedImageValues = useMemo(
+    () =>
+      selectedUrls.map((url) =>
+        selectedImageValue(url, placementFor(placements, url)),
+      ),
+    [placements, selectedUrls],
+  );
   const alternateImages = allImages.filter(
     (image) => !selectedUrls.includes(image.url),
   );
+  const effectiveActivePlacementUrl = selectedUrls.includes(activePlacementUrl)
+    ? activePlacementUrl
+    : (selectedUrls[0] ?? "");
+  const activePlacement =
+    effectiveActivePlacementUrl
+      ? placementFor(placements, effectiveActivePlacementUrl)
+      : null;
 
   function remove(url: string) {
     setSelectedUrls((current) => current.filter((item) => item !== url));
+    setPlacements((current) => {
+      if (!current[url]) return current;
+      const next = { ...current };
+      delete next[url];
+      return next;
+    });
   }
 
   function move(url: string, direction: -1 | 1) {
@@ -143,9 +385,28 @@ export function CurateImagesPicker({
   }
 
   function add(url: string) {
+    if (!selectedUrls.includes(url) && selectedUrls.length < selectionCount) {
+      setActivePlacementUrl(url);
+    }
     setSelectedUrls((current) => {
       if (current.includes(url) || current.length >= selectionCount) return current;
       return [...current, url];
+    });
+  }
+
+  function updatePlacement(url: string, patch: Partial<ImagePlacement>) {
+    setPlacements((current) => {
+      const next = { ...placementFor(current, url), ...patch };
+      return { ...current, [url]: next };
+    });
+  }
+
+  function resetPlacement(url: string) {
+    setPlacements((current) => {
+      if (!current[url]) return current;
+      const next = { ...current };
+      delete next[url];
+      return next;
     });
   }
 
@@ -168,7 +429,7 @@ export function CurateImagesPicker({
           data: buildPreviewData(
             previewPlaceholders,
             previewBindings,
-            selectedUrls,
+            selectedImageValues,
           ),
         }),
         signal: controller.signal,
@@ -197,7 +458,13 @@ export function CurateImagesPicker({
     };
     // previewUrl is intentionally omitted so each render captures the previous URL once.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [previewTemplateId, previewPlaceholders, previewBindings, selectedUrls]);
+  }, [
+    previewTemplateId,
+    previewPlaceholders,
+    previewBindings,
+    selectedUrls,
+    selectedImageValues,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -216,7 +483,7 @@ export function CurateImagesPicker({
       const res = await fetch(`/api/workflows/runs/${runId}/resume`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ resumeToken, selectedUrls }),
+        body: JSON.stringify({ resumeToken, selectedImages: selectedImageValues }),
       });
       if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
       toast.success("Image set selected - finishing run");
@@ -282,9 +549,35 @@ export function CurateImagesPicker({
                     <MoveDown className="size-3" />
                   </Button>
                 </div>
+                <ToolButton
+                  label="Frame image"
+                  active={effectiveActivePlacementUrl === image.url}
+                  disabled={submitting}
+                  onClick={() => setActivePlacementUrl(image.url)}
+                  className={cn(
+                    "absolute bottom-2 left-2 shadow-sm",
+                    effectiveActivePlacementUrl !== image.url && "opacity-90",
+                  )}
+                >
+                  <Crosshair className="size-3" />
+                </ToolButton>
               </ImageTile>
             ))}
           </div>
+          {activePlacement ? (
+            <PlacementControls
+              image={byUrl.get(effectiveActivePlacementUrl)}
+              placement={activePlacement}
+              disabled={submitting}
+              onPositionChange={(objectPosition) =>
+                updatePlacement(effectiveActivePlacementUrl, { objectPosition })
+              }
+              onScaleChange={(scale) =>
+                updatePlacement(effectiveActivePlacementUrl, { scale })
+              }
+              onReset={() => resetPlacement(effectiveActivePlacementUrl)}
+            />
+          ) : null}
         </section>
 
         <section>

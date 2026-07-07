@@ -7,9 +7,10 @@ import type {
 import {
   baseStyle,
   fillToStyle,
-  imageClipStyle,
   imageContainerStyle,
-  resolveImageSrc,
+  imageContentStyle,
+  imagePlacementContainerStyle,
+  resolveImage,
   resolveText,
   shapeStyle,
   textContentStyle,
@@ -45,21 +46,22 @@ export function ElementView({
   }
 
   if (el.type === "image") {
-    const src = resolveImageSrc(el, data);
+    const image = resolveImage(el, data);
     return (
-      <div style={{ ...style, ...imageContainerStyle(el) }} {...hook}>
-        {src ? (
+      <div
+        style={{
+          ...style,
+          ...imageContainerStyle(el),
+          ...imagePlacementContainerStyle(image),
+        }}
+        {...hook}
+      >
+        {image.src ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={src}
+            src={image.src}
             alt=""
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: el.objectFit ?? "cover",
-              display: "block",
-              ...imageClipStyle(el),
-            }}
+            style={imageContentStyle(el, image)}
           />
         ) : (
           <ImagePlaceholderBox label={el.placeholderKey} />

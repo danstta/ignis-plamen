@@ -1,5 +1,6 @@
 import { getNodeMeta } from "@/lib/nodes/catalog";
 import { CURATE_IMAGES_TYPE_ID } from "@/lib/nodes/curate-images/meta";
+import { GOOGLE_DRIVE_LIST_IMAGES_TYPE_ID } from "@/lib/nodes/google-drive-list-images/meta";
 import { RANK_IMAGES_TYPE_ID } from "@/lib/nodes/rank-images/meta";
 
 /**
@@ -49,18 +50,22 @@ function selectedOutputFields(n: RefNode): string[] {
   );
 }
 
-function rankImagesSelectionCount(n: RefNode): number {
+function exposedImageSelectionCount(n: RefNode): number {
   const value = Number(n.config?.selectionCount ?? 5);
   if (!Number.isFinite(value)) return 5;
   return Math.min(50, Math.max(1, Math.trunc(value)));
 }
 
-function rankImagesSelectedImagePaths(n: RefNode): string[] {
-  if (n.type !== RANK_IMAGES_TYPE_ID && n.type !== CURATE_IMAGES_TYPE_ID) {
+function exposedSelectedImagePaths(n: RefNode): string[] {
+  if (
+    n.type !== RANK_IMAGES_TYPE_ID &&
+    n.type !== CURATE_IMAGES_TYPE_ID &&
+    n.type !== GOOGLE_DRIVE_LIST_IMAGES_TYPE_ID
+  ) {
     return [];
   }
   return Array.from(
-    { length: rankImagesSelectionCount(n) },
+    { length: exposedImageSelectionCount(n) },
     (_, index) => `selected.${index}.url`,
   );
 }
@@ -76,7 +81,7 @@ export function selectedOutputPaths(n: RefNode): string[] {
   return [
     ...new Set([
       ...declared,
-      ...rankImagesSelectedImagePaths(n),
+      ...exposedSelectedImagePaths(n),
       ...selectedOutputFields(n),
     ]),
   ];

@@ -29,6 +29,8 @@ export const googleDriveListImagesNode: NodeDefinition<GoogleDriveListImagesConf
       `found ${images.length} image file(s) in Drive folder tree ${folderId}`,
     );
 
+    const selected = images.slice(0, ctx.config.selectionCount);
+
     return {
       type: "output",
       outputs: {
@@ -36,6 +38,8 @@ export const googleDriveListImagesNode: NodeDefinition<GoogleDriveListImagesConf
         count: images.length,
         links: images.map((image) => image.webViewLink),
         directLinks: images.map((image) => image.directLink),
+        selected,
+        selectedUrls: selected.map((image) => image.url),
         firstLink: images[0]?.webViewLink ?? "",
         firstDirectLink: images[0]?.directLink ?? "",
         images,

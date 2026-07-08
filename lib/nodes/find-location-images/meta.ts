@@ -1,6 +1,9 @@
 import { z } from "zod";
 import type { NodeMeta } from "../types";
 
+export const FIND_LOCATION_IMAGES_TYPE_ID = "find-location-images";
+export const MAX_LOCATION_IMAGE_QUERIES = 10;
+
 export const locationImageProviders = [
   "google-places",
   "wikimedia",
@@ -25,6 +28,7 @@ const baseFindLocationImagesConfigSchema = z.object({
     .min(1)
     .default(["wikimedia"]),
   locationQuery: z.string().default(""),
+  locationQueries: z.array(z.string()).max(MAX_LOCATION_IMAGE_QUERIES).default([]),
   resultsPerProvider: z.coerce.number().int().min(1).max(10).default(5),
   maxWidthPx: z.coerce.number().int().min(200).max(4000).default(1200),
 });
@@ -42,6 +46,10 @@ export const findLocationImagesConfigSchema = z.preprocess((value) => {
   if (config.resultsPerProvider === undefined && config.maxCandidates !== undefined) {
     config.resultsPerProvider = config.maxCandidates;
   }
+  if (!Array.isArray(config.locationQueries)) {
+    config.locationQueries =
+      typeof config.locationQuery === "string" ? [config.locationQuery] : [];
+  }
   return config;
 }, baseFindLocationImagesConfigSchema);
 
@@ -50,14 +58,17 @@ export type FindLocationImagesConfig = z.infer<
 >;
 
 export const findLocationImagesMeta: NodeMeta<FindLocationImagesConfig> = {
-  id: "find-location-images",
+  id: FIND_LOCATION_IMAGES_TYPE_ID,
   label: "Find Location Images",
   description:
     "Searches free/open image sources for real, reusable photos near the location.",
   category: "source",
   group: "media",
   inputs: [],
-  outputs: [{ id: "candidates", label: "Candidates", kind: "data" }],
+  outputs: [
+    { id: "candidates", label: "Candidates", kind: "data" },
+    { id: "queryResults", label: "Candidates by query", kind: "data" },
+  ],
   configFields: [
     {
       name: "providers",
@@ -80,13 +91,6 @@ export const findLocationImagesMeta: NodeMeta<FindLocationImagesConfig> = {
       placeholder: "5",
       legacyValueField: "maxCandidates",
       help: "Each selected provider can add up to this many candidates to the output array.",
-    },
-    {
-      name: "locationQuery",
-      label: "Location",
-      type: "text",
-      placeholder: "Venue name, address, or insert webhook data",
-      help: "Insert webhook fields or type a venue, city, country, or address. Google Places requires GOOGLE_MAPS_API_KEY; Pexels requires PEXELS_API_KEY; Wikimedia and Openverse do not.",
     },
     {
       name: "maxWidthPx",

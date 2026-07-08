@@ -122,4 +122,6 @@ export interface ImageCandidate {
   license?: string;
   licenseUrl?: string;
   attributionUrl?: string;
+  locationQuery?: string;
+  locationQueryIndex?: number;
 }

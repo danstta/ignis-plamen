@@ -42,6 +42,10 @@ import {
 import { CURATE_IMAGES_TYPE_ID } from "@/lib/nodes/curate-images/meta";
 import { PREVIEW_DESIGN_IMAGE_TYPE_ID } from "@/lib/nodes/preview-design-image/meta";
 import { RENDER_TEMPLATE_BATCH_TYPE_ID } from "@/lib/nodes/render-template-batch/meta";
+import {
+  FIND_LOCATION_IMAGES_TYPE_ID,
+  MAX_LOCATION_IMAGE_QUERIES,
+} from "@/lib/nodes/find-location-images/meta";
 import { useWorkflowEditor } from "@/lib/workflows/store";
 import {
   collectConnectablePorts,
@@ -748,6 +752,19 @@ export function NodeConfigPanel({
         </div>
       ))}
 
+      {node.type === FIND_LOCATION_IMAGES_TYPE_ID ? (
+        <FindLocationQueriesEditor
+          queries={locationQueriesFromConfig(config)}
+          fields={upstreamFields}
+          onChange={(next) =>
+            setConfig({
+              locationQueries: next,
+              locationQuery: next[0] ?? "",
+            })
+          }
+        />
+      ) : null}
+
       {node.type === "render-template" ||
       node.type === RENDER_TEMPLATE_BATCH_TYPE_ID ||
       node.type === PREVIEW_DESIGN_IMAGE_TYPE_ID ||
@@ -861,6 +878,92 @@ export function NodeConfigPanel({
           ) : null}
         </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+function locationQueriesFromConfig(config: Record<string, unknown>): string[] {
+  const queries = Array.isArray(config.locationQueries)
+    ? config.locationQueries.map((query) =>
+        typeof query === "string" ? query : "",
+      )
+    : [];
+  if (queries.length > 0) return queries;
+  const legacy = typeof config.locationQuery === "string" ? config.locationQuery : "";
+  return [legacy];
+}
+
+function FindLocationQueriesEditor({
+  queries,
+  fields,
+  onChange,
+}: {
+  queries: string[];
+  fields: FieldRef[];
+  onChange: (next: string[]) => void;
+}) {
+  const update = (index: number, value: string) => {
+    const next = queries.map((query, i) => (i === index ? value : query));
+    onChange(next);
+  };
+  const canAdd = queries.length < MAX_LOCATION_IMAGE_QUERIES;
+  const add = () => {
+    if (canAdd) onChange([...queries, ""]);
+  };
+  const remove = (index: number) => {
+    const next = queries.filter((_, i) => i !== index);
+    onChange(next.length > 0 ? next : [""]);
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium tracking-wide text-muted-foreground/70">
+            Location queries
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Search each location with the same providers and result limits.
+          </p>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-7 shrink-0 gap-1 px-2 text-xs"
+          disabled={!canAdd}
+          onClick={add}
+        >
+          <Plus className="size-3.5" /> Add
+        </Button>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        {queries.map((query, index) => (
+          <div key={index} className="flex items-start gap-1.5">
+            <div className="min-w-0 flex-1">
+              <Label className="sr-only">Location query {index + 1}</Label>
+              <TokenBindingInput
+                value={query}
+                onChange={(value) => update(index, value)}
+                fields={fields}
+                placeholder="Venue, city, country, or insert webhook data"
+              />
+            </div>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="size-9 shrink-0 text-muted-foreground hover:text-destructive"
+              title="Remove query"
+              disabled={queries.length === 1}
+              onClick={() => remove(index)}
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -143,6 +143,10 @@ export default async function RunDetailPage({
       ? ((run.nodeOutputs[run.waitingNodeId]?.candidates ?? []) as {
           url: string;
           attribution?: string;
+          title?: string;
+          source?: string;
+          locationQuery?: string;
+          locationQueryIndex?: number;
         }[])
       : [];
   const reviewKind =

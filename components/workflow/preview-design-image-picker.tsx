@@ -7,8 +7,20 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-type Candidate = { url: string; attribution?: string; title?: string };
+type Candidate = {
+  url: string;
+  attribution?: string;
+  title?: string;
+  source?: string;
+  locationQuery?: string;
+  locationQueryIndex?: number;
+};
 type PreviewPlaceholder = { key: string; kind: "text" | "image" };
+type CandidateGroup = {
+  key: string;
+  label: string;
+  candidates: { candidate: Candidate; index: number }[];
+};
 
 function outputText(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -44,6 +56,29 @@ function buildPreviewData({
   return data;
 }
 
+function candidateGroups(candidates: Candidate[]): CandidateGroup[] {
+  const groups = new Map<string, CandidateGroup>();
+
+  candidates.forEach((candidate, index) => {
+    const query = candidate.locationQuery?.trim() || "";
+    const groupKey = query
+      ? `${candidate.locationQueryIndex ?? "query"}:${query}`
+      : "ungrouped";
+    const group = groups.get(groupKey);
+    if (group) {
+      group.candidates.push({ candidate, index });
+      return;
+    }
+    groups.set(groupKey, {
+      key: groupKey,
+      label: query || "Location query",
+      candidates: [{ candidate, index }],
+    });
+  });
+
+  return [...groups.values()];
+}
+
 export function PreviewDesignImagePicker({
   runId,
   resumeToken,
@@ -72,6 +107,8 @@ export function PreviewDesignImagePicker({
     () => candidates.find((candidate) => candidate.url === selectedUrl),
     [candidates, selectedUrl],
   );
+  const groups = useMemo(() => candidateGroups(candidates), [candidates]);
+  const grouped = groups.length > 1 || groups[0]?.key !== "ungrouped";
 
   useEffect(() => {
     if (!previewTemplateId || !selectedUrl || !dynamicImagePlaceholderKey) {
@@ -188,40 +225,56 @@ export function PreviewDesignImagePicker({
           </Button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {candidates.map((candidate, index) => {
-            const active = candidate.url === selectedUrl;
-            return (
-              <button
-                key={candidate.url}
-                type="button"
-                onClick={() => setSelectedUrl(candidate.url)}
-                disabled={submitting}
-                className={cn(
-                  "group relative min-w-0 overflow-hidden rounded-md border bg-muted/25 text-left outline-none transition hover:border-foreground/40 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60",
-                  active && "border-foreground/70 ring-2 ring-foreground/10",
-                )}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={candidate.url}
-                  alt=""
-                  className="aspect-square w-full object-cover"
-                />
-                <span className="absolute left-2 top-2 rounded bg-background/90 px-1.5 py-0.5 text-[10px] font-medium tabular-nums shadow-sm">
-                  {index + 1}
-                </span>
-                {active ? (
-                  <span className="absolute right-2 top-2 rounded-full bg-foreground p-1 text-background shadow-sm">
-                    <Check className="size-3.5" />
+        <div className="space-y-4">
+          {groups.map((group) => (
+            <section key={group.key} className="min-w-0">
+              {grouped ? (
+                <div className="mb-2 flex items-center justify-between gap-3 border-b pb-1.5">
+                  <h3 className="min-w-0 truncate text-xs font-medium text-foreground">
+                    {group.label}
+                  </h3>
+                  <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground tabular-nums">
+                    {group.candidates.length}
                   </span>
-                ) : null}
-                <span className="absolute inset-x-0 bottom-0 truncate bg-black/55 px-2 py-1 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
-                  Preview this image
-                </span>
-              </button>
-            );
-          })}
+                </div>
+              ) : null}
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {group.candidates.map(({ candidate, index }) => {
+                  const active = candidate.url === selectedUrl;
+                  return (
+                    <button
+                      key={candidate.url}
+                      type="button"
+                      onClick={() => setSelectedUrl(candidate.url)}
+                      disabled={submitting}
+                      className={cn(
+                        "group relative min-w-0 overflow-hidden rounded-md border bg-muted/25 text-left outline-none transition hover:border-foreground/40 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60",
+                        active && "border-foreground/70 ring-2 ring-foreground/10",
+                      )}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={candidate.url}
+                        alt=""
+                        className="aspect-square w-full object-cover"
+                      />
+                      <span className="absolute left-2 top-2 rounded bg-background/90 px-1.5 py-0.5 text-[10px] font-medium tabular-nums shadow-sm">
+                        {index + 1}
+                      </span>
+                      {active ? (
+                        <span className="absolute right-2 top-2 rounded-full bg-foreground p-1 text-background shadow-sm">
+                          <Check className="size-3.5" />
+                        </span>
+                      ) : null}
+                      <span className="absolute inset-x-0 bottom-0 truncate bg-black/55 px-2 py-1 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+                        {candidate.source ?? "Preview this image"}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
         </div>
       </div>
 

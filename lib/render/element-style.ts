@@ -13,6 +13,7 @@ import {
   placeholderValueToText,
 } from "@/lib/editor/types";
 import { shapeGeometryStyle } from "@/lib/editor/shapes";
+import { FALLBACK_FAMILY } from "./font-registry";
 
 /**
  * Pure element -> CSS helpers shared by the editor canvas and the Satori renderer.
@@ -42,6 +43,16 @@ export function fillToStyle(fill: Fill): CSSProperties {
 /** A text element in "chip" mode hugs its text horizontally (intrinsic width). */
 function isAutoWidth(el: TemplateElement): el is TextElement {
   return el.type === "text" && !!el.autoWidth;
+}
+
+function cssFontFamily(family: string): string {
+  return JSON.stringify(family);
+}
+
+function fontFamilyStack(family: string): string {
+  const fallback = cssFontFamily(FALLBACK_FAMILY);
+  if (family === FALLBACK_FAMILY) return `${fallback}, sans-serif`;
+  return `${cssFontFamily(family)}, ${fallback}, sans-serif`;
 }
 
 export function baseStyle(el: TemplateElement): CSSProperties {
@@ -77,7 +88,7 @@ export function textStyle(el: TextElement): CSSProperties {
         : el.textAlign === "right"
           ? "flex-end"
           : "flex-start",
-    fontFamily: el.fontFamily,
+    fontFamily: fontFamilyStack(el.fontFamily),
     fontSize: el.fontSize,
     fontWeight: el.fontWeight ?? 400,
     fontStyle: el.fontStyle ?? "normal",

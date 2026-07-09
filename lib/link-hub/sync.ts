@@ -1,11 +1,17 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { supabaseServiceRoleKey, supabaseUrl } from "@/lib/env";
+import {
+  linkHubSupabaseServiceRoleKey,
+  linkHubSupabaseUrl,
+  supabaseServiceRoleKey,
+  supabaseUrl,
+} from "@/lib/env";
 import {
   mapLinkHubPayloadToProject,
   mapNotionPageToLinkHubProject,
   pageBelongsToConfiguredDataSource,
   queryLinkHubNotionPages,
   retrieveNotionPage,
+  type LinkHubPropertyNames,
   type LinkHubProjectUpsert,
 } from "./notion";
 
@@ -16,11 +22,11 @@ let cachedClient: SupabaseClient | null = null;
 
 function supabaseAdmin(): SupabaseClient {
   if (cachedClient) return cachedClient;
-  const url = supabaseUrl();
-  const key = supabaseServiceRoleKey();
+  const url = linkHubSupabaseUrl() ?? supabaseUrl();
+  const key = linkHubSupabaseServiceRoleKey() ?? supabaseServiceRoleKey();
   if (!url || !key) {
     throw new Error(
-      "Supabase Link Hub sync is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.",
+      "Supabase Link Hub sync is not configured. Set LINK_HUB_SUPABASE_URL and LINK_HUB_SUPABASE_SERVICE_ROLE_KEY for the NGO website database.",
     );
   }
   cachedClient = createClient(url, key, {
@@ -102,8 +108,9 @@ export type LinkHubSyncResult = {
 
 export async function syncLinkHubPayload(
   payload: unknown,
+  names?: LinkHubPropertyNames,
 ): Promise<LinkHubSyncResult> {
-  const project = mapLinkHubPayloadToProject(payload);
+  const project = mapLinkHubPayloadToProject(payload, new Date(), names);
   if (!project) {
     return {
       mode: "payload",
@@ -122,7 +129,10 @@ export async function syncLinkHubPayload(
   };
 }
 
-export async function syncLinkHubPage(pageId: string): Promise<LinkHubSyncResult> {
+export async function syncLinkHubPage(
+  pageId: string,
+  names?: LinkHubPropertyNames,
+): Promise<LinkHubSyncResult> {
   const page = await retrieveNotionPage(pageId);
   if (!page) {
     return {
@@ -142,16 +152,20 @@ export async function syncLinkHubPage(pageId: string): Promise<LinkHubSyncResult
     };
   }
 
-  await upsertLinkHubProjects([mapNotionPageToLinkHubProject(page)]);
+  await upsertLinkHubProjects([
+    mapNotionPageToLinkHubProject(page, new Date(), names),
+  ]);
   return { mode: "page", upserted: 1, hidden: 0 };
 }
 
-export async function syncLinkHubDataSource(): Promise<LinkHubSyncResult> {
+export async function syncLinkHubDataSource(
+  names?: LinkHubPropertyNames,
+): Promise<LinkHubSyncResult> {
   const pages = await queryLinkHubNotionPages();
   const now = new Date();
   const rows = pages
     .filter(pageBelongsToConfiguredDataSource)
-    .map((page) => mapNotionPageToLinkHubProject(page, now));
+    .map((page) => mapNotionPageToLinkHubProject(page, now, names));
 
   await upsertLinkHubProjects(rows);
   const hidden = await hideMissingProjects(

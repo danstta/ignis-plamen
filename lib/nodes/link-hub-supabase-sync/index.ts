@@ -1,6 +1,7 @@
 import {
   readNotionWebhookSignal,
   signalMatchesConfiguredDataSource,
+  type LinkHubPropertyNames,
 } from "@/lib/link-hub/notion";
 import {
   syncLinkHubDataSource,
@@ -14,7 +15,22 @@ import {
   type LinkHubSupabaseSyncConfig,
 } from "./meta";
 
-async function fallbackSync(payload: unknown): Promise<LinkHubSyncResult> {
+function propertyNames(config: LinkHubSupabaseSyncConfig): LinkHubPropertyNames {
+  return {
+    projectName: config.projectNameProperty,
+    infopackLink: config.infopackLinkProperty,
+    googleFormLink: config.googleFormLinkProperty,
+    projectCountry: config.projectCountryProperty,
+    showOnLinks: config.showOnLinksProperty,
+    callDeadline: config.callDeadlineProperty,
+    sortOrder: config.sortOrderProperty,
+  };
+}
+
+async function fallbackSync(
+  payload: unknown,
+  names: LinkHubPropertyNames,
+): Promise<LinkHubSyncResult> {
   const signal = readNotionWebhookSignal(payload);
   if (!signalMatchesConfiguredDataSource(signal)) {
     return {
@@ -26,10 +42,10 @@ async function fallbackSync(payload: unknown): Promise<LinkHubSyncResult> {
   }
 
   if (!signal.requiresFullSync && signal.pageId) {
-    return syncLinkHubPage(signal.pageId);
+    return syncLinkHubPage(signal.pageId, names);
   }
 
-  return syncLinkHubDataSource();
+  return syncLinkHubDataSource(names);
 }
 
 export const linkHubSupabaseSyncNode: NodeDefinition<LinkHubSupabaseSyncConfig> = {
@@ -37,15 +53,16 @@ export const linkHubSupabaseSyncNode: NodeDefinition<LinkHubSupabaseSyncConfig> 
 
   async run(ctx) {
     const payload = ctx.inputs.payload ?? ctx.trigger.body ?? ctx.trigger;
+    const names = propertyNames(ctx.config);
 
     await ctx.throwIfStopped?.();
-    let result = await syncLinkHubPayload(payload);
+    let result = await syncLinkHubPayload(payload, names);
     if (
       result.skipped === "payload_missing_link_hub_fields" &&
       ctx.config.allowNotionApiFallback
     ) {
       await ctx.log("Webhook payload was sparse; fetching current Notion data.");
-      result = await fallbackSync(payload);
+      result = await fallbackSync(payload, names);
     }
 
     if (result.skipped && result.upserted === 0 && result.hidden === 0) {

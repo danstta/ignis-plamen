@@ -80,16 +80,21 @@ export const notionLinkHubDataSourceId = () =>
 export const notionLinkHubWebhookVerificationToken = () =>
   process.env.NOTION_LINK_HUB_WEBHOOK_VERIFICATION_TOKEN?.trim() || undefined;
 
+/** Optional separate Supabase project for the public NGO website Link Hub. */
+export const linkHubSupabaseUrl = () =>
+  process.env.LINK_HUB_SUPABASE_URL?.trim() || undefined;
+export const linkHubSupabaseServiceRoleKey = () =>
+  process.env.LINK_HUB_SUPABASE_SERVICE_ROLE_KEY?.trim() || undefined;
+
 export const notionLinkHubProjectNameProperty = () =>
-  process.env.NOTION_LINK_HUB_PROJECT_NAME_PROPERTY?.trim() || "Project name";
+  process.env.NOTION_LINK_HUB_PROJECT_NAME_PROPERTY?.trim() || "Ime projekta";
 export const notionLinkHubInfopackLinkProperty = () =>
   process.env.NOTION_LINK_HUB_INFOPACK_LINK_PROPERTY?.trim() || "Infopack link";
 export const notionLinkHubGoogleFormLinkProperty = () =>
   process.env.NOTION_LINK_HUB_GOOGLE_FORM_LINK_PROPERTY?.trim() ||
   "Google form link";
 export const notionLinkHubProjectCountryProperty = () =>
-  process.env.NOTION_LINK_HUB_PROJECT_COUNTRY_PROPERTY?.trim() ||
-  "Project country";
+  process.env.NOTION_LINK_HUB_PROJECT_COUNTRY_PROPERTY?.trim() || "Država";
 export const notionLinkHubShowOnLinksProperty = () =>
   process.env.NOTION_LINK_HUB_SHOW_ON_LINKS_PROPERTY?.trim() || "Show on links";
 export const notionLinkHubCallDeadlineProperty = () =>

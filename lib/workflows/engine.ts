@@ -192,6 +192,7 @@ async function execute(
         const config = def.configSchema.parse(resolvedConfig);
         const ctx: NodeRunContext = {
           config,
+          rawConfig: node.config,
           inputs: resolveInputs(graph, node.id, state.nodeOutputs),
           trigger,
           runId,

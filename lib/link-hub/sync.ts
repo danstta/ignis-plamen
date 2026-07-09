@@ -12,6 +12,7 @@ import {
   queryLinkHubNotionPages,
   retrieveNotionPage,
   type LinkHubPropertyNames,
+  type LinkHubPropertyValues,
   type LinkHubProjectUpsert,
 } from "./notion";
 
@@ -109,8 +110,9 @@ export type LinkHubSyncResult = {
 export async function syncLinkHubPayload(
   payload: unknown,
   names?: LinkHubPropertyNames,
+  values?: LinkHubPropertyValues,
 ): Promise<LinkHubSyncResult> {
-  const project = mapLinkHubPayloadToProject(payload, new Date(), names);
+  const project = mapLinkHubPayloadToProject(payload, new Date(), names, values);
   if (!project) {
     return {
       mode: "payload",

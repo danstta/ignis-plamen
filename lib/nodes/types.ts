@@ -71,6 +71,8 @@ export type RunResult =
 export interface NodeRunContext<C = Record<string, unknown>> {
   /** Validated config for this node instance. */
   config: C;
+  /** Original config before `{{...}}` references were resolved. */
+  rawConfig?: Record<string, unknown>;
   /** Resolved input values keyed by input port id (from upstream node outputs). */
   inputs: Record<string, unknown>;
   /** The run's trigger payload (e.g. Notion { recordId, fields }). */

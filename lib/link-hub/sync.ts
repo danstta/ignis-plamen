@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { supabaseServiceRoleKey, supabaseUrl } from "@/lib/env";
 import {
+  mapLinkHubPayloadToProject,
   mapNotionPageToLinkHubProject,
   pageBelongsToConfiguredDataSource,
   queryLinkHubNotionPages,
@@ -36,7 +37,9 @@ function chunk<T>(items: T[], size: number): T[][] {
   return chunks;
 }
 
-async function upsertProjects(rows: LinkHubProjectUpsert[]): Promise<void> {
+export async function upsertLinkHubProjects(
+  rows: LinkHubProjectUpsert[],
+): Promise<void> {
   if (rows.length === 0) return;
   const { error } = await supabaseAdmin()
     .from(TABLE)
@@ -90,11 +93,34 @@ async function hideMissingProjects(currentPageIds: Set<string>): Promise<number>
 }
 
 export type LinkHubSyncResult = {
-  mode: "page" | "full";
+  mode: "payload" | "page" | "full";
   upserted: number;
   hidden: number;
+  project?: LinkHubProjectUpsert;
   skipped?: string;
 };
+
+export async function syncLinkHubPayload(
+  payload: unknown,
+): Promise<LinkHubSyncResult> {
+  const project = mapLinkHubPayloadToProject(payload);
+  if (!project) {
+    return {
+      mode: "payload",
+      upserted: 0,
+      hidden: 0,
+      skipped: "payload_missing_link_hub_fields",
+    };
+  }
+
+  await upsertLinkHubProjects([project]);
+  return {
+    mode: "payload",
+    upserted: 1,
+    hidden: 0,
+    project,
+  };
+}
 
 export async function syncLinkHubPage(pageId: string): Promise<LinkHubSyncResult> {
   const page = await retrieveNotionPage(pageId);
@@ -116,7 +142,7 @@ export async function syncLinkHubPage(pageId: string): Promise<LinkHubSyncResult
     };
   }
 
-  await upsertProjects([mapNotionPageToLinkHubProject(page)]);
+  await upsertLinkHubProjects([mapNotionPageToLinkHubProject(page)]);
   return { mode: "page", upserted: 1, hidden: 0 };
 }
 
@@ -127,7 +153,7 @@ export async function syncLinkHubDataSource(): Promise<LinkHubSyncResult> {
     .filter(pageBelongsToConfiguredDataSource)
     .map((page) => mapNotionPageToLinkHubProject(page, now));
 
-  await upsertProjects(rows);
+  await upsertLinkHubProjects(rows);
   const hidden = await hideMissingProjects(
     new Set(rows.map((row) => row.notion_page_id)),
   );

@@ -13,6 +13,7 @@ import { rehostImageNode } from "./rehost-image";
 import { runLinkNode } from "./run-link";
 import { routerNode } from "./router";
 import { notionUpdatePageNode } from "./notion-update-page";
+import { linkHubSupabaseSyncNode } from "./link-hub-supabase-sync";
 import { googleDriveListImagesNode } from "./google-drive-list-images";
 import { googleDriveUploadFilesNode } from "./google-drive-upload-files";
 
@@ -36,6 +37,7 @@ const definitions: NodeDefinition[] = [
   runLinkNode as unknown as NodeDefinition,
   routerNode as unknown as NodeDefinition,
   notionUpdatePageNode as unknown as NodeDefinition,
+  linkHubSupabaseSyncNode as unknown as NodeDefinition,
   googleDriveListImagesNode as unknown as NodeDefinition,
   googleDriveUploadFilesNode as unknown as NodeDefinition,
 ];

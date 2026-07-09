@@ -116,10 +116,9 @@ export function listServerEnvironmentConnections(): ServerEnvironmentConnection[
       access:
         "Reads the configured Notion data source and writes public Link Hub rows with the Supabase service role.",
       env: [
-        { name: "NOTION_LINK_HUB_TOKEN" },
-        { name: "NOTION_LINK_HUB_DATA_SOURCE_ID" },
-        { name: "NOTION_LINK_HUB_WEBHOOK_VERIFICATION_TOKEN" },
-        { name: "LINK_HUB_SYNC_SECRET", required: false },
+        { name: "NOTION_LINK_HUB_TOKEN", required: false },
+        { name: "NOTION_LINK_HUB_DATA_SOURCE_ID", required: false },
+        { name: "NOTION_LINK_HUB_WEBHOOK_VERIFICATION_TOKEN", required: false },
       ],
     }),
     connection({

@@ -115,6 +115,8 @@ export interface NodeDefinition<C extends Record<string, unknown> = Record<strin
 export interface ImageCandidate {
   url: string;
   attribution: string;
+  mimeType?: string;
+  thumbnailLink?: string;
   widthPx?: number;
   heightPx?: number;
   title?: string;

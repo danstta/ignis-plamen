@@ -118,6 +118,13 @@ const DIVERSITY_CHUNK_SIZE = 6;
 const PROVIDER_CHUNK_CONCURRENCY = 8;
 const IMAGE_FETCH_CONCURRENCY = 12;
 const NORMALIZE_CONCURRENCY = 8;
+const PROVIDER_SUPPORTED_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+]);
 
 const noopCheckpoint: CheckpointFn = async () => {};
 
@@ -513,15 +520,84 @@ async function fetchImageBytes(
     throw new Error(`image is ${bytes.byteLength} bytes`);
   }
 
-  return { bytes, contentType };
+  return { bytes, contentType: contentType.toLowerCase() };
 }
 
-async function imageUrlToDataUrl(candidate: ImageCandidate): Promise<string> {
+function imageDataUrl(bytes: Buffer, contentType: string): string {
+  const normalizedType = contentType === "image/jpg" ? "image/jpeg" : contentType;
+  return `data:${normalizedType};base64,${bytes.toString("base64")}`;
+}
+
+function highResolutionThumbnailUrl(candidate: ImageCandidate): string | undefined {
+  const thumbnailLink = candidate.thumbnailLink?.trim();
+  if (!thumbnailLink) return undefined;
+  return thumbnailLink.replace(/=s\d+$/, "=s2048");
+}
+
+async function fallbackPreviewToDataUrl(
+  candidate: ImageCandidate,
+  sourceIndex: number,
+  log: LogFn,
+): Promise<string | undefined> {
+  const previewUrl = highResolutionThumbnailUrl(candidate);
+  if (!previewUrl) return undefined;
+
+  const preview = await fetchImageBytes(
+    { ...candidate, url: previewUrl },
+    MAX_PROVIDER_IMAGE_BYTES,
+  );
+  if (!PROVIDER_SUPPORTED_IMAGE_TYPES.has(preview.contentType)) {
+    throw new Error(`preview has unsupported content-type ${preview.contentType}`);
+  }
+
+  await writeLog(
+    log,
+    `Using JPEG preview for image candidate ${sourceIndex} because the original file is ${candidate.mimeType ?? "an unsupported image type"}.`,
+  );
+  return imageDataUrl(preview.bytes, preview.contentType);
+}
+
+async function providerImageToDataUrl(
+  candidate: ImageCandidate,
+  sourceIndex: number,
+  log: LogFn,
+): Promise<string> {
   const { bytes, contentType } = await fetchImageBytes(
     candidate,
     MAX_PROVIDER_IMAGE_BYTES,
   );
-  return `data:${contentType};base64,${bytes.toString("base64")}`;
+  if (PROVIDER_SUPPORTED_IMAGE_TYPES.has(contentType)) {
+    return imageDataUrl(bytes, contentType);
+  }
+
+  const preview = await fallbackPreviewToDataUrl(candidate, sourceIndex, log);
+  if (preview) return preview;
+
+  let converted: Buffer;
+  try {
+    const sharp = (await import("sharp")).default;
+    converted = await sharp(bytes, { failOn: "none" })
+      .autoOrient()
+      .jpeg({ quality: 92, mozjpeg: true })
+      .toBuffer();
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `unsupported image content-type ${contentType}; conversion failed: ${reason}`,
+    );
+  }
+
+  if (converted.byteLength > MAX_PROVIDER_IMAGE_BYTES) {
+    throw new Error(
+      `converted image is ${converted.byteLength} bytes`,
+    );
+  }
+
+  await writeLog(
+    log,
+    `Converted image candidate ${sourceIndex} from ${contentType} to image/jpeg for ${MAX_PROVIDER_IMAGE_BYTES / 1024 / 1024}MB vision upload compatibility.`,
+  );
+  return imageDataUrl(converted, "image/jpeg");
 }
 
 async function prepareProviderImages(
@@ -538,7 +614,7 @@ async function prepareProviderImages(
       try {
         return {
           candidate,
-          visionUrl: await imageUrlToDataUrl(candidate),
+          visionUrl: await providerImageToDataUrl(candidate, sourceIndex, log),
           sourceIndex,
         };
       } catch (err) {

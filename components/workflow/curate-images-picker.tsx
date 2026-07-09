@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -57,6 +57,34 @@ const POSITION_PRESETS = [
   { value: "center bottom", label: "Bottom", icon: ArrowDown },
   { value: "right bottom", label: "Bottom right", icon: ArrowDown },
 ] as const;
+
+async function renderPreviewPage(input: {
+  templateId: string;
+  page: number;
+  data: PlaceholderData;
+  signal: AbortSignal;
+}): Promise<{ url: string; pageCount: number }> {
+  const res = await fetch("/api/render", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      templateId: input.templateId,
+      page: input.page,
+      data: input.data,
+    }),
+    signal: input.signal,
+  });
+  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+
+  const pageCount = Math.max(
+    1,
+    Math.trunc(Number(res.headers.get("X-Page-Count") ?? "1")),
+  );
+  return {
+    url: URL.createObjectURL(await res.blob()),
+    pageCount,
+  };
+}
 
 function uniqueByUrl(images: Candidate[]): Candidate[] {
   const seen = new Set<string>();
@@ -373,7 +401,9 @@ export function CurateImagesPicker({
     () => selectedUrls[0] ?? "",
   );
   const [submitting, setSubmitting] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const previewUrlsRef = useRef<string[]>([]);
+  const [activePreviewPage, setActivePreviewPage] = useState(0);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
@@ -409,6 +439,17 @@ export function CurateImagesPicker({
   const activePlacementIndex = selectedUrls.indexOf(
     effectiveActivePlacementUrl,
   );
+  const activePreviewUrl =
+    previewUrls[activePreviewPage] ?? previewUrls[0] ?? null;
+
+  function replacePreviewUrls(nextUrls: string[]) {
+    for (const url of previewUrlsRef.current) URL.revokeObjectURL(url);
+    previewUrlsRef.current = nextUrls;
+    setPreviewUrls(nextUrls);
+    setActivePreviewPage((page) =>
+      nextUrls.length === 0 ? 0 : Math.min(page, nextUrls.length - 1),
+    );
+  }
 
   function remove(url: string) {
     setSelectedUrls((current) => current.filter((item) => item !== url));
@@ -461,37 +502,40 @@ export function CurateImagesPicker({
 
   useEffect(() => {
     if (!previewTemplateId || selectedUrls.length === 0) {
-      return;
+      const clearTimer = window.setTimeout(() => replacePreviewUrls([]), 0);
+      return () => window.clearTimeout(clearTimer);
     }
 
     const controller = new AbortController();
-    const previousUrl = previewUrl;
 
     const timer = window.setTimeout(() => {
       setPreviewLoading(true);
       setPreviewError(null);
-      void fetch("/api/render", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const data = buildPreviewData(
+        previewPlaceholders,
+        previewBindings,
+        selectedImageValues,
+      );
+
+      void (async () => {
+        const firstPage = await renderPreviewPage({
           templateId: previewTemplateId,
-          data: buildPreviewData(
-            previewPlaceholders,
-            previewBindings,
-            selectedImageValues,
+          page: 0,
+          data,
+          signal: controller.signal,
+        });
+        const rest = await Promise.all(
+          Array.from({ length: firstPage.pageCount - 1 }, (_, index) =>
+            renderPreviewPage({
+              templateId: previewTemplateId,
+              page: index + 1,
+              data,
+              signal: controller.signal,
+            }),
           ),
-        }),
-        signal: controller.signal,
-      })
-        .then(async (res) => {
-          if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
-          return res.blob();
-        })
-        .then((blob) => {
-          const nextUrl = URL.createObjectURL(blob);
-          setPreviewUrl(nextUrl);
-          if (previousUrl) URL.revokeObjectURL(previousUrl);
-        })
+        );
+        replacePreviewUrls([firstPage.url, ...rest.map((page) => page.url)]);
+      })()
         .catch((err) => {
           if (controller.signal.aborted) return;
           setPreviewError(String(err));
@@ -505,8 +549,6 @@ export function CurateImagesPicker({
       window.clearTimeout(timer);
       controller.abort();
     };
-    // previewUrl is intentionally omitted so each render captures the previous URL once.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     previewTemplateId,
     previewPlaceholders,
@@ -517,9 +559,10 @@ export function CurateImagesPicker({
 
   useEffect(() => {
     return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      for (const url of previewUrlsRef.current) URL.revokeObjectURL(url);
+      previewUrlsRef.current = [];
     };
-  }, [previewUrl]);
+  }, []);
 
   async function submit() {
     if (selectedUrls.length === 0) {
@@ -654,9 +697,33 @@ export function CurateImagesPicker({
               )}
             </div>
             <div className="overflow-hidden rounded-md border bg-muted/20">
-              {previewUrl ? (
+              {previewUrls.length > 1 ? (
+                <div
+                  role="tablist"
+                  aria-label="Preview pages"
+                  className="flex gap-1 border-b bg-card p-1"
+                >
+                  {previewUrls.map((url, index) => (
+                    <button
+                      key={url}
+                      type="button"
+                      role="tab"
+                      aria-selected={activePreviewPage === index}
+                      className={cn(
+                        "h-6 rounded px-2 text-[11px] font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground",
+                        activePreviewPage === index &&
+                          "bg-muted text-foreground",
+                      )}
+                      onClick={() => setActivePreviewPage(index)}
+                    >
+                      {index + 1}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              {activePreviewUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={previewUrl} alt="" className="w-full" />
+                <img src={activePreviewUrl} alt="" className="w-full" />
               ) : (
                 <div className="flex aspect-square items-center justify-center p-6 text-center text-xs text-muted-foreground">
                   {selectedUrls.length === 0

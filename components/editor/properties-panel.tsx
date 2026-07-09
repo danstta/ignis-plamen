@@ -38,7 +38,11 @@ import {
 import { isPolygonShape } from "@/lib/editor/shapes";
 import { fillToStyle } from "@/lib/render/element-style";
 import { FIT_MAX_FONT_SIZE, FIT_MIN_FONT_SIZE } from "@/lib/render/fit-text";
-import { FONT_FAMILIES, FONTS } from "@/lib/render/font-registry";
+import {
+  FONT_FAMILIES,
+  FONTS,
+  normalizeWeight,
+} from "@/lib/render/font-registry";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -63,7 +67,7 @@ import {
 // Driven by the shared registry (lib/render/font-registry.ts) — add fonts there.
 // Brand fonts are merged in on top of this base (see TextProps).
 const BASE_FONTS = FONT_FAMILIES;
-const FONT_WEIGHT_OPTIONS = [300, 400, 500, 600, 700, 800, 900] as const;
+const FONT_WEIGHT_OPTIONS = [100, 200, 300, 400, 500, 600, 700, 800, 900] as const;
 const NORMAL_FONT_WEIGHT = 400;
 const BOLD_FONT_WEIGHT = 700;
 
@@ -559,7 +563,18 @@ function TextProps({ element }: { element: TextElement }) {
   const update = useEditor((s) => s.updateElement);
   const brandFonts = useEditor((s) => activeBrand(s)?.fonts ?? NO_FONTS);
   const id = element.id;
-  const bold = isBoldWeight(element.fontWeight);
+  const fontDef = FONTS[element.fontFamily];
+  const effectiveFontWeight = fontDef
+    ? normalizeWeight(fontDef, element.fontWeight ?? NORMAL_FONT_WEIGHT)
+    : (element.fontWeight ?? NORMAL_FONT_WEIGHT);
+  const fontWeightOptions = fontDef?.weights ?? FONT_WEIGHT_OPTIONS;
+  const bold = isBoldWeight(effectiveFontWeight);
+
+  useEffect(() => {
+    if (fontDef && (element.fontWeight ?? NORMAL_FONT_WEIGHT) !== effectiveFontWeight) {
+      update(id, { fontWeight: effectiveFontWeight });
+    }
+  }, [effectiveFontWeight, element.fontWeight, fontDef, id, update]);
 
   // Registry fonts (Satori-rendered) + brand fonts + whatever this element
   // already uses, de-duplicated.
@@ -602,8 +617,20 @@ function TextProps({ element }: { element: TextElement }) {
             value={element.fontFamily}
             onValueChange={(v) => {
               if (!v) return;
+              const nextDef = FONTS[v];
               snapshot();
-              update(id, { fontFamily: v });
+              update(
+                id,
+                nextDef
+                  ? {
+                      fontFamily: v,
+                      fontWeight: normalizeWeight(
+                        nextDef,
+                        element.fontWeight ?? NORMAL_FONT_WEIGHT,
+                      ),
+                    }
+                  : { fontFamily: v },
+              );
             }}
           >
             <SelectTrigger
@@ -657,7 +684,7 @@ function TextProps({ element }: { element: TextElement }) {
         </Field>
         <Field label="Weight">
           <Select
-            value={String(element.fontWeight ?? 400)}
+            value={String(effectiveFontWeight)}
             onValueChange={(v) => {
               if (!v) return;
               snapshot();
@@ -668,7 +695,7 @@ function TextProps({ element }: { element: TextElement }) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {FONT_WEIGHT_OPTIONS.map((w) => (
+              {fontWeightOptions.map((w) => (
                 <SelectItem key={w} value={String(w)}>
                   {w}
                 </SelectItem>

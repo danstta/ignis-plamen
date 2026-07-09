@@ -1,4 +1,5 @@
 import { getNodeType } from "@/lib/nodes/registry";
+import { normalizeImageCandidates } from "@/lib/nodes/image-input";
 import { isNodeTypeEnabled } from "@/lib/plugins/service";
 import { getWorkflow } from "./service";
 import { createRun, getRun, saveRunState } from "./runs-service";
@@ -439,15 +440,6 @@ type SelectedImageChoice = {
   scale?: number;
 };
 
-function isImageRecord(value: unknown): value is { url: string } {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    "url" in value &&
-    typeof value.url === "string"
-  );
-}
-
 function isPlaceholderRecord(
   value: unknown,
 ): value is { key: string; kind: "text" | "image" } {
@@ -570,11 +562,11 @@ function outputForCuratedImages(
   pausedState: NodeOutputs | undefined,
   selectedImages: SelectedImageChoice[],
 ): NodeOutputs {
-  const ranked = Array.isArray(pausedState?.ranked)
-    ? pausedState.ranked.filter(isImageRecord)
-    : Array.isArray(pausedState?.candidates)
-      ? pausedState.candidates.filter(isImageRecord)
-      : [];
+  const ranked = normalizeImageCandidates(
+    Array.isArray(pausedState?.ranked)
+      ? pausedState.ranked
+      : pausedState?.candidates,
+  );
   const byUrl = new Map(ranked.map((candidate) => [candidate.url, candidate]));
   const seen = new Set<string>();
   const selectedChoices = selectedImages.filter((choice) => {

@@ -33,6 +33,7 @@ import {
   type PlaceholderData,
   type PlaceholderValue,
 } from "@/lib/editor/types";
+import { normalizeImageCandidates } from "@/lib/nodes/image-input";
 import { cn } from "@/lib/utils";
 
 type Candidate = { url: string; attribution?: string };
@@ -118,15 +119,22 @@ function ImageTile({
   label,
   disabled,
   children,
+  className,
 }: {
   image: Candidate;
   action: () => void;
   label: string;
   disabled?: boolean;
   children?: ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="group relative overflow-hidden rounded-md border bg-muted/20">
+    <div
+      className={cn(
+        "group relative overflow-hidden rounded-md border bg-muted/20",
+        className,
+      )}
+    >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={image.url} alt="" className="aspect-square w-full object-cover" />
       {children}
@@ -137,7 +145,7 @@ function ImageTile({
         onClick={action}
         disabled={disabled}
         aria-label={label}
-        className="absolute right-2 top-2 opacity-90 shadow-sm transition-opacity group-hover:opacity-100"
+        className="absolute right-2 top-2 opacity-[0.85] shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
       >
         {label === "Remove" ? <X className="size-4" /> : <Plus className="size-4" />}
       </Button>
@@ -189,6 +197,11 @@ function PlacementControls({
   onPositionChange,
   onScaleChange,
   onReset,
+  onMoveEarlier,
+  onMoveLater,
+  activeIndex,
+  canMoveEarlier,
+  canMoveLater,
 }: {
   image?: Candidate;
   placement: ImagePlacement;
@@ -196,6 +209,11 @@ function PlacementControls({
   onPositionChange: (objectPosition: string) => void;
   onScaleChange: (scale: number) => void;
   onReset: () => void;
+  onMoveEarlier: () => void;
+  onMoveLater: () => void;
+  activeIndex?: number;
+  canMoveEarlier: boolean;
+  canMoveLater: boolean;
 }) {
   return (
     <div className="mt-3 grid gap-3 rounded-md border bg-card p-3 sm:grid-cols-[88px_minmax(0,1fr)]">
@@ -216,19 +234,39 @@ function PlacementControls({
 
       <div className="min-w-0 space-y-3">
         <div className="flex items-center justify-between gap-3">
-          <span className="text-xs font-medium text-muted-foreground">
-            Position
-          </span>
-          <Button
-            type="button"
-            size="xs"
-            variant="ghost"
-            onClick={onReset}
-            disabled={disabled || !hasCustomPlacement(placement)}
-          >
-            <RotateCcw className="size-3" />
-            Reset
-          </Button>
+          <div className="min-w-0">
+            <span className="text-xs font-medium text-muted-foreground">
+              Position
+            </span>
+            {activeIndex !== undefined ? (
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Image {activeIndex + 1}
+              </p>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-1">
+            <ToolButton
+              label="Move earlier"
+              disabled={disabled || !canMoveEarlier}
+              onClick={onMoveEarlier}
+            >
+              <MoveUp className="size-3" />
+            </ToolButton>
+            <ToolButton
+              label="Move later"
+              disabled={disabled || !canMoveLater}
+              onClick={onMoveLater}
+            >
+              <MoveDown className="size-3" />
+            </ToolButton>
+            <ToolButton
+              label="Reset framing"
+              disabled={disabled || !hasCustomPlacement(placement)}
+              onClick={onReset}
+            >
+              <RotateCcw className="size-3" />
+            </ToolButton>
+          </div>
         </div>
 
         <div className="grid w-fit grid-cols-3 gap-1">
@@ -315,8 +353,16 @@ export function CurateImagesPicker({
   previewBindings?: Record<string, unknown>;
 }) {
   const router = useRouter();
+  const normalizedSelected = useMemo(
+    () => normalizeImageCandidates(selected),
+    [selected],
+  );
+  const normalizedAlternates = useMemo(
+    () => normalizeImageCandidates(alternates),
+    [alternates],
+  );
   const [selectedUrls, setSelectedUrls] = useState(() =>
-    uniqueByUrl(selected)
+    uniqueByUrl(normalizedSelected)
       .slice(0, selectionCount)
       .map((image) => image.url),
   );
@@ -332,8 +378,8 @@ export function CurateImagesPicker({
   const [previewError, setPreviewError] = useState<string | null>(null);
 
   const allImages = useMemo(
-    () => uniqueByUrl([...selected, ...alternates]),
-    [selected, alternates],
+    () => uniqueByUrl([...normalizedSelected, ...normalizedAlternates]),
+    [normalizedSelected, normalizedAlternates],
   );
   const byUrl = useMemo(
     () => new Map(allImages.map((image) => [image.url, image])),
@@ -360,6 +406,9 @@ export function CurateImagesPicker({
     effectiveActivePlacementUrl
       ? placementFor(placements, effectiveActivePlacementUrl)
       : null;
+  const activePlacementIndex = selectedUrls.indexOf(
+    effectiveActivePlacementUrl,
+  );
 
   function remove(url: string) {
     setSelectedUrls((current) => current.filter((item) => item !== url));
@@ -524,39 +573,22 @@ export function CurateImagesPicker({
                 action={() => remove(image.url)}
                 label="Remove"
                 disabled={submitting}
+                className={cn(
+                  effectiveActivePlacementUrl === image.url &&
+                    "border-primary/70 ring-2 ring-primary/35",
+                )}
               >
-                <div className="absolute left-2 top-2 flex gap-1">
-                  <Button
-                    type="button"
-                    size="icon-xs"
-                    variant="secondary"
-                    aria-label="Move earlier"
-                    disabled={submitting || index === 0}
-                    onClick={() => move(image.url, -1)}
-                    className="opacity-90 shadow-sm"
-                  >
-                    <MoveUp className="size-3" />
-                  </Button>
-                  <Button
-                    type="button"
-                    size="icon-xs"
-                    variant="secondary"
-                    aria-label="Move later"
-                    disabled={submitting || index === selectedImages.length - 1}
-                    onClick={() => move(image.url, 1)}
-                    className="opacity-90 shadow-sm"
-                  >
-                    <MoveDown className="size-3" />
-                  </Button>
-                </div>
+                <span className="absolute left-2 top-2 inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-background/85 px-1.5 text-[11px] font-medium text-foreground shadow-sm backdrop-blur">
+                  {index + 1}
+                </span>
                 <ToolButton
                   label="Frame image"
                   active={effectiveActivePlacementUrl === image.url}
                   disabled={submitting}
                   onClick={() => setActivePlacementUrl(image.url)}
                   className={cn(
-                    "absolute bottom-2 left-2 shadow-sm",
-                    effectiveActivePlacementUrl !== image.url && "opacity-90",
+                    "absolute bottom-2 left-2 shadow-sm opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100",
+                    effectiveActivePlacementUrl === image.url && "opacity-100",
                   )}
                 >
                   <Crosshair className="size-3" />
@@ -576,6 +608,16 @@ export function CurateImagesPicker({
                 updatePlacement(effectiveActivePlacementUrl, { scale })
               }
               onReset={() => resetPlacement(effectiveActivePlacementUrl)}
+              onMoveEarlier={() => move(effectiveActivePlacementUrl, -1)}
+              onMoveLater={() => move(effectiveActivePlacementUrl, 1)}
+              activeIndex={
+                activePlacementIndex >= 0 ? activePlacementIndex : undefined
+              }
+              canMoveEarlier={activePlacementIndex > 0}
+              canMoveLater={
+                activePlacementIndex >= 0 &&
+                activePlacementIndex < selectedImages.length - 1
+              }
             />
           ) : null}
         </section>

@@ -7,46 +7,9 @@ import {
 } from "@/lib/editor/types";
 import { getTemplate } from "@/lib/templates/service";
 import { valueToText } from "@/lib/workflows/references";
+import { normalizeImageCandidates } from "../image-input";
 import type { ImageCandidate, NodeDefinition } from "../types";
 import { curateImagesMeta, type CurateImagesConfig } from "./meta";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function isImageCandidate(value: unknown): value is ImageCandidate {
-  return (
-    isRecord(value) &&
-    typeof value.url === "string" &&
-    value.url.trim() !== ""
-  );
-}
-
-function normalizeImages(value: unknown): ImageCandidate[] {
-  const raw =
-    isRecord(value) && Array.isArray(value.ranked)
-      ? value.ranked
-      : isRecord(value) && Array.isArray(value.selected)
-        ? value.selected
-        : isRecord(value) && Array.isArray(value.candidates)
-          ? value.candidates
-          : value;
-  if (!Array.isArray(raw)) return [];
-
-  const seen = new Set<string>();
-  const images: ImageCandidate[] = [];
-  for (const item of raw) {
-    const candidate = isImageCandidate(item)
-      ? item
-      : typeof item === "string" && item.trim()
-        ? { url: item.trim(), attribution: "" }
-        : undefined;
-    if (!candidate || seen.has(candidate.url)) continue;
-    seen.add(candidate.url);
-    images.push(candidate);
-  }
-  return images;
-}
 
 function outputsFromSelection(
   ranked: ImageCandidate[],
@@ -111,9 +74,9 @@ export const curateImagesNode: NodeDefinition<CurateImagesConfig> = {
   ...curateImagesMeta,
 
   async run(ctx) {
-    const ranked = normalizeImages(ctx.inputs.ranked);
+    const ranked = normalizeImageCandidates(ctx.inputs.ranked);
     if (ranked.length === 0) {
-      ctx.log("No ranked images were available to curate.");
+      ctx.log("No images were available to curate.");
       return {
         type: "output",
         outputs: { ranked: [], selected: [], selectedUrls: [], best: "" },

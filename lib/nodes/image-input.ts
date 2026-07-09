@@ -4,16 +4,59 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function driveDirectLink(fileId: string): string {
+  return `https://drive.google.com/uc?export=view&id=${encodeURIComponent(fileId)}`;
+}
+
+function googleDriveFileIdFromUrl(value: string): string | undefined {
+  try {
+    const url = new URL(value);
+    if (!url.hostname.endsWith("drive.google.com")) return undefined;
+
+    const id = url.searchParams.get("id")?.trim();
+    if (id) return id;
+
+    const fileMatch = url.pathname.match(/\/file\/d\/([^/?#]+)/);
+    return fileMatch?.[1] ? decodeURIComponent(fileMatch[1]) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function displayUrl(value: string): string {
+  const url = value.trim();
+  const driveFileId = googleDriveFileIdFromUrl(url);
+  return driveFileId ? driveDirectLink(driveFileId) : url;
+}
+
 export function urlFromImageValue(value: unknown): string | undefined {
-  if (typeof value === "string") return value.trim() || undefined;
+  if (typeof value === "string") {
+    const url = nonEmptyString(value);
+    return url ? displayUrl(url) : undefined;
+  }
   if (!isRecord(value)) return undefined;
+  const primaryUrl =
+    nonEmptyString(value.url) ??
+    nonEmptyString(value.renderUrl) ??
+    nonEmptyString(value.primaryUrl) ??
+    nonEmptyString(value.chosen) ??
+    nonEmptyString(value.best);
+  const renderableUrl =
+    nonEmptyString(value.directLink) ??
+    nonEmptyString(value.webContentLink) ??
+    nonEmptyString(value.thumbnailLink);
   const url =
-    value.url ??
-    value.renderUrl ??
-    value.primaryUrl ??
-    value.chosen ??
-    value.best;
-  return typeof url === "string" && url.trim() ? url.trim() : undefined;
+    primaryUrl && googleDriveFileIdFromUrl(primaryUrl)
+      ? renderableUrl ?? primaryUrl
+      : primaryUrl ??
+        renderableUrl ??
+        nonEmptyString(value.webViewLink);
+
+  return url ? displayUrl(url) : undefined;
 }
 
 function imagesFromQueryResults(value: unknown): unknown[] | undefined {

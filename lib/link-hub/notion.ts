@@ -56,6 +56,8 @@ type LinkHubPropertyKey =
   | "callDeadline"
   | "sortOrder";
 
+export type LinkHubPropertyNames = Partial<Record<LinkHubPropertyKey, string>>;
+
 const PROPERTY_FALLBACKS: Record<LinkHubPropertyKey, string[]> = {
   projectName: ["Project name", "project_name", "Name", "Title"],
   infopackLink: ["Infopack link", "infopack_link", "Infopack"],
@@ -82,7 +84,10 @@ function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function propertyName(key: LinkHubPropertyKey): string {
+function propertyName(key: LinkHubPropertyKey, names?: LinkHubPropertyNames): string {
+  const configured = names?.[key]?.trim();
+  if (configured) return configured;
+
   switch (key) {
     case "projectName":
       return notionLinkHubProjectNameProperty();
@@ -101,10 +106,12 @@ function propertyName(key: LinkHubPropertyKey): string {
   }
 }
 
-function propertyCandidates(key: LinkHubPropertyKey): string[] {
-  return [...new Set([propertyName(key), ...PROPERTY_FALLBACKS[key]])].filter(
-    Boolean,
-  );
+function propertyCandidates(
+  key: LinkHubPropertyKey,
+  names?: LinkHubPropertyNames,
+): string[] {
+  return [...new Set([propertyName(key, names), ...PROPERTY_FALLBACKS[key]])]
+    .filter(Boolean);
 }
 
 function normalizePropertyName(name: string): string {
@@ -118,9 +125,10 @@ function normalizePropertyName(name: string): string {
 function getProperty(
   properties: Record<string, NotionProperty> | undefined,
   key: LinkHubPropertyKey,
+  names?: LinkHubPropertyNames,
 ): NotionProperty | undefined {
   if (!properties) return undefined;
-  const candidates = propertyCandidates(key);
+  const candidates = propertyCandidates(key, names);
   for (const candidate of candidates) {
     const exact = properties[candidate];
     if (exact) return exact;
@@ -367,25 +375,34 @@ export function pageBelongsToConfiguredDataSource(page: NotionPage): boolean {
 export function mapNotionPageToLinkHubProject(
   page: NotionPage,
   now = new Date(),
+  names?: LinkHubPropertyNames,
 ): LinkHubProjectUpsert {
   const properties = page.properties;
-  const projectName = propertyToString(getProperty(properties, "projectName"));
+  const projectName = propertyToString(
+    getProperty(properties, "projectName", names),
+  );
   const archived = page.archived === true || page.in_trash === true;
   const showOnLinks =
     !archived &&
     projectName.length > 0 &&
-    propertyToBoolean(getProperty(properties, "showOnLinks"));
+    propertyToBoolean(getProperty(properties, "showOnLinks", names));
 
   return {
     notion_page_id: extractNotionId(page.id) ?? page.id,
     project_name: projectName,
-    infopack_link: propertyToHttpUrl(getProperty(properties, "infopackLink")),
-    google_form_link: propertyToHttpUrl(getProperty(properties, "googleFormLink")),
+    infopack_link: propertyToHttpUrl(
+      getProperty(properties, "infopackLink", names),
+    ),
+    google_form_link: propertyToHttpUrl(
+      getProperty(properties, "googleFormLink", names),
+    ),
     project_country:
-      propertyToString(getProperty(properties, "projectCountry")) || null,
+      propertyToString(getProperty(properties, "projectCountry", names)) || null,
     show_on_links: showOnLinks,
-    call_deadline: propertyToDateOnly(getProperty(properties, "callDeadline")),
-    sort_order: propertyToNumber(getProperty(properties, "sortOrder")),
+    call_deadline: propertyToDateOnly(
+      getProperty(properties, "callDeadline", names),
+    ),
+    sort_order: propertyToNumber(getProperty(properties, "sortOrder", names)),
     updated_at: now.toISOString(),
   };
 }
@@ -405,7 +422,10 @@ function payloadProperties(payload: JsonRecord): JsonRecord | null {
   );
 }
 
-function directCandidates(key: LinkHubPropertyKey): string[] {
+function directCandidates(
+  key: LinkHubPropertyKey,
+  names?: LinkHubPropertyNames,
+): string[] {
   const camelByKey: Record<LinkHubPropertyKey, string[]> = {
     projectName: ["projectName"],
     infopackLink: ["infopackLink"],
@@ -415,22 +435,25 @@ function directCandidates(key: LinkHubPropertyKey): string[] {
     callDeadline: ["callDeadline", "rokPoziva"],
     sortOrder: ["sortOrder"],
   };
-  return [...propertyCandidates(key), ...camelByKey[key]];
+  return [...propertyCandidates(key, names), ...camelByKey[key]];
 }
 
 function payloadValue(
   payload: JsonRecord,
   properties: JsonRecord | null,
   key: LinkHubPropertyKey,
+  names?: LinkHubPropertyNames,
 ): unknown {
-  for (const candidate of directCandidates(key)) {
+  for (const candidate of directCandidates(key, names)) {
     if (Object.hasOwn(payload, candidate)) return payload[candidate];
     if (properties && Object.hasOwn(properties, candidate)) {
       return properties[candidate];
     }
   }
 
-  const normalized = new Set(directCandidates(key).map(normalizePropertyName));
+  const normalized = new Set(
+    directCandidates(key, names).map(normalizePropertyName),
+  );
   for (const [name, value] of Object.entries(payload)) {
     if (normalized.has(normalizePropertyName(name))) return value;
   }
@@ -461,6 +484,7 @@ function payloadPageId(payload: JsonRecord): string | undefined {
 function hasKnownLinkHubField(
   payload: JsonRecord,
   properties: JsonRecord | null,
+  names?: LinkHubPropertyNames,
 ): boolean {
   return (
     ([
@@ -472,7 +496,7 @@ function hasKnownLinkHubField(
       "callDeadline",
       "sortOrder",
     ] as LinkHubPropertyKey[]).some(
-      (key) => payloadValue(payload, properties, key) !== undefined,
+      (key) => payloadValue(payload, properties, key, names) !== undefined,
     )
   );
 }
@@ -480,34 +504,41 @@ function hasKnownLinkHubField(
 export function mapLinkHubPayloadToProject(
   payload: unknown,
   now = new Date(),
+  names?: LinkHubPropertyNames,
 ): LinkHubProjectUpsert | null {
   const source = payloadRecord(payload);
   if (!source) return null;
 
   const properties = payloadProperties(source);
   const notionPageId = payloadPageId(source);
-  if (!notionPageId || !hasKnownLinkHubField(source, properties)) return null;
+  if (!notionPageId || !hasKnownLinkHubField(source, properties, names)) {
+    return null;
+  }
 
   const projectName = valueToString(
-    payloadValue(source, properties, "projectName"),
+    payloadValue(source, properties, "projectName", names),
   );
   const archived = valueToBoolean(source.archived) || valueToBoolean(source.in_trash);
 
   return {
     notion_page_id: notionPageId,
     project_name: projectName,
-    infopack_link: valueToHttpUrl(payloadValue(source, properties, "infopackLink")),
+    infopack_link: valueToHttpUrl(
+      payloadValue(source, properties, "infopackLink", names),
+    ),
     google_form_link: valueToHttpUrl(
-      payloadValue(source, properties, "googleFormLink"),
+      payloadValue(source, properties, "googleFormLink", names),
     ),
     project_country:
-      valueToString(payloadValue(source, properties, "projectCountry")) || null,
+      valueToString(payloadValue(source, properties, "projectCountry", names)) ||
+      null,
     show_on_links:
-      !archived && valueToBoolean(payloadValue(source, properties, "showOnLinks")),
+      !archived &&
+      valueToBoolean(payloadValue(source, properties, "showOnLinks", names)),
     call_deadline: valueToDateOnly(
-      payloadValue(source, properties, "callDeadline"),
+      payloadValue(source, properties, "callDeadline", names),
     ),
-    sort_order: valueToNumber(payloadValue(source, properties, "sortOrder")),
+    sort_order: valueToNumber(payloadValue(source, properties, "sortOrder", names)),
     updated_at: now.toISOString(),
   };
 }

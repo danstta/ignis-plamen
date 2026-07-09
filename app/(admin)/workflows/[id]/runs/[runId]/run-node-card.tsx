@@ -18,6 +18,8 @@ import type { NodeRunState, RunLogEntry } from "@/lib/workflows/types";
 
 type ImagePreview = {
   url: string;
+  previewUrl?: string;
+  thumbnailLink?: string;
   title?: string;
   source?: string;
   attribution?: string;
@@ -99,6 +101,10 @@ function toImagePreview(value: unknown): ImagePreview | undefined {
   }
   return {
     url: value.url.trim(),
+    previewUrl:
+      typeof value.previewUrl === "string" ? value.previewUrl : undefined,
+    thumbnailLink:
+      typeof value.thumbnailLink === "string" ? value.thumbnailLink : undefined,
     title: typeof value.title === "string" ? value.title : undefined,
     source: typeof value.source === "string" ? value.source : undefined,
     attribution:
@@ -106,6 +112,10 @@ function toImagePreview(value: unknown): ImagePreview | undefined {
     locationQuery:
       typeof value.locationQuery === "string" ? value.locationQuery : undefined,
   };
+}
+
+function imagePreviewSrc(image: ImagePreview): string {
+  return image.previewUrl ?? image.thumbnailLink ?? image.url;
 }
 
 function imageQueryGroups(outputs: Record<string, unknown>): ImageQueryGroup[] {
@@ -182,7 +192,7 @@ function ImageGroupsPreview({ outputs }: { outputs: Record<string, unknown> }) {
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={image.url}
+                    src={imagePreviewSrc(image)}
                     alt={image.title ?? `${group.query} candidate ${index + 1}`}
                     loading="lazy"
                     className="aspect-square w-full rounded-t-[calc(var(--radius)-1px)] object-cover"

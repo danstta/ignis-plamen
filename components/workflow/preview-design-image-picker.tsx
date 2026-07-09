@@ -10,6 +10,8 @@ import { cn } from "@/lib/utils";
 type Candidate = {
   url: string;
   attribution?: string;
+  previewUrl?: string;
+  thumbnailLink?: string;
   title?: string;
   source?: string;
   locationQuery?: string;
@@ -77,6 +79,10 @@ function candidateGroups(candidates: Candidate[]): CandidateGroup[] {
   });
 
   return [...groups.values()];
+}
+
+function imagePreviewSrc(image: Candidate): string {
+  return image.previewUrl ?? image.thumbnailLink ?? image.url;
 }
 
 export function PreviewDesignImagePicker({
@@ -254,7 +260,7 @@ export function PreviewDesignImagePicker({
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={candidate.url}
+                        src={imagePreviewSrc(candidate)}
                         alt=""
                         className="aspect-square w-full object-cover"
                       />

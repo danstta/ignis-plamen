@@ -12,7 +12,11 @@ function driveDirectLink(fileId: string): string {
   return `https://drive.google.com/uc?export=view&id=${encodeURIComponent(fileId)}`;
 }
 
-function googleDriveFileIdFromUrl(value: string): string | undefined {
+function driveLinkPreviewUrl(fileId: string): string {
+  return `/api/drive-link-images/${encodeURIComponent(fileId)}`;
+}
+
+export function googleDriveFileIdFromUrl(value: string): string | undefined {
   try {
     const url = new URL(value);
     if (!url.hostname.endsWith("drive.google.com")) return undefined;
@@ -25,6 +29,11 @@ function googleDriveFileIdFromUrl(value: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+export function browserPreviewUrlForImageUrl(value: string): string | undefined {
+  const driveFileId = googleDriveFileIdFromUrl(value);
+  return driveFileId ? driveLinkPreviewUrl(driveFileId) : undefined;
 }
 
 function displayUrl(value: string): string {
@@ -120,16 +129,22 @@ export function normalizeImageCandidates(value: unknown): ImageCandidate[] {
     const url = urlFromImageValue(item);
     if (!url || seen.has(url)) continue;
     seen.add(url);
+    const previewUrl = browserPreviewUrlForImageUrl(url);
 
     if (isRecord(item)) {
       candidates.push({
         ...item,
         url,
+        ...(previewUrl ? { previewUrl } : {}),
         attribution:
           typeof item.attribution === "string" ? item.attribution : "",
       });
     } else {
-      candidates.push({ url, attribution: "" });
+      candidates.push({
+        url,
+        ...(previewUrl ? { previewUrl } : {}),
+        attribution: "",
+      });
     }
   }
 

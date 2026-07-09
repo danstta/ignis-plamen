@@ -82,26 +82,32 @@ function imagesFromQueryResults(value: unknown): unknown[] | undefined {
   });
 }
 
+function firstImageArray(value: unknown): unknown[] | undefined {
+  if (!isRecord(value)) return undefined;
+
+  for (const key of [
+    "links",
+    "directLinks",
+    "images",
+    "candidates",
+    "ranked",
+    "selected",
+    "selectedUrls",
+    "renderUrls",
+    "designs",
+  ]) {
+    const array = value[key];
+    if (Array.isArray(array)) return array;
+  }
+
+  return undefined;
+}
+
 function imageArrayFrom(value: unknown): unknown[] {
   const queryResultImages = imagesFromQueryResults(value);
   if (queryResultImages) return queryResultImages;
 
-  const raw =
-    isRecord(value) && Array.isArray(value.images)
-      ? value.images
-      : isRecord(value) && Array.isArray(value.candidates)
-        ? value.candidates
-        : isRecord(value) && Array.isArray(value.ranked)
-          ? value.ranked
-          : isRecord(value) && Array.isArray(value.selected)
-            ? value.selected
-            : isRecord(value) && Array.isArray(value.selectedUrls)
-              ? value.selectedUrls
-              : isRecord(value) && Array.isArray(value.renderUrls)
-                ? value.renderUrls
-                : isRecord(value) && Array.isArray(value.designs)
-                  ? value.designs
-                  : value;
+  const raw = firstImageArray(value) ?? value;
 
   return Array.isArray(raw) ? raw : [raw];
 }

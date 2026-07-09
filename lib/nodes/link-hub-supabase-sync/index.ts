@@ -1,7 +1,9 @@
 import {
   readNotionWebhookSignal,
   signalMatchesConfiguredDataSource,
+  type LinkHubPropertyKey,
   type LinkHubPropertyNames,
+  type LinkHubPropertyValues,
 } from "@/lib/link-hub/notion";
 import {
   syncLinkHubDataSource,
@@ -15,16 +17,56 @@ import {
   type LinkHubSupabaseSyncConfig,
 } from "./meta";
 
-function propertyNames(config: LinkHubSupabaseSyncConfig): LinkHubPropertyNames {
-  return {
-    projectName: config.projectNameProperty,
-    infopackLink: config.infopackLinkProperty,
-    googleFormLink: config.googleFormLinkProperty,
-    projectCountry: config.projectCountryProperty,
-    showOnLinks: config.showOnLinksProperty,
-    callDeadline: config.callDeadlineProperty,
-    sortOrder: config.sortOrderProperty,
-  };
+const FIELD_BY_PROPERTY: Record<
+  LinkHubPropertyKey,
+  keyof Omit<LinkHubSupabaseSyncConfig, "allowNotionApiFallback">
+> = {
+  projectName: "projectNameProperty",
+  infopackLink: "infopackLinkProperty",
+  googleFormLink: "googleFormLinkProperty",
+  projectCountry: "projectCountryProperty",
+  showOnLinks: "showOnLinksProperty",
+  callDeadline: "callDeadlineProperty",
+  sortOrder: "sortOrderProperty",
+};
+
+const REFERENCE_TOKEN = /\{\{\s*[^}]+?\s*\}\}/;
+
+function containsReference(value: unknown): boolean {
+  return typeof value === "string" && REFERENCE_TOKEN.test(value);
+}
+
+function stringConfig(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function propertySources(
+  config: LinkHubSupabaseSyncConfig,
+  rawConfig?: Record<string, unknown>,
+): { names: LinkHubPropertyNames; values: LinkHubPropertyValues } {
+  const names: LinkHubPropertyNames = {};
+  const values: LinkHubPropertyValues = {};
+
+  for (const [key, field] of Object.entries(FIELD_BY_PROPERTY) as [
+    LinkHubPropertyKey,
+    keyof Omit<LinkHubSupabaseSyncConfig, "allowNotionApiFallback">,
+  ][]) {
+    const resolved = config[field];
+    const raw = rawConfig?.[field];
+    if (containsReference(raw)) {
+      if (resolved !== undefined) values[key] = resolved;
+      continue;
+    }
+
+    const name = stringConfig(resolved);
+    if (name) {
+      names[key] = name;
+    } else if (resolved !== undefined) {
+      values[key] = resolved;
+    }
+  }
+
+  return { names, values };
 }
 
 async function fallbackSync(
@@ -53,10 +95,10 @@ export const linkHubSupabaseSyncNode: NodeDefinition<LinkHubSupabaseSyncConfig> 
 
   async run(ctx) {
     const payload = ctx.inputs.payload ?? ctx.trigger.body ?? ctx.trigger;
-    const names = propertyNames(ctx.config);
+    const { names, values } = propertySources(ctx.config, ctx.rawConfig);
 
     await ctx.throwIfStopped?.();
-    let result = await syncLinkHubPayload(payload, names);
+    let result = await syncLinkHubPayload(payload, names, values);
     if (
       result.skipped === "payload_missing_link_hub_fields" &&
       ctx.config.allowNotionApiFallback

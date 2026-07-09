@@ -47,7 +47,7 @@ export type LinkHubProjectUpsert = {
   updated_at: string;
 };
 
-type LinkHubPropertyKey =
+export type LinkHubPropertyKey =
   | "projectName"
   | "infopackLink"
   | "googleFormLink"
@@ -57,12 +57,25 @@ type LinkHubPropertyKey =
   | "sortOrder";
 
 export type LinkHubPropertyNames = Partial<Record<LinkHubPropertyKey, string>>;
+export type LinkHubPropertyValues = Partial<Record<LinkHubPropertyKey, unknown>>;
 
 const PROPERTY_FALLBACKS: Record<LinkHubPropertyKey, string[]> = {
-  projectName: ["Project name", "project_name", "Name", "Title"],
+  projectName: ["Ime projekta", "Project name", "project_name", "Name", "Title"],
   infopackLink: ["Infopack link", "infopack_link", "Infopack"],
-  googleFormLink: ["Google form link", "google_form_link", "Application form"],
-  projectCountry: ["Project country", "project_country", "Country"],
+  googleFormLink: [
+    "Forma link",
+    "Google form link",
+    "google_form_link",
+    "Application form",
+  ],
+  projectCountry: [
+    "Država",
+    "Drzava",
+    "DrÅ¾ava",
+    "Project country",
+    "project_country",
+    "Country",
+  ],
   showOnLinks: [
     "Show on links",
     "show_on_links",
@@ -443,7 +456,12 @@ function payloadValue(
   properties: JsonRecord | null,
   key: LinkHubPropertyKey,
   names?: LinkHubPropertyNames,
+  values?: LinkHubPropertyValues,
 ): unknown {
+  if (values && Object.hasOwn(values, key) && values[key] !== undefined) {
+    return values[key];
+  }
+
   for (const candidate of directCandidates(key, names)) {
     if (Object.hasOwn(payload, candidate)) return payload[candidate];
     if (properties && Object.hasOwn(properties, candidate)) {
@@ -485,6 +503,7 @@ function hasKnownLinkHubField(
   payload: JsonRecord,
   properties: JsonRecord | null,
   names?: LinkHubPropertyNames,
+  values?: LinkHubPropertyValues,
 ): boolean {
   return (
     ([
@@ -496,7 +515,7 @@ function hasKnownLinkHubField(
       "callDeadline",
       "sortOrder",
     ] as LinkHubPropertyKey[]).some(
-      (key) => payloadValue(payload, properties, key, names) !== undefined,
+      (key) => payloadValue(payload, properties, key, names, values) !== undefined,
     )
   );
 }
@@ -505,18 +524,19 @@ export function mapLinkHubPayloadToProject(
   payload: unknown,
   now = new Date(),
   names?: LinkHubPropertyNames,
+  values?: LinkHubPropertyValues,
 ): LinkHubProjectUpsert | null {
   const source = payloadRecord(payload);
   if (!source) return null;
 
   const properties = payloadProperties(source);
   const notionPageId = payloadPageId(source);
-  if (!notionPageId || !hasKnownLinkHubField(source, properties, names)) {
+  if (!notionPageId || !hasKnownLinkHubField(source, properties, names, values)) {
     return null;
   }
 
   const projectName = valueToString(
-    payloadValue(source, properties, "projectName", names),
+    payloadValue(source, properties, "projectName", names, values),
   );
   const archived = valueToBoolean(source.archived) || valueToBoolean(source.in_trash);
 
@@ -524,21 +544,25 @@ export function mapLinkHubPayloadToProject(
     notion_page_id: notionPageId,
     project_name: projectName,
     infopack_link: valueToHttpUrl(
-      payloadValue(source, properties, "infopackLink", names),
+      payloadValue(source, properties, "infopackLink", names, values),
     ),
     google_form_link: valueToHttpUrl(
-      payloadValue(source, properties, "googleFormLink", names),
+      payloadValue(source, properties, "googleFormLink", names, values),
     ),
     project_country:
-      valueToString(payloadValue(source, properties, "projectCountry", names)) ||
+      valueToString(
+        payloadValue(source, properties, "projectCountry", names, values),
+      ) ||
       null,
     show_on_links:
       !archived &&
-      valueToBoolean(payloadValue(source, properties, "showOnLinks", names)),
+      valueToBoolean(payloadValue(source, properties, "showOnLinks", names, values)),
     call_deadline: valueToDateOnly(
-      payloadValue(source, properties, "callDeadline", names),
+      payloadValue(source, properties, "callDeadline", names, values),
     ),
-    sort_order: valueToNumber(payloadValue(source, properties, "sortOrder", names)),
+    sort_order: valueToNumber(
+      payloadValue(source, properties, "sortOrder", names, values),
+    ),
     updated_at: now.toISOString(),
   };
 }

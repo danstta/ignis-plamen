@@ -3,14 +3,16 @@ import type { NodeMeta } from "../types";
 
 export const LINK_HUB_SUPABASE_SYNC_TYPE_ID = "link-hub-supabase-sync";
 
+const propertyMappingSchema = z.unknown();
+
 export const linkHubSupabaseSyncConfigSchema = z.object({
-  projectNameProperty: z.string().default("Ime projekta"),
-  infopackLinkProperty: z.string().default("Infopack link"),
-  googleFormLinkProperty: z.string().default("Google form link"),
-  projectCountryProperty: z.string().default("Država"),
-  showOnLinksProperty: z.string().default("Show on links"),
-  callDeadlineProperty: z.string().default("Rok poziva"),
-  sortOrderProperty: z.string().default("Sort order"),
+  projectNameProperty: propertyMappingSchema.default("Ime projekta"),
+  infopackLinkProperty: propertyMappingSchema.default("Infopack link"),
+  googleFormLinkProperty: propertyMappingSchema.default("Google form link"),
+  projectCountryProperty: propertyMappingSchema.default("Država"),
+  showOnLinksProperty: propertyMappingSchema.default("Show on links"),
+  callDeadlineProperty: propertyMappingSchema.default("Rok poziva"),
+  sortOrderProperty: propertyMappingSchema.default("Sort order"),
   allowNotionApiFallback: z.boolean().default(true),
 });
 

@@ -109,6 +109,20 @@ export function listServerEnvironmentConnections(): ServerEnvironmentConnection[
       ],
     }),
     connection({
+      id: "link-hub-notion-env",
+      name: "Link Hub Notion Sync",
+      providerType: "notion",
+      description: "Mirrors the public links database from Notion into Supabase.",
+      access:
+        "Reads the configured Notion data source and writes public Link Hub rows with the Supabase service role.",
+      env: [
+        { name: "NOTION_LINK_HUB_TOKEN" },
+        { name: "NOTION_LINK_HUB_DATA_SOURCE_ID" },
+        { name: "NOTION_LINK_HUB_WEBHOOK_VERIFICATION_TOKEN" },
+        { name: "LINK_HUB_SYNC_SECRET", required: false },
+      ],
+    }),
+    connection({
       id: "vercel-blob-env",
       name: "Vercel Blob",
       providerType: "vercel",

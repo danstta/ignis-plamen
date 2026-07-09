@@ -67,6 +67,40 @@ export function hasSupabaseStorage(): boolean {
   return Boolean(supabaseUrl() && supabaseServiceRoleKey());
 }
 
+// --- Link Hub Notion -> Supabase sync --------------------------------------
+/** Server-only Notion integration token for the public /links mirror. */
+export const notionLinkHubToken = () =>
+  process.env.NOTION_LINK_HUB_TOKEN?.trim() || undefined;
+
+/** Current Notion API data source id that contains the Link Hub rows. */
+export const notionLinkHubDataSourceId = () =>
+  process.env.NOTION_LINK_HUB_DATA_SOURCE_ID?.trim() || undefined;
+
+/** HMAC key Notion provides when verifying the webhook subscription. */
+export const notionLinkHubWebhookVerificationToken = () =>
+  process.env.NOTION_LINK_HUB_WEBHOOK_VERIFICATION_TOKEN?.trim() || undefined;
+
+/** Optional secret for manual full syncs through GET /api/link-hub/notion. */
+export const linkHubSyncSecret = () =>
+  process.env.LINK_HUB_SYNC_SECRET?.trim() || undefined;
+
+export const notionLinkHubProjectNameProperty = () =>
+  process.env.NOTION_LINK_HUB_PROJECT_NAME_PROPERTY?.trim() || "Project name";
+export const notionLinkHubInfopackLinkProperty = () =>
+  process.env.NOTION_LINK_HUB_INFOPACK_LINK_PROPERTY?.trim() || "Infopack link";
+export const notionLinkHubGoogleFormLinkProperty = () =>
+  process.env.NOTION_LINK_HUB_GOOGLE_FORM_LINK_PROPERTY?.trim() ||
+  "Google form link";
+export const notionLinkHubProjectCountryProperty = () =>
+  process.env.NOTION_LINK_HUB_PROJECT_COUNTRY_PROPERTY?.trim() ||
+  "Project country";
+export const notionLinkHubShowOnLinksProperty = () =>
+  process.env.NOTION_LINK_HUB_SHOW_ON_LINKS_PROPERTY?.trim() || "Show on links";
+export const notionLinkHubCallDeadlineProperty = () =>
+  process.env.NOTION_LINK_HUB_CALL_DEADLINE_PROPERTY?.trim() || "Rok poziva";
+export const notionLinkHubSortOrderProperty = () =>
+  process.env.NOTION_LINK_HUB_SORT_ORDER_PROPERTY?.trim() || "Sort order";
+
 // --- Background queue (Inngest) ---
 /**
  * Inngest event key used by the client to send events. Non-throwing (like

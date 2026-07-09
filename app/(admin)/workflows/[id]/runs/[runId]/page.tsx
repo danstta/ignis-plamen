@@ -4,6 +4,7 @@ import { ArrowLeft, ChevronDown } from "lucide-react";
 import { getRun } from "@/lib/workflows/runs-service";
 import { getWorkflow } from "@/lib/workflows/service";
 import { getNodeType } from "@/lib/nodes/registry";
+import { browserPreviewUrlForImageUrl } from "@/lib/nodes/image-input";
 import { formatRelativeTime } from "@/lib/format";
 import type { WorkflowGraph } from "@/lib/workflows/types";
 import { RunStatusBadge } from "@/components/workflow/run-status-badge";
@@ -25,11 +26,37 @@ function cleanUrl(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function firstUrlFromList(value: unknown): string | undefined {
+function imagePreviewSrc(input: {
+  url: string;
+  previewUrl?: string;
+  thumbnailLink?: string;
+}): string {
+  return (
+    input.previewUrl ??
+    input.thumbnailLink ??
+    browserPreviewUrlForImageUrl(input.url) ??
+    input.url
+  );
+}
+
+function firstImageFromList(
+  value: unknown,
+): { url: string; previewUrl?: string; thumbnailLink?: string } | undefined {
   if (!Array.isArray(value)) return undefined;
   for (const item of value) {
-    const url = cleanUrl(item) ?? (isRecord(item) ? cleanUrl(item.url) : undefined);
-    if (url) return url;
+    if (typeof item === "string") {
+      const url = cleanUrl(item);
+      if (url) return { url };
+      continue;
+    }
+    if (!isRecord(item)) continue;
+    const url = cleanUrl(item.url);
+    if (!url) continue;
+    return {
+      url,
+      previewUrl: cleanUrl(item.previewUrl),
+      thumbnailLink: cleanUrl(item.thumbnailLink),
+    };
   }
   return undefined;
 }
@@ -63,8 +90,10 @@ function chosenLabel(type: string): string {
 function findChosenImage(
   graph: WorkflowGraph,
   outputs: Record<string, Record<string, unknown>>,
-): { url: string; label: string; source: string } | undefined {
-  let candidate: { url: string; label: string; source: string } | undefined;
+): { url: string; src: string; label: string; source: string } | undefined {
+  let candidate:
+    | { url: string; src: string; label: string; source: string }
+    | undefined;
 
   for (const node of graph.nodes) {
     const out = outputs[node.id];
@@ -75,19 +104,34 @@ function findChosenImage(
       cleanUrl(out.chosen) ??
       (isRecord(out.chosenDesign) ? cleanUrl(out.chosenDesign.url) : undefined);
     if (chosen) {
-      candidate = { url: chosen, label: chosenLabel(node.type), source };
+      candidate = {
+        url: chosen,
+        src: imagePreviewSrc({ url: chosen }),
+        label: chosenLabel(node.type),
+        source,
+      };
       continue;
     }
 
     const best = cleanUrl(out.best);
     if (best) {
-      candidate = { url: best, label: "Best image", source };
+      candidate = {
+        url: best,
+        src: imagePreviewSrc({ url: best }),
+        label: "Best image",
+        source,
+      };
       continue;
     }
 
-    const selected = firstUrlFromList(out.selectedUrls) ?? firstUrlFromList(out.selected);
+    const selected = firstImageFromList(out.selectedUrls) ?? firstImageFromList(out.selected);
     if (selected) {
-      candidate = { url: selected, label: "Top selected image", source };
+      candidate = {
+        url: selected.url,
+        src: imagePreviewSrc(selected),
+        label: "Top selected image",
+        source,
+      };
     }
   }
 
@@ -368,7 +412,7 @@ export default async function RunDetailPage({
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={chosenImage.url}
+              src={chosenImage.src}
               alt={`${chosenImage.label} from ${chosenImage.source}`}
               className="max-h-44 w-auto max-w-full rounded-md border bg-muted/20 object-contain"
             />

@@ -36,7 +36,12 @@ import {
 import { normalizeImageCandidates } from "@/lib/nodes/image-input";
 import { cn } from "@/lib/utils";
 
-type Candidate = { url: string; attribution?: string };
+type Candidate = {
+  url: string;
+  attribution?: string;
+  previewUrl?: string;
+  thumbnailLink?: string;
+};
 type PreviewPlaceholder = { key: string; kind: "text" | "image" };
 type ImagePlacement = { objectPosition: string; scale: number };
 type SelectedImageValue = { url: string } & ImagePlacement;
@@ -141,6 +146,10 @@ function valueForTextPlaceholder(value: unknown): string {
   return JSON.stringify(value);
 }
 
+function imagePreviewSrc(image: Candidate): string {
+  return image.previewUrl ?? image.thumbnailLink ?? image.url;
+}
+
 function ImageTile({
   image,
   action,
@@ -164,7 +173,11 @@ function ImageTile({
       )}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={image.url} alt="" className="aspect-square w-full object-cover" />
+      <img
+        src={imagePreviewSrc(image)}
+        alt=""
+        className="aspect-square w-full object-cover"
+      />
       {children}
       <Button
         type="button"
@@ -249,7 +262,7 @@ function PlacementControls({
         {image ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={image.url}
+            src={imagePreviewSrc(image)}
             alt=""
             className="aspect-square w-full object-cover"
             style={{

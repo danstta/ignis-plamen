@@ -80,10 +80,6 @@ export const notionLinkHubDataSourceId = () =>
 export const notionLinkHubWebhookVerificationToken = () =>
   process.env.NOTION_LINK_HUB_WEBHOOK_VERIFICATION_TOKEN?.trim() || undefined;
 
-/** Optional secret for manual full syncs through GET /api/link-hub/notion. */
-export const linkHubSyncSecret = () =>
-  process.env.LINK_HUB_SYNC_SECRET?.trim() || undefined;
-
 export const notionLinkHubProjectNameProperty = () =>
   process.env.NOTION_LINK_HUB_PROJECT_NAME_PROPERTY?.trim() || "Project name";
 export const notionLinkHubInfopackLinkProperty = () =>

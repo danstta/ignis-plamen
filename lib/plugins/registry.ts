@@ -42,8 +42,8 @@ const definitions: PluginDefinition[] = [
     id: "notion",
     name: "Notion",
     description:
-      "Updates Notion pages from webhook payloads and previous workflow steps.",
-    nodeTypeIds: ["notion-update-page"],
+      "Updates Notion pages and syncs Notion payloads into public Link Hub rows.",
+    nodeTypeIds: ["notion-update-page", "link-hub-supabase-sync"],
     defaultEnabled: true,
   },
   {

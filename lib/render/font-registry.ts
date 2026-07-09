@@ -42,14 +42,17 @@ export type FontDef =
     };
 
 // Subsets fetched for every Fontsource family. Latin + Latin-Extended cover
-// Western/Balkan diacritics (č/ć/š/ž/đ); Cyrillic + Cyrillic-Extended cover
-// Serbian/Russian/etc. Satori composes glyphs across all loaded subset faces,
-// and the server-side auto-fit measurer (lib/render/measure-server.ts) mirrors
-// that, so a document mixing scripts both renders and fits correctly. Other
-// scripts (Greek, Vietnamese) still fall back to .notdef — add their subsets
-// here to support them. A subset a given weight doesn't ship 404s and is
-// skipped gracefully, so over-listing is safe.
+// Western/Balkan diacritics (č/ć/š/ž/đ); Cyrillic covers modern Serbian
+// Cyrillic (ђ/љ/њ/ћ/џ), and Cyrillic-Extended widens coverage for other
+// Cyrillic scripts. Satori composes glyphs across all loaded subset faces, and
+// the server-side auto-fit measurer (lib/render/measure-server.ts) mirrors that,
+// so a document mixing scripts both renders and fits correctly.
 const SUBSETS = ["latin", "latin-ext", "cyrillic", "cyrillic-ext"] as const;
+
+// Some display faces ship modern Cyrillic but not Cyrillic-Extended. Use this
+// set when the family still supports Serbian text but would otherwise request
+// non-existent CDN files.
+const SERBIAN_SUBSETS = ["latin", "latin-ext", "cyrillic"] as const;
 
 /** The font every render keeps loaded as the ultimate layout/glyph fallback. */
 export const FALLBACK_FAMILY = "Inter";
@@ -80,15 +83,120 @@ export const FONTS: Record<string, FontDef> = {
     subsets: SUBSETS,
     weights: [100, 200, 300, 400, 500, 600, 700, 800, 900],
   },
-  // Licensed faces — supply the files in public/fonts/ (see the README there).
-  // Until the files exist these render as Inter. Adjust the weights to match the
-  // files you actually drop in.
-  "Canva Sans": {
-    family: "Canva Sans",
-    kind: "local",
-    file: (w) => `canva-sans-${w}.woff`,
-    weights: [400, 500, 700],
+  "Noto Sans": {
+    family: "Noto Sans",
+    kind: "fontsource",
+    pkg: "@fontsource/noto-sans@5.2.10",
+    slug: "noto-sans",
+    subsets: SUBSETS,
+    weights: [100, 200, 300, 400, 500, 600, 700, 800, 900],
   },
+  "Noto Serif": {
+    family: "Noto Serif",
+    kind: "fontsource",
+    pkg: "@fontsource/noto-serif@5.2.9",
+    slug: "noto-serif",
+    subsets: SUBSETS,
+    weights: [100, 200, 300, 400, 500, 600, 700, 800, 900],
+  },
+  "Open Sans": {
+    family: "Open Sans",
+    kind: "fontsource",
+    pkg: "@fontsource/open-sans@5.2.7",
+    slug: "open-sans",
+    subsets: SUBSETS,
+    weights: [300, 400, 500, 600, 700, 800],
+  },
+  "Source Sans 3": {
+    family: "Source Sans 3",
+    kind: "fontsource",
+    pkg: "@fontsource/source-sans-3@5.2.9",
+    slug: "source-sans-3",
+    subsets: SUBSETS,
+    weights: [200, 300, 400, 500, 600, 700, 800, 900],
+  },
+  "Nunito Sans": {
+    family: "Nunito Sans",
+    kind: "fontsource",
+    pkg: "@fontsource/nunito-sans@5.2.7",
+    slug: "nunito-sans",
+    subsets: SUBSETS,
+    weights: [200, 300, 400, 500, 600, 700, 800, 900],
+  },
+  Rubik: {
+    family: "Rubik",
+    kind: "fontsource",
+    pkg: "@fontsource/rubik@5.2.8",
+    slug: "rubik",
+    subsets: SUBSETS,
+    weights: [300, 400, 500, 600, 700, 800, 900],
+  },
+  "IBM Plex Sans": {
+    family: "IBM Plex Sans",
+    kind: "fontsource",
+    pkg: "@fontsource/ibm-plex-sans@5.2.8",
+    slug: "ibm-plex-sans",
+    subsets: SUBSETS,
+    weights: [100, 200, 300, 400, 500, 600, 700],
+  },
+  Oswald: {
+    family: "Oswald",
+    kind: "fontsource",
+    pkg: "@fontsource/oswald@5.2.8",
+    slug: "oswald",
+    subsets: SUBSETS,
+    weights: [200, 300, 400, 500, 600, 700],
+  },
+  Merriweather: {
+    family: "Merriweather",
+    kind: "fontsource",
+    pkg: "@fontsource/merriweather@5.2.11",
+    slug: "merriweather",
+    subsets: SUBSETS,
+    weights: [300, 400, 500, 600, 700, 800, 900],
+  },
+  "Roboto Slab": {
+    family: "Roboto Slab",
+    kind: "fontsource",
+    pkg: "@fontsource/roboto-slab@5.2.8",
+    slug: "roboto-slab",
+    subsets: SUBSETS,
+    weights: [100, 200, 300, 400, 500, 600, 700, 800, 900],
+  },
+  "PT Sans": {
+    family: "PT Sans",
+    kind: "fontsource",
+    pkg: "@fontsource/pt-sans@5.2.8",
+    slug: "pt-sans",
+    subsets: SUBSETS,
+    weights: [400, 700],
+  },
+  "PT Serif": {
+    family: "PT Serif",
+    kind: "fontsource",
+    pkg: "@fontsource/pt-serif@5.2.8",
+    slug: "pt-serif",
+    subsets: SUBSETS,
+    weights: [400, 700],
+  },
+  "Cormorant Garamond": {
+    family: "Cormorant Garamond",
+    kind: "fontsource",
+    pkg: "@fontsource/cormorant-garamond@5.2.11",
+    slug: "cormorant-garamond",
+    subsets: SUBSETS,
+    weights: [300, 400, 500, 600, 700],
+  },
+  "Playfair Display": {
+    family: "Playfair Display",
+    kind: "fontsource",
+    pkg: "@fontsource/playfair-display@5.2.8",
+    slug: "playfair-display",
+    subsets: SERBIAN_SUBSETS,
+    weights: [400, 500, 600, 700, 800, 900],
+  },
+  // Licensed faces — supply the files in public/fonts/ (see the README there).
+  // Adjust the weights to match the files you actually drop in.
   Garet: {
     family: "Garet",
     kind: "local",

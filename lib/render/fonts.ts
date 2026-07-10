@@ -8,7 +8,7 @@ import {
   type FontDef,
   type FontWeight,
 } from "./font-registry";
-import { fontSourceFaceUrl } from "./font-assets";
+import { fontSourceFaceUrl, fontSourceSubsetFamily } from "./font-assets";
 
 /**
  * Satori needs fonts supplied as raw bytes (and only reads ttf/otf/woff — not
@@ -72,15 +72,18 @@ async function loadFaces(
   weights: Set<FontWeight>,
 ): Promise<SatoriFont[]> {
   const jobs: Promise<SatoriFont | null>[] = [];
-  const toFont = (data: ArrayBuffer | null, weight: FontWeight) =>
-    data ? { name: def.family, data, weight, style: "normal" as const } : null;
+  const toFont = (
+    data: ArrayBuffer | null,
+    weight: FontWeight,
+    name = def.family,
+  ) => (data ? { name, data, weight, style: "normal" as const } : null);
 
   for (const weight of weights) {
     if (def.kind === "fontsource") {
       for (const subset of def.subsets) {
         jobs.push(
           fetchBytes(fontSourceFaceUrl(def, subset, weight)).then((d) =>
-            toFont(d, weight),
+            toFont(d, weight, fontSourceSubsetFamily(def, subset)),
           ),
         );
       }

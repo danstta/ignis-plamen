@@ -13,7 +13,8 @@ import {
   placeholderValueToText,
 } from "@/lib/editor/types";
 import { shapeGeometryStyle } from "@/lib/editor/shapes";
-import { FALLBACK_FAMILY } from "./font-registry";
+import { FALLBACK_FAMILY, FONTS, type FontDef } from "./font-registry";
+import { fontSourceSubsetFamily } from "./font-assets";
 
 /**
  * Pure element -> CSS helpers shared by the editor canvas and the Satori renderer.
@@ -49,10 +50,27 @@ function cssFontFamily(family: string): string {
   return JSON.stringify(family);
 }
 
+function fontDefFamilyNames(def: FontDef): string[] {
+  if (def.kind === "fontsource") {
+    return [
+      ...def.subsets.map((subset) => fontSourceSubsetFamily(def, subset)),
+      def.family,
+    ];
+  }
+  return [def.family];
+}
+
 function fontFamilyStack(family: string): string {
-  const fallback = cssFontFamily(FALLBACK_FAMILY);
-  if (family === FALLBACK_FAMILY) return `${fallback}, sans-serif`;
-  return `${cssFontFamily(family)}, ${fallback}, sans-serif`;
+  const primary = FONTS[family];
+  const fallback = FONTS[FALLBACK_FAMILY];
+  const names = [
+    ...(primary ? fontDefFamilyNames(primary) : [family]),
+    ...fontDefFamilyNames(fallback),
+  ];
+  return [
+    ...new Set(names.filter(Boolean).map(cssFontFamily)),
+    "sans-serif",
+  ].join(", ");
 }
 
 export function baseStyle(el: TemplateElement): CSSProperties {

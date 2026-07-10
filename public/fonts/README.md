@@ -11,8 +11,8 @@ exported PNGs. These are read at render time by `lib/render/fonts.ts`.
 
 ## Expected files
 
-The registry currently references these (adjust the `weights` array there to
-match whatever you actually add):
+The registry currently references this local family (adjust the `weights` array
+there to match whatever you actually add):
 
 | Family | Files                            |
 | ------ | -------------------------------- |

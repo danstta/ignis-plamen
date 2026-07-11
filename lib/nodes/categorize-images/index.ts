@@ -448,7 +448,6 @@ function groupedByCategory(
 
 export const categorizeImagesNode: NodeDefinition<CategorizeImagesConfig> = {
   ...categorizeImagesMeta,
-  usesDurableSteps: true,
 
   async run(ctx) {
     const allCandidates = normalizeImageCandidates(

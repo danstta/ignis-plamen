@@ -195,12 +195,15 @@ async function convertHeicToJpegInWorker(
   options: { quality?: number; maxBytes?: number; timeoutMs: number },
 ): Promise<Buffer> {
   const { Worker } = await import("node:worker_threads");
+  const { createRequire } = await import("node:module");
+  const requireFromHere = createRequire(import.meta.url);
+  const converterPath = requireFromHere.resolve("heic-convert");
   const quality = Math.max(0, Math.min(1, (options.quality ?? 90) / 100));
   const workerBytes = Uint8Array.from(bytes);
   const worker = new Worker(
     `
       const { parentPort, workerData } = require("node:worker_threads");
-      const heicConvertModule = require("heic-convert");
+      const heicConvertModule = require(workerData.converterPath);
       const convert = heicConvertModule.default || heicConvertModule;
 
       (async () => {
@@ -218,7 +221,7 @@ async function convertHeicToJpegInWorker(
     `,
     {
       eval: true,
-      workerData: { bytes: workerBytes, quality },
+      workerData: { bytes: workerBytes, converterPath, quality },
       transferList: [workerBytes.buffer],
     },
   );

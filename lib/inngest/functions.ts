@@ -8,9 +8,12 @@ import { resumeRun, startRun, type StepRunner } from "@/lib/workflows/engine";
  * return type back to the engine's `T` — the engine only reads JSON-safe fields off
  * step results.
  *
- * `retries: 4` retries only the failed step (prior steps stay memoized);
- * `concurrency` caps parallel runs to protect the OpenAI/location-search rate limits and the
- * DB pool.
+ * Expected node-level failures should be handled by the node itself (for example,
+ * Rank Images skips bad inputs and logs why). Function retries are disabled so a
+ * hard timeout does not replay expensive nodes and duplicate run logs.
+ *
+ * `concurrency` caps parallel runs to protect the OpenAI/location-search rate
+ * limits and the DB pool.
  */
 
 /**
@@ -20,7 +23,7 @@ import { resumeRun, startRun, type StepRunner } from "@/lib/workflows/engine";
 export const runStart = inngest.createFunction(
   {
     id: "workflow-run-start",
-    retries: 4,
+    retries: 0,
     concurrency: { limit: 5 },
     triggers: [{ event: runStartEvent }],
   },
@@ -41,7 +44,7 @@ export const runStart = inngest.createFunction(
 export const runResume = inngest.createFunction(
   {
     id: "workflow-run-resume",
-    retries: 4,
+    retries: 0,
     concurrency: { limit: 5 },
     triggers: [{ event: runResumeEvent }],
   },

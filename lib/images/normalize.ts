@@ -14,6 +14,8 @@ type HeicConvert = (input: {
   quality?: number;
 }) => Promise<ImageBytes>;
 
+type HeicWorkerMessage = ImageBytes | { error: string };
+
 const HEIC_BRANDS = new Set([
   "heic",
   "heix",
@@ -165,8 +167,15 @@ function errorMessage(err: unknown) {
 
 async function convertHeicToJpeg(
   bytes: Buffer,
-  options: { quality?: number; maxBytes?: number },
+  options: { quality?: number; maxBytes?: number; timeoutMs?: number },
 ): Promise<Buffer> {
+  if (options.timeoutMs) {
+    return convertHeicToJpegInWorker(bytes, {
+      ...options,
+      timeoutMs: options.timeoutMs,
+    });
+  }
+
   const heicConvertModule = await import("heic-convert");
   const convert = (heicConvertModule.default ?? heicConvertModule) as HeicConvert;
   const converted = toBuffer(
@@ -181,9 +190,92 @@ async function convertHeicToJpeg(
   return converted;
 }
 
+async function convertHeicToJpegInWorker(
+  bytes: Buffer,
+  options: { quality?: number; maxBytes?: number; timeoutMs: number },
+): Promise<Buffer> {
+  const { Worker } = await import("node:worker_threads");
+  const quality = Math.max(0, Math.min(1, (options.quality ?? 90) / 100));
+  const workerBytes = Uint8Array.from(bytes);
+  const worker = new Worker(
+    `
+      const { parentPort, workerData } = require("node:worker_threads");
+      const heicConvertModule = require("heic-convert");
+      const convert = heicConvertModule.default || heicConvertModule;
+
+      (async () => {
+        const converted = await convert({
+          buffer: Buffer.from(workerData.bytes),
+          format: "JPEG",
+          quality: workerData.quality,
+        });
+        parentPort.postMessage(Buffer.from(converted));
+      })().catch((err) => {
+        parentPort.postMessage({
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    `,
+    {
+      eval: true,
+      workerData: { bytes: workerBytes, quality },
+      transferList: [workerBytes.buffer],
+    },
+  );
+
+  return new Promise<Buffer>((resolve, reject) => {
+    let settled = false;
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      fn();
+    };
+    const timeout = setTimeout(() => {
+      finish(() => {
+        void worker.terminate();
+        reject(
+          new Error(
+            `HEIC conversion timed out after ${Math.round(options.timeoutMs / 1000)}s`,
+          ),
+        );
+      });
+    }, options.timeoutMs);
+
+    worker.once("message", (message: HeicWorkerMessage) => {
+      finish(() => {
+        void worker.terminate();
+        if (
+          message &&
+          typeof message === "object" &&
+          !Buffer.isBuffer(message) &&
+          "error" in message
+        ) {
+          reject(new Error(message.error));
+          return;
+        }
+
+        try {
+          const converted = toBuffer(message);
+          assertMaxBytes(converted, options.maxBytes);
+          resolve(converted);
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
+    worker.once("error", (err) => finish(() => reject(err)));
+    worker.once("exit", (code) => {
+      if (code !== 0) {
+        finish(() => reject(new Error(`HEIC conversion worker exited with ${code}`)));
+      }
+    });
+  });
+}
+
 export async function convertImageToJpeg(
   bytes: ImageBytes,
-  options: { quality?: number; maxBytes?: number } = {},
+  options: { quality?: number; maxBytes?: number; timeoutMs?: number } = {},
 ): Promise<Buffer> {
   const sharp = (await import("sharp")).default;
   const input = toBuffer(bytes);

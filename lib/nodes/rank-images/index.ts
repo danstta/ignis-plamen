@@ -69,8 +69,10 @@ type CheckpointFn = () => Promise<void>;
 const IMAGE_FETCH_USER_AGENT = "Ignis/0.1 (https://github.com/danstta/ignis)";
 const MAX_PROVIDER_IMAGE_BYTES = 8 * 1024 * 1024;
 const IMAGE_FETCH_TIMEOUT_MS = 20_000;
+const IMAGE_PREPARE_TIMEOUT_MS = 30_000;
+const IMAGE_CONVERSION_TIMEOUT_MS = 20_000;
 const CHAT_COMPLETION_TIMEOUT_MS = 45_000;
-const IMAGE_FETCH_CONCURRENCY = 8;
+const IMAGE_FETCH_CONCURRENCY = 3;
 const PROVIDER_SUPPORTED_IMAGE_TYPES = new Set([
   "image/jpeg",
   "image/jpg",
@@ -119,6 +121,24 @@ function chunkArray<T>(items: T[], size: number): T[][] {
   return chunks;
 }
 
+function compactReason(reason: string, maxLength = 500): string {
+  const compact = reason.replace(/\s+/g, " ").trim();
+  return compact.length > maxLength
+    ? `${compact.slice(0, maxLength - 3)}...`
+    : compact;
+}
+
+function imageLogLabel(candidate: ImageCandidate, sourceIndex: number): string {
+  const label = candidate.name ?? candidate.title ?? candidate.source;
+  return label ? `image ${sourceIndex + 1} (${label})` : `image ${sourceIndex + 1}`;
+}
+
+function urlForLog(candidate: ImageCandidate): string {
+  return candidate.url.length > 160
+    ? `${candidate.url.slice(0, 157)}...`
+    : candidate.url;
+}
+
 async function mapWithConcurrency<T, R>(
   items: T[],
   concurrency: number,
@@ -139,6 +159,29 @@ async function mapWithConcurrency<T, R>(
     }),
   );
   return results;
+}
+
+async function withTimeout<T>(
+  work: Promise<T>,
+  timeoutMs: number,
+  label: string,
+): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout>;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => {
+      reject(
+        new RequestTimeoutError(
+          `${label} timed out after ${Math.round(timeoutMs / 1000)}s`,
+        ),
+      );
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([work, timeoutPromise]);
+  } finally {
+    clearTimeout(timeout!);
+  }
 }
 
 async function fetchWithTimeout(
@@ -288,9 +331,14 @@ async function providerImageToDataUrl(
   if (preview) return preview;
 
   try {
+    await writeLog(
+      log,
+      `Converting ${imageLogLabel(candidate, sourceIndex)} from ${image.contentType} to image/jpeg for vision rating.`,
+    );
     const converted = await convertImageToJpeg(image.bytes, {
       quality: 90,
       maxBytes: MAX_PROVIDER_IMAGE_BYTES,
+      timeoutMs: IMAGE_CONVERSION_TIMEOUT_MS,
     });
     await writeLog(
       log,
@@ -305,6 +353,41 @@ async function providerImageToDataUrl(
   }
 }
 
+async function prepareProviderImage(input: {
+  candidate: ImageCandidate;
+  sourceIndex: number;
+  scores: ScoreState[];
+  log: LogFn;
+  checkpoint: CheckpointFn;
+}): Promise<PreparedImage | null> {
+  await input.checkpoint();
+  const label = imageLogLabel(input.candidate, input.sourceIndex);
+  try {
+    const visionUrl = await withTimeout(
+      providerImageToDataUrl(input.candidate, input.sourceIndex, input.log),
+      IMAGE_PREPARE_TIMEOUT_MS,
+      `preparing ${label}`,
+    );
+    return {
+      candidate: input.candidate,
+      sourceIndex: input.sourceIndex,
+      visionUrl,
+    };
+  } catch (err) {
+    const reason = compactReason(err instanceof Error ? err.message : String(err));
+    input.scores[input.sourceIndex] = {
+      ...input.scores[input.sourceIndex],
+      reason: `Could not prepare image for vision rating: ${reason}`,
+      rated: false,
+    };
+    await writeLog(
+      input.log,
+      `Skipping ${label}: ${reason}. URL: ${urlForLog(input.candidate)}`,
+    );
+    return null;
+  }
+}
+
 async function prepareProviderImages(input: {
   candidates: ImageCandidate[];
   scores: ScoreState[];
@@ -314,28 +397,14 @@ async function prepareProviderImages(input: {
   const prepared = await mapWithConcurrency(
     input.candidates,
     IMAGE_FETCH_CONCURRENCY,
-    async (candidate, sourceIndex) => {
-      await input.checkpoint();
-      try {
-        return {
-          candidate,
-          sourceIndex,
-          visionUrl: await providerImageToDataUrl(candidate, sourceIndex, input.log),
-        };
-      } catch (err) {
-        const reason = err instanceof Error ? err.message : String(err);
-        input.scores[sourceIndex] = {
-          ...input.scores[sourceIndex],
-          reason: `Could not prepare image for vision rating: ${reason}`,
-          rated: false,
-        };
-        await writeLog(
-          input.log,
-          `Skipping vision rating for image ${sourceIndex + 1}: ${reason}`,
-        );
-        return null;
-      }
-    },
+    async (candidate, sourceIndex) =>
+      prepareProviderImage({
+        candidate,
+        sourceIndex,
+        scores: input.scores,
+        log: input.log,
+        checkpoint: input.checkpoint,
+      }),
   );
 
   return prepared.filter((image): image is PreparedImage => Boolean(image));
@@ -633,7 +702,20 @@ async function ratePreparedChunk(input: {
       ];
     }
 
-    throw err;
+    const reason = compactReason(err instanceof Error ? err.message : String(err));
+    const indexes = input.images
+      .map((image) => image.sourceIndex + 1)
+      .join(", ");
+    await writeLog(
+      input.log,
+      `Rating image(s) ${indexes} failed: ${reason}. Marking them unrated and continuing.`,
+    );
+    return input.images.map((image) => ({
+      sourceIndex: image.sourceIndex,
+      score: 0,
+      reason,
+      rated: false,
+    }));
   }
 }
 

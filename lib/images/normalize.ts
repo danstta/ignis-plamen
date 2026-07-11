@@ -165,11 +165,16 @@ function errorMessage(err: unknown) {
 
 async function convertHeicToJpeg(
   bytes: Buffer,
-  options: { quality?: number; maxBytes?: number; timeoutMs?: number },
+  options: {
+    quality?: number;
+    maxBytes?: number;
+    timeoutMs?: number;
+    maxDimension?: number;
+  },
 ): Promise<Buffer> {
   const heicConvertModule = await import("heic-convert");
   const convert = (heicConvertModule.default ?? heicConvertModule) as HeicConvert;
-  const converted = toBuffer(
+  let converted = toBuffer(
     await convert({
       buffer: bytes,
       format: "JPEG",
@@ -177,19 +182,45 @@ async function convertHeicToJpeg(
     }),
   );
 
+  if (options.maxDimension) {
+    const sharp = (await import("sharp")).default;
+    converted = await sharp(converted, { failOn: "none" })
+      .resize({
+        width: options.maxDimension,
+        height: options.maxDimension,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: options.quality ?? 90, mozjpeg: true })
+      .toBuffer();
+  }
+
   assertMaxBytes(converted, options.maxBytes);
   return converted;
 }
 
 export async function convertImageToJpeg(
   bytes: ImageBytes,
-  options: { quality?: number; maxBytes?: number; timeoutMs?: number } = {},
+  options: {
+    quality?: number;
+    maxBytes?: number;
+    timeoutMs?: number;
+    maxDimension?: number;
+  } = {},
 ): Promise<Buffer> {
   const sharp = (await import("sharp")).default;
   const input = toBuffer(bytes);
   try {
-    const converted = await sharp(input, { failOn: "none" })
-      .autoOrient()
+    let pipeline = sharp(input, { failOn: "none" }).autoOrient();
+    if (options.maxDimension) {
+      pipeline = pipeline.resize({
+        width: options.maxDimension,
+        height: options.maxDimension,
+        fit: "inside",
+        withoutEnlargement: true,
+      });
+    }
+    const converted = await pipeline
       .jpeg({ quality: options.quality ?? 90, mozjpeg: true })
       .toBuffer();
 

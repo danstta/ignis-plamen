@@ -10,7 +10,7 @@ import {
   mapWithConcurrency,
   noopCheckpoint,
   parseJsonResponse,
-  prepareProviderImages,
+  prepareProviderImageLinks,
   RequestTimeoutError,
   sendAzureChatCompletion,
   sendOpenAIChatCompletion,
@@ -448,6 +448,7 @@ function groupedByCategory(
 
 export const categorizeImagesNode: NodeDefinition<CategorizeImagesConfig> = {
   ...categorizeImagesMeta,
+  usesDurableSteps: true,
 
   async run(ctx) {
     const allCandidates = normalizeImageCandidates(
@@ -509,18 +510,13 @@ export const categorizeImagesNode: NodeDefinition<CategorizeImagesConfig> = {
 
     await checkpoint();
     await ctx.log(
-      `Preparing ${candidates.length} image(s) for vision categorization.`,
+      `Preparing ${candidates.length} image link(s) for vision categorization.`,
     );
-    const prepared = await prepareProviderImages({
-      candidates,
-      purpose: "vision categorization",
-      log: ctx.log,
-      checkpoint,
-    });
+    const prepared = prepareProviderImageLinks({ candidates });
     for (const skipped of prepared.skipped) {
       states[skipped.sourceIndex] = {
         ...states[skipped.sourceIndex],
-        reason: `Could not prepare image for vision categorization: ${skipped.reason}`,
+        reason: `Could not use image link for vision categorization: ${skipped.reason}`,
         categorized: false,
       };
     }

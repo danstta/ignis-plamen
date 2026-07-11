@@ -3,6 +3,9 @@ import {
   fetchGoogleDriveImageFile,
   verifyGoogleDriveImageSignature,
 } from "@/lib/connections/google-drive/api";
+import { normalizeHeicImageForPreview } from "@/lib/images/normalize";
+
+export const runtime = "nodejs";
 
 export async function GET(
   req: Request,
@@ -28,10 +31,12 @@ export async function GET(
 
   try {
     const image = await fetchGoogleDriveImageFile({ connectionId, fileId });
-    return new Response(image.bytes, {
+    const preview = await normalizeHeicImageForPreview(image);
+    return new Response(new Uint8Array(preview.bytes), {
       headers: {
-        "Content-Type": image.contentType,
+        "Content-Type": preview.contentType,
         "Cache-Control": "private, max-age=300",
+        ...(preview.converted ? { "X-Ignis-Image-Converted": "heic-to-jpeg" } : {}),
       },
     });
   } catch (err) {

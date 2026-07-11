@@ -34,6 +34,7 @@ import {
   type PlaceholderValue,
 } from "@/lib/editor/types";
 import { normalizeImageCandidates } from "@/lib/nodes/image-input";
+import { imagePreviewSrc } from "@/lib/nodes/image-preview";
 import { cn } from "@/lib/utils";
 
 type Candidate = {
@@ -41,6 +42,8 @@ type Candidate = {
   attribution?: string;
   previewUrl?: string;
   thumbnailLink?: string;
+  mimeType?: string;
+  name?: string;
 };
 type PreviewPlaceholder = { key: string; kind: "text" | "image" };
 type ImagePlacement = { objectPosition: string; scale: number };
@@ -144,10 +147,6 @@ function valueForTextPlaceholder(value: unknown): string {
   }
   if (value === null || value === undefined || value === "") return "";
   return JSON.stringify(value);
-}
-
-function imagePreviewSrc(image: Candidate): string {
-  return image.previewUrl ?? image.thumbnailLink ?? image.url;
 }
 
 function ImageTile({

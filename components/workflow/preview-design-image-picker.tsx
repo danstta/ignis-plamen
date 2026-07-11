@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Check, ImageIcon, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { imagePreviewSrc } from "@/lib/nodes/image-preview";
 import { cn } from "@/lib/utils";
 
 type Candidate = {
@@ -12,6 +13,8 @@ type Candidate = {
   attribution?: string;
   previewUrl?: string;
   thumbnailLink?: string;
+  mimeType?: string;
+  name?: string;
   title?: string;
   source?: string;
   locationQuery?: string;
@@ -79,10 +82,6 @@ function candidateGroups(candidates: Candidate[]): CandidateGroup[] {
   });
 
   return [...groups.values()];
-}
-
-function imagePreviewSrc(image: Candidate): string {
-  return image.previewUrl ?? image.thumbnailLink ?? image.url;
 }
 
 export function PreviewDesignImagePicker({

@@ -335,7 +335,6 @@ function legacySelectionCount(rawConfig: Record<string, unknown> | undefined) {
 
 export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
   ...rankImagesMeta,
-  usesDurableSteps: true,
 
   async run(ctx) {
     const allCandidates = normalizeImageCandidates(

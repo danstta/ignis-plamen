@@ -1,11 +1,18 @@
 import {
   isHeicContentType,
+  isImageContentType,
   normalizeImageContentType,
 } from "@/lib/images/content-types";
 
 export type ImageBytes = Buffer | Uint8Array | ArrayBuffer;
 
 export const JPEG_CONTENT_TYPE = "image/jpeg";
+
+type HeicConvert = (input: {
+  buffer: Buffer;
+  format: "JPEG";
+  quality?: number;
+}) => Promise<ImageBytes>;
 
 const HEIC_BRANDS = new Set([
   "heic",
@@ -32,6 +39,31 @@ function extensionLooksHeic(name: string | undefined) {
   return /\.(heic|heif|hif)$/i.test(name ?? "");
 }
 
+function extensionImageContentType(name: string | undefined): string {
+  const match = name?.match(/\.([a-z0-9]+)(?:[?#].*)?$/i);
+  const extension = match?.[1]?.toLowerCase();
+  switch (extension) {
+    case "jpg":
+    case "jpeg":
+      return JPEG_CONTENT_TYPE;
+    case "png":
+      return "image/png";
+    case "gif":
+      return "image/gif";
+    case "webp":
+      return "image/webp";
+    case "avif":
+      return "image/avif";
+    case "heic":
+      return "image/heic";
+    case "heif":
+    case "hif":
+      return "image/heif";
+    default:
+      return "";
+  }
+}
+
 function isoBmffBrand(bytes: Buffer, offset: number): string {
   return bytes.subarray(offset, offset + 4).toString("ascii").toLowerCase();
 }
@@ -41,7 +73,13 @@ function hasHeicSignature(bytes: Buffer) {
 
   const majorBrand = isoBmffBrand(bytes, 8);
   if (AVIF_BRANDS.has(majorBrand)) return false;
-  if (HEIC_BRANDS.has(majorBrand)) return true;
+  if (
+    HEIC_BRANDS.has(majorBrand) &&
+    majorBrand !== "mif1" &&
+    majorBrand !== "msf1"
+  ) {
+    return true;
+  }
 
   const maxOffset = Math.min(bytes.byteLength - 4, 64);
   for (let offset = 16; offset <= maxOffset; offset += 4) {
@@ -65,23 +103,109 @@ export function isHeicLikeImage(input: {
   return input.bytes ? hasHeicSignature(toBuffer(input.bytes)) : false;
 }
 
+export function inferImageContentType(input: {
+  bytes?: ImageBytes;
+  contentType?: string | null;
+  name?: string;
+}): string {
+  const contentType = normalizeImageContentType(input.contentType);
+  if (isImageContentType(contentType)) return contentType;
+
+  const bytes = input.bytes ? toBuffer(input.bytes) : undefined;
+  if (bytes) {
+    if (
+      bytes.byteLength >= 3 &&
+      bytes[0] === 0xff &&
+      bytes[1] === 0xd8 &&
+      bytes[2] === 0xff
+    ) {
+      return JPEG_CONTENT_TYPE;
+    }
+
+    if (
+      bytes.byteLength >= 8 &&
+      bytes[0] === 0x89 &&
+      bytes[1] === 0x50 &&
+      bytes[2] === 0x4e &&
+      bytes[3] === 0x47 &&
+      bytes[4] === 0x0d &&
+      bytes[5] === 0x0a &&
+      bytes[6] === 0x1a &&
+      bytes[7] === 0x0a
+    ) {
+      return "image/png";
+    }
+
+    const header = bytes.subarray(0, 12).toString("ascii");
+    if (header.startsWith("GIF87a") || header.startsWith("GIF89a")) {
+      return "image/gif";
+    }
+    if (header.startsWith("RIFF") && header.slice(8, 12) === "WEBP") {
+      return "image/webp";
+    }
+    if (hasHeicSignature(bytes)) return "image/heic";
+    if (bytes.byteLength >= 12 && isoBmffBrand(bytes, 4) === "ftyp") {
+      const majorBrand = isoBmffBrand(bytes, 8);
+      if (AVIF_BRANDS.has(majorBrand)) return "image/avif";
+    }
+  }
+
+  return extensionImageContentType(input.name);
+}
+
+function assertMaxBytes(bytes: Buffer, maxBytes: number | undefined) {
+  if (maxBytes && bytes.byteLength > maxBytes) {
+    throw new Error(`converted image is ${bytes.byteLength} bytes (max ${maxBytes})`);
+  }
+}
+
+function errorMessage(err: unknown) {
+  return err instanceof Error ? err.message : String(err);
+}
+
+async function convertHeicToJpeg(
+  bytes: Buffer,
+  options: { quality?: number; maxBytes?: number },
+): Promise<Buffer> {
+  const heicConvertModule = await import("heic-convert");
+  const convert = (heicConvertModule.default ?? heicConvertModule) as HeicConvert;
+  const converted = toBuffer(
+    await convert({
+      buffer: bytes,
+      format: "JPEG",
+      quality: Math.max(0, Math.min(1, (options.quality ?? 90) / 100)),
+    }),
+  );
+
+  assertMaxBytes(converted, options.maxBytes);
+  return converted;
+}
+
 export async function convertImageToJpeg(
   bytes: ImageBytes,
   options: { quality?: number; maxBytes?: number } = {},
 ): Promise<Buffer> {
   const sharp = (await import("sharp")).default;
-  const converted = await sharp(toBuffer(bytes), { failOn: "none" })
-    .autoOrient()
-    .jpeg({ quality: options.quality ?? 90, mozjpeg: true })
-    .toBuffer();
+  const input = toBuffer(bytes);
+  try {
+    const converted = await sharp(input, { failOn: "none" })
+      .autoOrient()
+      .jpeg({ quality: options.quality ?? 90, mozjpeg: true })
+      .toBuffer();
 
-  if (options.maxBytes && converted.byteLength > options.maxBytes) {
-    throw new Error(
-      `converted image is ${converted.byteLength} bytes (max ${options.maxBytes})`,
-    );
+    assertMaxBytes(converted, options.maxBytes);
+    return converted;
+  } catch (err) {
+    if (!hasHeicSignature(input)) throw err;
+
+    try {
+      return await convertHeicToJpeg(input, options);
+    } catch (fallbackErr) {
+      throw new Error(
+        `sharp conversion failed: ${errorMessage(err)}; HEIC fallback failed: ${errorMessage(fallbackErr)}`,
+      );
+    }
   }
-
-  return converted;
 }
 
 export async function normalizeHeicImageForPreview(input: {
@@ -91,7 +215,7 @@ export async function normalizeHeicImageForPreview(input: {
 }): Promise<{ bytes: Buffer; contentType: string; converted: boolean }> {
   const bytes = toBuffer(input.bytes);
   const contentType =
-    normalizeImageContentType(input.contentType) || "application/octet-stream";
+    inferImageContentType({ ...input, bytes }) || "application/octet-stream";
 
   if (!isHeicLikeImage({ ...input, bytes })) {
     return { bytes, contentType, converted: false };
@@ -102,4 +226,12 @@ export async function normalizeHeicImageForPreview(input: {
     contentType: JPEG_CONTENT_TYPE,
     converted: true,
   };
+}
+
+export async function normalizeImageForPreview(input: {
+  bytes: ImageBytes;
+  contentType: string | null | undefined;
+  name?: string;
+}): Promise<{ bytes: Buffer; contentType: string; converted: boolean }> {
+  return normalizeHeicImageForPreview(input);
 }

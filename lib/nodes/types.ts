@@ -119,6 +119,7 @@ export interface ImageCandidate {
   attribution: string;
   previewUrl?: string;
   mimeType?: string;
+  name?: string;
   thumbnailLink?: string;
   widthPx?: number;
   heightPx?: number;

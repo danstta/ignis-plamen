@@ -32,8 +32,8 @@ export const categorizeImagesConfigSchema = z.object({
   systemPrompt: z.string().default(DEFAULT_CATEGORIZE_IMAGES_SYSTEM_PROMPT),
   prompt: z.string().default(DEFAULT_CATEGORIZE_IMAGES_PROMPT),
   categories: z.string().default(DEFAULT_CATEGORIZE_IMAGES_CATEGORIES),
-  imagesPerCall: z.coerce.number().int().min(1).max(6).default(2),
-  concurrentCalls: z.coerce.number().int().min(1).max(4).default(1),
+  imagesPerCall: z.coerce.number().int().min(1).max(6).default(1),
+  concurrentCalls: z.coerce.number().int().min(1).max(4).default(2),
   maxImages: z.coerce.number().int().min(1).max(500).default(100),
 });
 
@@ -95,14 +95,14 @@ export const categorizeImagesMeta: NodeMeta<CategorizeImagesConfig> = {
       name: "imagesPerCall",
       label: "Images per LLM call",
       type: "number",
-      placeholder: "2",
-      help: "Each batch creates one vision call. Use 1 for maximum isolation, or 2+ for fewer calls.",
+      placeholder: "1",
+      help: "Each batch creates one durable vision call. Use 1 for per-image failure isolation, or 2+ for fewer calls.",
     },
     {
       name: "concurrentCalls",
       label: "LLM calls at once",
       type: "number",
-      placeholder: "1",
+      placeholder: "2",
       help: "Controls how many categorization calls run in parallel. 1 or 2 is safest for rate limits.",
     },
     {

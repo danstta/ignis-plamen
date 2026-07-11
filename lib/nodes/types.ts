@@ -67,8 +67,15 @@ export type RunResult =
   | { type: "output"; outputs: NodeOutputs }
   | { type: "pause"; reason?: string; state: Record<string, unknown> };
 
+export type NodeStepRunner = <T>(
+  stepId: string,
+  fn: () => Promise<T>,
+) => Promise<T>;
+
 /** Everything a node's run() needs. */
 export interface NodeRunContext<C = Record<string, unknown>> {
+  /** The concrete graph node id for this node instance. */
+  nodeId: string;
   /** Validated config for this node instance. */
   config: C;
   /** Original config before `{{...}}` references were resolved. */
@@ -84,6 +91,12 @@ export interface NodeRunContext<C = Record<string, unknown>> {
   isStopped?: () => Promise<boolean>;
   /** Throws a cooperative stop signal when the run has been stopped. */
   throwIfStopped?: () => Promise<void>;
+  /**
+   * Optional durable substep runner. Long-running nodes use this to split image
+   * preparation/provider calls into memoized Inngest steps instead of one giant
+   * node invocation.
+   */
+  step?: NodeStepRunner;
 }
 
 /**
@@ -109,6 +122,8 @@ export interface NodeMeta<C extends Record<string, unknown> = Record<string, unk
 /** A node's full server-side definition: its metadata plus the run implementation. */
 export interface NodeDefinition<C extends Record<string, unknown> = Record<string, unknown>>
   extends NodeMeta<C> {
+  /** Run outside the wrapper node step so the implementation can call ctx.step. */
+  usesDurableSteps?: boolean;
   /** Execute the node. Throw to fail the run; return a pause to wait for input. */
   run(ctx: NodeRunContext<C>): Promise<RunResult>;
 }

@@ -28,7 +28,11 @@ import type {
   WorkflowGraph,
   WorkflowNode,
 } from "./types";
-import type { NodeRunContext, RunResult } from "@/lib/nodes/types";
+import type {
+  NodeRunContext,
+  NodeStepRunner,
+  RunResult,
+} from "@/lib/nodes/types";
 
 /**
  * Workflow execution engine.
@@ -156,74 +160,105 @@ async function execute(
   // outcome. Splitting this from the persist below means the common transient
   // failure (the DB write) retries only the cheap persist, while the blob/
   // OpenAI work stays memoized and is never re-run.
-  const runNode = (node: WorkflowNode) => {
-    nodeVisitCounts[node.id] = (nodeVisitCounts[node.id] ?? 0) + 1;
-    return step(visitStepId(node.id, "run"), async (): Promise<NodeOutcome> => {
-      const def = getNodeType(node.type);
-      if (!def) {
-        return { type: "error", error: `Unknown node type: ${node.type}` };
-      }
+  const cleanStepSegment = (value: string) =>
+    value.replace(/[^a-zA-Z0-9:._-]/g, "_").slice(0, 160);
 
-      // A disabled plugin neutralizes its nodes, even mid-workflow.
-      if (!(await isNodeTypeEnabled(node.type))) {
-        return {
-          type: "error",
-          error: `Node "${def.label}" belongs to a disabled plugin`,
-        };
-      }
+  const runNodeWork = async (
+    node: WorkflowNode,
+    substep?: NodeStepRunner,
+  ): Promise<NodeOutcome> => {
+    const smallStep: NodeStepRunner = substep ?? ((_id, fn) => fn());
+    const def = getNodeType(node.type);
+    if (!def) {
+      return { type: "error", error: `Unknown node type: ${node.type}` };
+    }
 
-      try {
-        state.nodeStates[node.id] = "running";
+    if (!(await isNodeTypeEnabled(node.type))) {
+      return {
+        type: "error",
+        error: `Node "${def.label}" belongs to a disabled plugin`,
+      };
+    }
+
+    try {
+      state.nodeStates[node.id] = "running";
+      await smallStep("start", async () => {
         await logNode(node.id, `Started ${def.label}.`);
         await throwIfStopped();
         await saveRunState(runId, {
           nodeStates: state.nodeStates,
           nodeLogs: state.nodeLogs,
         });
+        return null;
+      });
 
-        // Substitute {{nodeId.path}} references from upstream outputs, then validate.
+      await smallStep("resolve", async () => {
         await logNode(node.id, "Resolving inputs and validating configuration.");
         await throwIfStopped();
-        const resolvedConfig = resolveReferences(
-          node.config,
-          state.nodeOutputs,
-          trigger,
-        );
-        const config = def.configSchema.parse(resolvedConfig);
-        const ctx: NodeRunContext = {
-          config,
-          rawConfig: node.config,
-          inputs: resolveInputs(graph, node.id, state.nodeOutputs),
-          trigger,
-          runId,
-          log: (msg) => logNode(node.id, msg),
-          isStopped,
-          throwIfStopped,
-        };
-        const result: RunResult = await def.run(ctx);
-        await throwIfStopped();
+        return null;
+      });
+      const resolvedConfig = resolveReferences(
+        node.config,
+        state.nodeOutputs,
+        trigger,
+      );
+      const config = def.configSchema.parse(resolvedConfig);
+      const ctx: NodeRunContext = {
+        nodeId: node.id,
+        config,
+        rawConfig: node.config,
+        inputs: resolveInputs(graph, node.id, state.nodeOutputs),
+        trigger,
+        runId,
+        log: (msg) => logNode(node.id, msg),
+        isStopped,
+        throwIfStopped,
+        step: substep,
+      };
+      const result: RunResult = await def.run(ctx);
+      await throwIfStopped();
+      await smallStep("complete", async () => {
         await logNode(
           node.id,
           result.type === "pause"
             ? "Paused for human input."
             : "Completed successfully.",
         );
-        return result.type === "pause"
-          ? { type: "pause", state: result.state }
-          : { type: "output", outputs: result.outputs };
-      } catch (err) {
-        if (err instanceof RunStoppedError) {
+        return null;
+      });
+      return result.type === "pause"
+        ? { type: "pause", state: result.state }
+        : { type: "output", outputs: result.outputs };
+    } catch (err) {
+      if (err instanceof RunStoppedError) {
+        await smallStep("stopped", async () => {
           await logNode(node.id, "Stopped by user.");
-          return { type: "stopped" };
-        }
-        const message = err instanceof Error ? err.message : String(err);
-        await logNode(node.id, message, "error");
-        return {
-          type: "error",
-          error: `${def.label}: ${message}`,
-        };
+          return null;
+        });
+        return { type: "stopped" };
       }
-    });
+      const message = err instanceof Error ? err.message : String(err);
+      await smallStep("error", async () => {
+        await logNode(node.id, message, "error");
+        return null;
+      });
+      return {
+        type: "error",
+        error: `${def.label}: ${message}`,
+      };
+    }
+  };
+
+  const runNode = (node: WorkflowNode) => {
+    nodeVisitCounts[node.id] = (nodeVisitCounts[node.id] ?? 0) + 1;
+    const def = getNodeType(node.type);
+    const runStepId = visitStepId(node.id, "run");
+    if (def?.usesDurableSteps) {
+      const substep: NodeStepRunner = (id, fn) =>
+        step(`${runStepId}:sub:${cleanStepSegment(id)}`, fn);
+      return runNodeWork(node, substep);
+    }
+    return step(runStepId, () => runNodeWork(node));
   };
 
   const persistNodeOutcome = async (

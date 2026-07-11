@@ -1,7 +1,6 @@
 import { getNodeMeta } from "@/lib/nodes/catalog";
 import { CURATE_IMAGES_TYPE_ID } from "@/lib/nodes/curate-images/meta";
 import { GOOGLE_DRIVE_LIST_IMAGES_TYPE_ID } from "@/lib/nodes/google-drive-list-images/meta";
-import { RANK_IMAGES_TYPE_ID } from "@/lib/nodes/rank-images/meta";
 
 /**
  * Field propagation between connected nodes. Two surfaces share this module:
@@ -58,7 +57,6 @@ function exposedImageSelectionCount(n: RefNode): number {
 
 function exposedSelectedImagePaths(n: RefNode): string[] {
   if (
-    n.type !== RANK_IMAGES_TYPE_ID &&
     n.type !== CURATE_IMAGES_TYPE_ID &&
     n.type !== GOOGLE_DRIVE_LIST_IMAGES_TYPE_ID
   ) {

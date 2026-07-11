@@ -1,7 +1,7 @@
 import { getConnection } from "@/lib/connections/service";
 import { modelOptionsForConnection } from "@/lib/connections/model-options";
 import { normalizeImageCandidates } from "../image-input";
-import type { ImageCandidate, NodeDefinition } from "../types";
+import type { ImageCandidate, NodeDefinition, NodeStepRunner } from "../types";
 import {
   chunkArray,
   compactReason,
@@ -216,6 +216,7 @@ async function categorizePreparedChunk(input: {
   send: (images: PreparedImage[]) => Promise<CategorizationEntry[]>;
   log: LogFn;
   checkpoint: CheckpointFn;
+  step?: NodeStepRunner;
 }): Promise<CategoryPatch[]> {
   await input.checkpoint();
   try {
@@ -297,6 +298,7 @@ async function categorizePreparedImages(input: {
   send: (images: PreparedImage[]) => Promise<CategorizationEntry[]>;
   log: LogFn;
   checkpoint: CheckpointFn;
+  step?: NodeStepRunner;
 }): Promise<CategoryPatch[]> {
   const chunks = chunkArray(input.preparedImages, input.imagesPerCall);
   await writeLog(
@@ -307,7 +309,12 @@ async function categorizePreparedImages(input: {
   const chunkResults = await mapWithConcurrency(
     chunks,
     input.concurrentCalls,
-    (images) => categorizePreparedChunk({ ...input, images }),
+    (images, chunkIndex) => {
+      const categorize = () => categorizePreparedChunk({ ...input, images });
+      return input.step
+        ? input.step(`categorize:${chunkIndex}`, categorize)
+        : categorize();
+    },
   );
   return chunkResults.flat();
 }
@@ -325,6 +332,7 @@ async function categorizeWithOpenAI(input: {
   responseFormat: ResponseFormat;
   log: LogFn;
   checkpoint: CheckpointFn;
+  step?: NodeStepRunner;
 }): Promise<CategoryPatch[]> {
   return categorizePreparedImages({
     preparedImages: input.preparedImages,
@@ -335,6 +343,7 @@ async function categorizeWithOpenAI(input: {
     fallbackCategory: input.fallbackCategory,
     log: input.log,
     checkpoint: input.checkpoint,
+    step: input.step,
     send: async (images) => {
       const res = await sendOpenAIChatCompletion({
         config: input.config,
@@ -365,6 +374,7 @@ async function categorizeWithAzure(input: {
   responseFormat: ResponseFormat;
   log: LogFn;
   checkpoint: CheckpointFn;
+  step?: NodeStepRunner;
 }): Promise<CategoryPatch[]> {
   return categorizePreparedImages({
     preparedImages: input.preparedImages,
@@ -375,6 +385,7 @@ async function categorizeWithAzure(input: {
     fallbackCategory: input.fallbackCategory,
     log: input.log,
     checkpoint: input.checkpoint,
+    step: input.step,
     send: async (images) => {
       const res = await sendAzureChatCompletion({
         config: input.config,
@@ -437,6 +448,7 @@ function groupedByCategory(
 
 export const categorizeImagesNode: NodeDefinition<CategorizeImagesConfig> = {
   ...categorizeImagesMeta,
+  usesDurableSteps: true,
 
   async run(ctx) {
     const allCandidates = normalizeImageCandidates(
@@ -500,19 +512,21 @@ export const categorizeImagesNode: NodeDefinition<CategorizeImagesConfig> = {
     await ctx.log(
       `Preparing ${candidates.length} image(s) for vision categorization.`,
     );
-    const preparedImages = await prepareProviderImages({
+    const prepared = await prepareProviderImages({
       candidates,
       purpose: "vision categorization",
       log: ctx.log,
       checkpoint,
-      onSkip: ({ sourceIndex, reason }) => {
-        states[sourceIndex] = {
-          ...states[sourceIndex],
-          reason: `Could not prepare image for vision categorization: ${reason}`,
-          categorized: false,
-        };
-      },
+      step: ctx.step,
     });
+    for (const skipped of prepared.skipped) {
+      states[skipped.sourceIndex] = {
+        ...states[skipped.sourceIndex],
+        reason: `Could not prepare image for vision categorization: ${skipped.reason}`,
+        categorized: false,
+      };
+    }
+    const preparedImages = prepared.preparedImages;
 
     if (preparedImages.length > 0) {
       await checkpoint();
@@ -535,6 +549,7 @@ export const categorizeImagesNode: NodeDefinition<CategorizeImagesConfig> = {
               responseFormat,
               log: ctx.log,
               checkpoint,
+              step: ctx.step,
             })
           : connection.type === "azure-foundry"
             ? await categorizeWithAzure({
@@ -550,6 +565,7 @@ export const categorizeImagesNode: NodeDefinition<CategorizeImagesConfig> = {
                 responseFormat,
                 log: ctx.log,
                 checkpoint,
+                step: ctx.step,
               })
             : (() => {
                 throw new Error(

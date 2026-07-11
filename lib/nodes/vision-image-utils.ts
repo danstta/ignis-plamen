@@ -3,7 +3,7 @@ import {
   convertImageToJpeg,
   inferImageContentType,
 } from "@/lib/images/normalize";
-import type { ImageCandidate } from "./types";
+import type { ImageCandidate, NodeStepRunner } from "./types";
 
 export type ProviderName = "OpenAI" | "Azure";
 
@@ -25,6 +25,17 @@ export type PreparedImage = {
   candidate: ImageCandidate;
   sourceIndex: number;
   visionUrl: string;
+};
+
+export type SkippedPreparedImage = {
+  candidate: ImageCandidate;
+  sourceIndex: number;
+  reason: string;
+};
+
+export type PreparedImagesResult = {
+  preparedImages: PreparedImage[];
+  skipped: SkippedPreparedImage[];
 };
 
 export type LogFn = (message: string) => void | Promise<void>;
@@ -332,12 +343,10 @@ async function prepareProviderImage(input: {
   purpose: string;
   log: LogFn;
   checkpoint: CheckpointFn;
-  onSkip?: (input: {
-    candidate: ImageCandidate;
-    sourceIndex: number;
-    reason: string;
-  }) => void;
-}): Promise<PreparedImage | null> {
+}): Promise<
+  | { prepared: PreparedImage; skipped?: never }
+  | { prepared?: never; skipped: SkippedPreparedImage }
+> {
   await input.checkpoint();
   const label = imageLogLabel(input.candidate, input.sourceIndex);
   try {
@@ -352,22 +361,25 @@ async function prepareProviderImage(input: {
       `preparing ${label}`,
     );
     return {
-      candidate: input.candidate,
-      sourceIndex: input.sourceIndex,
-      visionUrl,
+      prepared: {
+        candidate: input.candidate,
+        sourceIndex: input.sourceIndex,
+        visionUrl,
+      },
     };
   } catch (err) {
     const reason = compactReason(err instanceof Error ? err.message : String(err));
-    input.onSkip?.({
-      candidate: input.candidate,
-      sourceIndex: input.sourceIndex,
-      reason,
-    });
     await writeLog(
       input.log,
       `Skipping ${label}: ${reason}. URL: ${urlForLog(input.candidate)}`,
     );
-    return null;
+    return {
+      skipped: {
+        candidate: input.candidate,
+        sourceIndex: input.sourceIndex,
+        reason,
+      },
+    };
   }
 }
 
@@ -376,27 +388,50 @@ export async function prepareProviderImages(input: {
   purpose: string;
   log: LogFn;
   checkpoint: CheckpointFn;
-  onSkip?: (input: {
-    candidate: ImageCandidate;
-    sourceIndex: number;
-    reason: string;
-  }) => void;
-}): Promise<PreparedImage[]> {
-  const prepared = await mapWithConcurrency(
+  step?: NodeStepRunner;
+}): Promise<PreparedImagesResult> {
+  const results = await mapWithConcurrency(
     input.candidates,
     IMAGE_FETCH_CONCURRENCY,
-    async (candidate, sourceIndex) =>
-      prepareProviderImage({
-        candidate,
-        sourceIndex,
-        purpose: input.purpose,
-        log: input.log,
-        checkpoint: input.checkpoint,
-        onSkip: input.onSkip,
-      }),
+    async (candidate, sourceIndex) => {
+      const prepare = () =>
+        prepareProviderImage({
+          candidate,
+          sourceIndex,
+          purpose: input.purpose,
+          log: input.log,
+          checkpoint: input.checkpoint,
+        });
+      return input.step
+        ? input.step(`prepare:${sourceIndex}`, prepare)
+        : prepare();
+    },
   );
 
-  return prepared.filter((image): image is PreparedImage => Boolean(image));
+  return {
+    preparedImages: results.flatMap((result) =>
+      result.prepared ? [result.prepared] : [],
+    ),
+    skipped: results.flatMap((result) =>
+      result.skipped ? [result.skipped] : [],
+    ),
+  };
+}
+
+export async function prepareProviderImagesLegacy(input: {
+  candidates: ImageCandidate[];
+  purpose: string;
+  log: LogFn;
+  checkpoint: CheckpointFn;
+}): Promise<PreparedImage[]> {
+  return (
+    await prepareProviderImages({
+      candidates: input.candidates,
+      purpose: input.purpose,
+      log: input.log,
+      checkpoint: input.checkpoint,
+    })
+  ).preparedImages;
 }
 
 export function visionImageContentItems(images: PreparedImage[]): unknown[] {

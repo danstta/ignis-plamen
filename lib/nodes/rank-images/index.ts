@@ -22,7 +22,7 @@ import {
   type ResponseFormat,
 } from "../vision-image-utils";
 import { normalizeImageCandidates } from "../image-input";
-import type { ImageCandidate, NodeDefinition } from "../types";
+import type { ImageCandidate, NodeDefinition, NodeStepRunner } from "../types";
 import { rankImagesMeta, type RankImagesConfig } from "./meta";
 
 const responseSchema = {
@@ -219,6 +219,7 @@ async function ratePreparedImages(input: {
   send: (images: PreparedImage[]) => Promise<RatingEntry[]>;
   log: LogFn;
   checkpoint: CheckpointFn;
+  step?: NodeStepRunner;
 }): Promise<ScorePatch[]> {
   const chunks = chunkArray(input.preparedImages, input.imagesPerCall);
   await writeLog(
@@ -229,7 +230,10 @@ async function ratePreparedImages(input: {
   const chunkResults = await mapWithConcurrency(
     chunks,
     input.concurrentCalls,
-    (images) => ratePreparedChunk({ ...input, images }),
+    (images, chunkIndex) => {
+      const rate = () => ratePreparedChunk({ ...input, images });
+      return input.step ? input.step(`rate:${chunkIndex}`, rate) : rate();
+    },
   );
   return chunkResults.flat();
 }
@@ -243,6 +247,7 @@ async function rateWithOpenAI(input: {
   concurrentCalls: number;
   log: LogFn;
   checkpoint: CheckpointFn;
+  step?: NodeStepRunner;
 }): Promise<ScorePatch[]> {
   return ratePreparedImages({
     preparedImages: input.preparedImages,
@@ -251,6 +256,7 @@ async function rateWithOpenAI(input: {
     provider: "OpenAI",
     log: input.log,
     checkpoint: input.checkpoint,
+    step: input.step,
     send: async (images) => {
       const res = await sendOpenAIChatCompletion({
         config: input.config,
@@ -272,6 +278,7 @@ async function rateWithAzure(input: {
   concurrentCalls: number;
   log: LogFn;
   checkpoint: CheckpointFn;
+  step?: NodeStepRunner;
 }): Promise<ScorePatch[]> {
   return ratePreparedImages({
     preparedImages: input.preparedImages,
@@ -280,6 +287,7 @@ async function rateWithAzure(input: {
     provider: "Azure",
     log: input.log,
     checkpoint: input.checkpoint,
+    step: input.step,
     send: async (images) => {
       const res = await sendAzureChatCompletion({
         config: input.config,
@@ -327,6 +335,7 @@ function legacySelectionCount(rawConfig: Record<string, unknown> | undefined) {
 
 export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
   ...rankImagesMeta,
+  usesDurableSteps: true,
 
   async run(ctx) {
     const allCandidates = normalizeImageCandidates(
@@ -380,19 +389,21 @@ export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
 
     await checkpoint();
     await ctx.log(`Preparing ${candidates.length} image(s) for vision rating.`);
-    const preparedImages = await prepareProviderImages({
+    const prepared = await prepareProviderImages({
       candidates,
       purpose: "vision rating",
       log: ctx.log,
       checkpoint,
-      onSkip: ({ sourceIndex, reason }) => {
-        scores[sourceIndex] = {
-          ...scores[sourceIndex],
-          reason: `Could not prepare image for vision rating: ${reason}`,
-          rated: false,
-        };
-      },
+      step: ctx.step,
     });
+    for (const skipped of prepared.skipped) {
+      scores[skipped.sourceIndex] = {
+        ...scores[skipped.sourceIndex],
+        reason: `Could not prepare image for vision rating: ${skipped.reason}`,
+        rated: false,
+      };
+    }
+    const preparedImages = prepared.preparedImages;
 
     if (preparedImages.length > 0) {
       await checkpoint();
@@ -407,6 +418,7 @@ export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
               concurrentCalls: ctx.config.concurrentCalls,
               log: ctx.log,
               checkpoint,
+              step: ctx.step,
             })
           : connection.type === "azure-foundry"
             ? await rateWithAzure({
@@ -418,6 +430,7 @@ export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
                 concurrentCalls: ctx.config.concurrentCalls,
                 log: ctx.log,
                 checkpoint,
+                step: ctx.step,
               })
             : (() => {
                 throw new Error(

@@ -17,6 +17,7 @@ import { notionUpdatePageNode } from "./notion-update-page";
 import { linkHubSupabaseSyncNode } from "./link-hub-supabase-sync";
 import { googleDriveListImagesNode } from "./google-drive-list-images";
 import { googleDriveUploadFilesNode } from "./google-drive-upload-files";
+import { prepareVisionImagesNode } from "./prepare-vision-images";
 
 /**
  * Registry of available workflow node types. To add a node, implement a
@@ -41,6 +42,7 @@ const definitions: NodeDefinition[] = [
   notionUpdatePageNode as unknown as NodeDefinition,
   linkHubSupabaseSyncNode as unknown as NodeDefinition,
   googleDriveListImagesNode as unknown as NodeDefinition,
+  prepareVisionImagesNode as unknown as NodeDefinition,
   googleDriveUploadFilesNode as unknown as NodeDefinition,
 ];
 

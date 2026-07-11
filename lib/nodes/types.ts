@@ -130,11 +130,17 @@ export interface NodeDefinition<C extends Record<string, unknown> = Record<strin
 
 /** Shared candidate-image shape produced by Find Location Images and consumed downstream. */
 export interface ImageCandidate {
+  id?: string;
   url: string;
   attribution: string;
   previewUrl?: string;
   mimeType?: string;
+  originalMimeType?: string;
+  originalUrl?: string;
   name?: string;
+  webViewLink?: string;
+  webContentLink?: string;
+  directLink?: string;
   thumbnailLink?: string;
   widthPx?: number;
   heightPx?: number;
@@ -150,4 +156,6 @@ export interface ImageCandidate {
   categorized?: boolean;
   rawCategory?: string;
   sourceIndex?: number;
+  converted?: boolean;
+  standardized?: boolean;
 }

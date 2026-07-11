@@ -30,7 +30,7 @@ export const rankImagesMeta: NodeMeta<RankImagesConfig> = {
   id: RANK_IMAGES_TYPE_ID,
   label: "Rank Images",
   description:
-    "Rates Drive images or image URLs with vision and returns them sorted best-first.",
+    "Rates prepared public image URLs with vision and returns them sorted best-first.",
   category: "transform",
   group: "ai",
   inputs: [{ id: "candidates", label: "Images", kind: "data" }],
@@ -68,7 +68,7 @@ export const rankImagesMeta: NodeMeta<RankImagesConfig> = {
       label: "Images per LLM call",
       type: "number",
       placeholder: "2",
-      help: "Each batch creates one vision call. Use 1 for independent single-image scoring, or 2+ for small comparisons.",
+      help: "Each batch creates one durable vision call. Use Prepare Vision Images before this node for HEIC or private Drive images.",
     },
     {
       name: "concurrentCalls",

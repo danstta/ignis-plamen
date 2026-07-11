@@ -8,7 +8,7 @@ import {
   mapWithConcurrency,
   noopCheckpoint,
   parseJsonResponse,
-  prepareProviderImages,
+  prepareProviderImageLinks,
   RequestTimeoutError,
   sendAzureChatCompletion,
   sendOpenAIChatCompletion,
@@ -335,6 +335,7 @@ function legacySelectionCount(rawConfig: Record<string, unknown> | undefined) {
 
 export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
   ...rankImagesMeta,
+  usesDurableSteps: true,
 
   async run(ctx) {
     const allCandidates = normalizeImageCandidates(
@@ -387,17 +388,12 @@ export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
     }));
 
     await checkpoint();
-    await ctx.log(`Preparing ${candidates.length} image(s) for vision rating.`);
-    const prepared = await prepareProviderImages({
-      candidates,
-      purpose: "vision rating",
-      log: ctx.log,
-      checkpoint,
-    });
+    await ctx.log(`Preparing ${candidates.length} image link(s) for vision rating.`);
+    const prepared = prepareProviderImageLinks({ candidates });
     for (const skipped of prepared.skipped) {
       scores[skipped.sourceIndex] = {
         ...scores[skipped.sourceIndex],
-        reason: `Could not prepare image for vision rating: ${skipped.reason}`,
+        reason: `Could not use image link for vision rating: ${skipped.reason}`,
         rated: false,
       };
     }

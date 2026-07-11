@@ -96,7 +96,7 @@ export const categorizeImagesMeta: NodeMeta<CategorizeImagesConfig> = {
       label: "Images per LLM call",
       type: "number",
       placeholder: "1",
-      help: "Each batch creates one durable vision call. Use 1 for per-image failure isolation, or 2+ for fewer calls.",
+      help: "Each batch creates one durable vision call. Use Prepare Vision Images before this node for HEIC or private Drive images.",
     },
     {
       name: "concurrentCalls",

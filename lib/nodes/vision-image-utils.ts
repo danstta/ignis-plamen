@@ -2,6 +2,7 @@ import { isImageContentType } from "@/lib/images/content-types";
 import {
   convertImageToJpeg,
   inferImageContentType,
+  isHeicLikeImage,
 } from "@/lib/images/normalize";
 import type { ImageCandidate } from "./types";
 
@@ -429,6 +430,48 @@ export async function prepareProviderImagesLegacy(input: {
       checkpoint: input.checkpoint,
     })
   ).preparedImages;
+}
+
+export function prepareProviderImageLinks(input: {
+  candidates: ImageCandidate[];
+}): PreparedImagesResult {
+  const preparedImages: PreparedImage[] = [];
+  const skipped: SkippedPreparedImage[] = [];
+
+  for (const [sourceIndex, candidate] of input.candidates.entries()) {
+    const url = candidate.url.trim();
+    const label = imageLogLabel(candidate, sourceIndex);
+    if (!/^https?:\/\//i.test(url)) {
+      skipped.push({
+        candidate,
+        sourceIndex,
+        reason: `${label} does not have a public http(s) image URL. Run Prepare Vision Images first or provide a public image link.`,
+      });
+      continue;
+    }
+
+    if (
+      isHeicLikeImage({
+        contentType: candidate.mimeType,
+        name: candidate.name ?? candidate.title ?? url,
+      })
+    ) {
+      skipped.push({
+        candidate,
+        sourceIndex,
+        reason: `${label} is HEIC/HEIF. Run Prepare Vision Images first so the model receives a JPEG/PNG/WebP/GIF URL.`,
+      });
+      continue;
+    }
+
+    preparedImages.push({
+      candidate,
+      sourceIndex,
+      visionUrl: url,
+    });
+  }
+
+  return { preparedImages, skipped };
 }
 
 export function visionImageContentItems(images: PreparedImage[]): unknown[] {

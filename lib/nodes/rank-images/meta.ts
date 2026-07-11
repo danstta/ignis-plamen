@@ -30,7 +30,7 @@ export const rankImagesMeta: NodeMeta<RankImagesConfig> = {
   id: RANK_IMAGES_TYPE_ID,
   label: "Rank Images",
   description:
-    "Rates prepared public image URLs with vision and returns them sorted best-first.",
+    "Rates supported public image URLs with vision and returns them sorted best-first.",
   category: "transform",
   group: "ai",
   inputs: [{ id: "candidates", label: "Images", kind: "data" }],
@@ -38,8 +38,10 @@ export const rankImagesMeta: NodeMeta<RankImagesConfig> = {
     { id: "ranked", label: "Ranked images", kind: "data" },
     { id: "rankedUrls", label: "Ranked image URLs", kind: "data" },
     { id: "scores", label: "Image scores", kind: "data" },
+    { id: "skipped", label: "Skipped images", kind: "data" },
     { id: "best", label: "Best image", kind: "image" },
     { id: "count", label: "Count", kind: "data" },
+    { id: "skippedCount", label: "Skipped count", kind: "data" },
   ],
   configFields: [
     {
@@ -68,7 +70,7 @@ export const rankImagesMeta: NodeMeta<RankImagesConfig> = {
       label: "Images per LLM call",
       type: "number",
       placeholder: "2",
-      help: "Each batch creates one durable vision call. Use Prepare Vision Images before this node for HEIC or private Drive images.",
+      help: "Each batch creates one durable vision call. Unsupported formats are skipped before the model is called.",
     },
     {
       name: "concurrentCalls",

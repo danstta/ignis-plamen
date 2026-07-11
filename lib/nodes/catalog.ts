@@ -17,7 +17,6 @@ import { notionUpdatePageMeta } from "./notion-update-page/meta";
 import { linkHubSupabaseSyncMeta } from "./link-hub-supabase-sync/meta";
 import { googleDriveListImagesMeta } from "./google-drive-list-images/meta";
 import { googleDriveUploadFilesMeta } from "./google-drive-upload-files/meta";
-import { prepareVisionImagesMeta } from "./prepare-vision-images/meta";
 
 /**
  * Client-safe node catalog: metadata only (no run()), so the canvas palette,
@@ -43,7 +42,6 @@ const catalog: NodeMeta[] = [
   notionUpdatePageMeta as unknown as NodeMeta,
   linkHubSupabaseSyncMeta as unknown as NodeMeta,
   googleDriveListImagesMeta as unknown as NodeMeta,
-  prepareVisionImagesMeta as unknown as NodeMeta,
   googleDriveUploadFilesMeta as unknown as NodeMeta,
 ];
 

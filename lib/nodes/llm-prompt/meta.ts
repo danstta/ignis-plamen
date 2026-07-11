@@ -32,7 +32,7 @@ export const llmPromptMeta: NodeMeta<LlmPromptConfig> = {
       label: "AI connection",
       type: "connection",
       connectionTypes: [...AI_MODEL_CONNECTION_TYPES],
-      help: "Choose an OpenAI or Azure AI Foundry connection.",
+      help: "Choose an OpenAI, Azure AI Foundry, or Claude connection.",
     },
     {
       name: "model",

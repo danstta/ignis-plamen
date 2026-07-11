@@ -13,10 +13,11 @@ import type { ZodType } from "zod";
 export interface ConfigField {
   name: string;
   label: string;
-  type: "text" | "password";
+  type: "text" | "password" | "model-list";
   placeholder?: string;
   help?: string;
   required?: boolean;
+  itemLabel?: string;
 }
 
 /** How a provider's accounts authenticate. */

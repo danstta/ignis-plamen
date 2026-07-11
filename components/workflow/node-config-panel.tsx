@@ -138,22 +138,27 @@ function TokenMenu({
 }
 
 /**
- * Single-line binding input: literal text plus a "Data" picker that inserts a
- * `{{nodeId.path}}` token at the cursor. Used for each template placeholder.
+ * Binding input: literal text plus a "Data" picker that inserts a
+ * `{{nodeId.path}}` token at the cursor.
  */
 function TokenBindingInput({
   value,
   onChange,
   fields,
   placeholder,
+  multiline = false,
 }: {
   value: string;
   onChange: (v: string) => void;
   fields: FieldRef[];
   placeholder?: string;
+  multiline?: boolean;
 }) {
-  const ref = useRef<HTMLInputElement>(null);
+  const ref = useRef<FieldEl>(null);
   const [open, setOpen] = useState(false);
+  const setBindingRef = (el: FieldEl) => {
+    ref.current = el;
+  };
 
   const insert = (token: string) => {
     const el = ref.current;
@@ -175,13 +180,24 @@ function TokenBindingInput({
   return (
     <div className="relative">
       <div className="flex items-start gap-1.5">
-        <Input
-          ref={ref}
-          value={value}
-          placeholder={placeholder}
-          onChange={(e) => onChange(e.target.value)}
-          autoComplete="off"
-        />
+        {multiline ? (
+          <Textarea
+            ref={setBindingRef}
+            value={value}
+            placeholder={placeholder}
+            onChange={(e) => onChange(e.target.value)}
+            rows={3}
+            className="min-h-20 resize-y"
+          />
+        ) : (
+          <Input
+            ref={setBindingRef}
+            value={value}
+            placeholder={placeholder}
+            onChange={(e) => onChange(e.target.value)}
+            autoComplete="off"
+          />
+        )}
         {fields.length > 0 ? (
           <Button
             type="button"
@@ -1069,6 +1085,7 @@ function NotionPropertiesEditor({
               value={String(row.value ?? "")}
               onChange={(value) => updateProperty(row.id, { value })}
               fields={fields}
+              multiline
               placeholder="Value - or insert data"
             />
           </div>

@@ -15,7 +15,7 @@ export const azureFoundryConnection: ConnectionDefinition<AzureFoundryConfig> =
     id: "azure-foundry",
     name: "Azure AI Foundry",
     description:
-      "Connect to an Azure AI Foundry model deployment with endpoint, key, and deployment name.",
+      "Connect to Azure AI Foundry model deployments with endpoint, key, and deployment names.",
     auth: {
       type: "keys",
       fields: [
@@ -35,10 +35,11 @@ export const azureFoundryConnection: ConnectionDefinition<AzureFoundryConfig> =
         },
         {
           name: "deploymentName",
-          label: "Deployment name",
-          type: "text",
+          label: "Deployment names",
+          type: "model-list",
           placeholder: "gpt-4.1-mini-production",
-          help: "The model deployment name that workflow nodes should call.",
+          itemLabel: "deployment",
+          help: "Add each Azure deployment name that workflow nodes can select.",
         },
         {
           name: "apiVersion",

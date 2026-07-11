@@ -1,5 +1,6 @@
 import { getConnection } from "@/lib/connections/service";
 import { modelOptionsForConnection } from "@/lib/connections/model-options";
+import { convertImageToJpeg } from "@/lib/images/normalize";
 import { normalizeImageCandidates } from "../image-input";
 import type { ImageCandidate, NodeDefinition } from "../types";
 import { rankImagesMeta, type RankImagesConfig } from "./meta";
@@ -272,14 +273,10 @@ async function providerImageToDataUrl(
   if (preview) return preview;
 
   try {
-    const sharp = (await import("sharp")).default;
-    const converted = await sharp(image.bytes, { failOn: "none" })
-      .autoOrient()
-      .jpeg({ quality: 90, mozjpeg: true })
-      .toBuffer();
-    if (converted.byteLength > MAX_PROVIDER_IMAGE_BYTES) {
-      throw new Error(`converted image is ${converted.byteLength} bytes`);
-    }
+    const converted = await convertImageToJpeg(image.bytes, {
+      quality: 90,
+      maxBytes: MAX_PROVIDER_IMAGE_BYTES,
+    });
     await writeLog(
       log,
       `Converted image ${sourceIndex + 1} from ${image.contentType} to image/jpeg for vision rating.`,

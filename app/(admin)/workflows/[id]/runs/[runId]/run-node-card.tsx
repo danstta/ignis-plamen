@@ -13,6 +13,7 @@ import {
   Square,
   Terminal,
 } from "lucide-react";
+import { imagePreviewSrc } from "@/lib/nodes/image-preview";
 import { cn } from "@/lib/utils";
 import type { NodeRunState, RunLogEntry } from "@/lib/workflows/types";
 
@@ -20,6 +21,8 @@ type ImagePreview = {
   url: string;
   previewUrl?: string;
   thumbnailLink?: string;
+  mimeType?: string;
+  name?: string;
   title?: string;
   source?: string;
   attribution?: string;
@@ -105,6 +108,8 @@ function toImagePreview(value: unknown): ImagePreview | undefined {
       typeof value.previewUrl === "string" ? value.previewUrl : undefined,
     thumbnailLink:
       typeof value.thumbnailLink === "string" ? value.thumbnailLink : undefined,
+    mimeType: typeof value.mimeType === "string" ? value.mimeType : undefined,
+    name: typeof value.name === "string" ? value.name : undefined,
     title: typeof value.title === "string" ? value.title : undefined,
     source: typeof value.source === "string" ? value.source : undefined,
     attribution:
@@ -112,10 +117,6 @@ function toImagePreview(value: unknown): ImagePreview | undefined {
     locationQuery:
       typeof value.locationQuery === "string" ? value.locationQuery : undefined,
   };
-}
-
-function imagePreviewSrc(image: ImagePreview): string {
-  return image.previewUrl ?? image.thumbnailLink ?? image.url;
 }
 
 function imageQueryGroups(outputs: Record<string, unknown>): ImageQueryGroup[] {

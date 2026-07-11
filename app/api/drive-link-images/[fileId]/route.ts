@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+import { normalizeHeicImageForPreview } from "@/lib/images/normalize";
+
+export const runtime = "nodejs";
 
 const DRIVE_FILE_ID = /^[A-Za-z0-9_-]{10,200}$/;
 
@@ -40,10 +43,16 @@ export async function GET(
       );
     }
 
-    return new Response(res.body, {
+    const preview = await normalizeHeicImageForPreview({
+      bytes: await res.arrayBuffer(),
+      contentType,
+    });
+
+    return new Response(new Uint8Array(preview.bytes), {
       headers: {
-        "Content-Type": contentType,
+        "Content-Type": preview.contentType,
         "Cache-Control": "private, max-age=300",
+        ...(preview.converted ? { "X-Ignis-Image-Converted": "heic-to-jpeg" } : {}),
       },
     });
   } catch (err) {

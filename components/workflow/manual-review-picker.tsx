@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Check, Grid2X2, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { imagePreviewSrc } from "@/lib/nodes/image-preview";
 import { cn } from "@/lib/utils";
 
 type Candidate = {
@@ -12,6 +13,8 @@ type Candidate = {
   attribution?: string;
   previewUrl?: string;
   thumbnailLink?: string;
+  mimeType?: string;
+  name?: string;
 };
 type InstagramPreview = { enabled?: boolean; username?: string };
 type InstagramPost = {
@@ -22,10 +25,6 @@ type InstagramPost = {
   timestamp?: string;
   caption?: string;
 };
-
-function imagePreviewSrc(image: Candidate): string {
-  return image.previewUrl ?? image.thumbnailLink ?? image.url;
-}
 
 /** Grid of candidates for a paused run; clicking one resumes the run. */
 export function ManualReviewPicker({

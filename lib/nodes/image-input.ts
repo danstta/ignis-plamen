@@ -99,6 +99,7 @@ function firstImageArray(value: unknown): unknown[] | undefined {
     "directLinks",
     "images",
     "candidates",
+    "categorized",
     "ranked",
     "selected",
     "selectedUrls",

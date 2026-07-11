@@ -44,6 +44,9 @@ type Candidate = {
   thumbnailLink?: string;
   mimeType?: string;
   name?: string;
+  category?: string;
+  categoryReason?: string;
+  categorized?: boolean;
 };
 type PreviewPlaceholder = { key: string; kind: "text" | "image" };
 type ImagePlacement = { objectPosition: string; scale: number };
@@ -178,6 +181,7 @@ function ImageTile({
         className="aspect-square w-full object-cover"
       />
       {children}
+      <CategoryBadge image={image} />
       <Button
         type="button"
         size="icon-sm"
@@ -190,6 +194,28 @@ function ImageTile({
         {label === "Remove" ? <X className="size-4" /> : <Plus className="size-4" />}
       </Button>
     </div>
+  );
+}
+
+function CategoryBadge({ image }: { image: Candidate }) {
+  const category = image.category?.trim();
+  if (!category) return null;
+
+  return (
+    <span
+      title={
+        image.categoryReason
+          ? `${category}: ${image.categoryReason}`
+          : category
+      }
+      className={cn(
+        "absolute bottom-2 left-2 max-w-[calc(100%-1rem)] truncate rounded bg-background/85 px-1.5 py-0.5 text-[10px] font-medium text-foreground shadow-sm backdrop-blur",
+        image.categorized === false &&
+          "border border-destructive/35 text-destructive",
+      )}
+    >
+      {category}
+    </span>
   );
 }
 
@@ -642,7 +668,7 @@ export function CurateImagesPicker({
                   disabled={submitting}
                   onClick={() => setActivePlacementUrl(image.url)}
                   className={cn(
-                    "absolute bottom-2 left-2 shadow-sm opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100",
+                    "absolute bottom-2 right-2 shadow-sm opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100",
                     effectiveActivePlacementUrl === image.url && "opacity-100",
                   )}
                 >

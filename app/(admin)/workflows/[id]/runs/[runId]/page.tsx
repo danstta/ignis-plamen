@@ -203,6 +203,9 @@ export default async function RunDetailPage({
       ? ((run.nodeOutputs[run.waitingNodeId]?.selected ?? []) as {
           url: string;
           attribution?: string;
+          category?: string;
+          categoryReason?: string;
+          categorized?: boolean;
         }[])
       : [];
   const waitingAlternates =
@@ -210,6 +213,9 @@ export default async function RunDetailPage({
       ? ((run.nodeOutputs[run.waitingNodeId]?.alternates ?? []) as {
           url: string;
           attribution?: string;
+          category?: string;
+          categoryReason?: string;
+          categorized?: boolean;
         }[])
       : [];
   const waitingSelectionCount =

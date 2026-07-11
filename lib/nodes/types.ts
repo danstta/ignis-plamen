@@ -130,4 +130,9 @@ export interface ImageCandidate {
   attributionUrl?: string;
   locationQuery?: string;
   locationQueryIndex?: number;
+  category?: string;
+  categoryReason?: string;
+  categorized?: boolean;
+  rawCategory?: string;
+  sourceIndex?: number;
 }

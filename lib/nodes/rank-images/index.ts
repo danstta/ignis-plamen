@@ -1,6 +1,10 @@
 import { getConnection } from "@/lib/connections/service";
 import { modelOptionsForConnection } from "@/lib/connections/model-options";
-import { convertImageToJpeg } from "@/lib/images/normalize";
+import { isImageContentType } from "@/lib/images/content-types";
+import {
+  convertImageToJpeg,
+  inferImageContentType,
+} from "@/lib/images/normalize";
 import { normalizeImageCandidates } from "../image-input";
 import type { ImageCandidate, NodeDefinition } from "../types";
 import { rankImagesMeta, type RankImagesConfig } from "./meta";
@@ -200,13 +204,6 @@ async function fetchImageBytes(
   );
   if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
 
-  const contentType = res.headers.get("content-type")?.split(";")[0] ?? "";
-  if (!contentType.startsWith("image/")) {
-    throw new Error(
-      `expected image content-type, got "${contentType || "unknown"}"`,
-    );
-  }
-
   const contentLength = Number(res.headers.get("content-length") ?? 0);
   if (contentLength > MAX_PROVIDER_IMAGE_BYTES) {
     throw new Error(`image is ${contentLength} bytes`);
@@ -217,7 +214,25 @@ async function fetchImageBytes(
     throw new Error(`image is ${bytes.byteLength} bytes`);
   }
 
-  return { bytes, contentType: contentType.toLowerCase() };
+  const headerContentType = res.headers.get("content-type")?.split(";")[0] ?? "";
+  const contentType =
+    inferImageContentType({
+      bytes,
+      contentType: headerContentType,
+      name: candidate.name ?? candidate.title,
+    }) ||
+    inferImageContentType({
+      bytes,
+      contentType: candidate.mimeType,
+      name: candidate.name ?? candidate.title,
+    });
+
+  if (!isImageContentType(contentType)) {
+    const declaredType = candidate.mimeType || headerContentType || "unknown";
+    throw new Error(`expected image content-type, got "${declaredType}"`);
+  }
+
+  return { bytes, contentType };
 }
 
 function imageDataUrl(bytes: Buffer, contentType: string): string {

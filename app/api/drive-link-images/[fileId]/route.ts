@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { normalizeHeicImageForPreview } from "@/lib/images/normalize";
+import { isImageContentType } from "@/lib/images/content-types";
+import { normalizeImageForPreview } from "@/lib/images/normalize";
 
 export const runtime = "nodejs";
 
@@ -35,18 +36,21 @@ export async function GET(
       );
     }
 
-    const contentType = res.headers.get("content-type") ?? "application/octet-stream";
-    if (!contentType.toLowerCase().startsWith("image/")) {
+    const upstreamContentType =
+      res.headers.get("content-type") ?? "application/octet-stream";
+    const preview = await normalizeImageForPreview({
+      bytes: await res.arrayBuffer(),
+      contentType: upstreamContentType,
+    });
+
+    if (!isImageContentType(preview.contentType)) {
       return NextResponse.json(
-        { error: `Google Drive returned ${contentType}, not an image.` },
+        {
+          error: `Google Drive returned ${upstreamContentType}, not a recognized image.`,
+        },
         { status: 502 },
       );
     }
-
-    const preview = await normalizeHeicImageForPreview({
-      bytes: await res.arrayBuffer(),
-      contentType,
-    });
 
     return new Response(new Uint8Array(preview.bytes), {
       headers: {

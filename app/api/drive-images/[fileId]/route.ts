@@ -3,7 +3,8 @@ import {
   fetchGoogleDriveImageFile,
   verifyGoogleDriveImageSignature,
 } from "@/lib/connections/google-drive/api";
-import { normalizeHeicImageForPreview } from "@/lib/images/normalize";
+import { isImageContentType } from "@/lib/images/content-types";
+import { normalizeImageForPreview } from "@/lib/images/normalize";
 
 export const runtime = "nodejs";
 
@@ -31,7 +32,14 @@ export async function GET(
 
   try {
     const image = await fetchGoogleDriveImageFile({ connectionId, fileId });
-    const preview = await normalizeHeicImageForPreview(image);
+    const preview = await normalizeImageForPreview(image);
+    if (!isImageContentType(preview.contentType)) {
+      return NextResponse.json(
+        { error: "Google Drive file is not a recognized image." },
+        { status: 502 },
+      );
+    }
+
     return new Response(new Uint8Array(preview.bytes), {
       headers: {
         "Content-Type": preview.contentType,

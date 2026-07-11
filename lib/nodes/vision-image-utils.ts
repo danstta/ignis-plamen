@@ -3,7 +3,7 @@ import {
   convertImageToJpeg,
   inferImageContentType,
 } from "@/lib/images/normalize";
-import type { ImageCandidate, NodeStepRunner } from "./types";
+import type { ImageCandidate } from "./types";
 
 export type ProviderName = "OpenAI" | "Azure";
 
@@ -388,23 +388,20 @@ export async function prepareProviderImages(input: {
   purpose: string;
   log: LogFn;
   checkpoint: CheckpointFn;
-  step?: NodeStepRunner;
 }): Promise<PreparedImagesResult> {
+  // Prepared images currently carry data URLs, so do not wrap this loop in
+  // durable Inngest steps until the image bytes are stored behind small URLs.
   const results = await mapWithConcurrency(
     input.candidates,
     IMAGE_FETCH_CONCURRENCY,
     async (candidate, sourceIndex) => {
-      const prepare = () =>
-        prepareProviderImage({
-          candidate,
-          sourceIndex,
-          purpose: input.purpose,
-          log: input.log,
-          checkpoint: input.checkpoint,
-        });
-      return input.step
-        ? input.step(`prepare:${sourceIndex}`, prepare)
-        : prepare();
+      return prepareProviderImage({
+        candidate,
+        sourceIndex,
+        purpose: input.purpose,
+        log: input.log,
+        checkpoint: input.checkpoint,
+      });
     },
   );
 

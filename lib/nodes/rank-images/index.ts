@@ -394,7 +394,6 @@ export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
       purpose: "vision rating",
       log: ctx.log,
       checkpoint,
-      step: ctx.step,
     });
     for (const skipped of prepared.skipped) {
       scores[skipped.sourceIndex] = {

@@ -517,7 +517,6 @@ export const categorizeImagesNode: NodeDefinition<CategorizeImagesConfig> = {
       purpose: "vision categorization",
       log: ctx.log,
       checkpoint,
-      step: ctx.step,
     });
     for (const skipped of prepared.skipped) {
       states[skipped.sourceIndex] = {

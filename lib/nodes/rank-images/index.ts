@@ -351,10 +351,12 @@ export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
           ranked: [],
           rankedUrls: [],
           scores: [],
+          skipped: [],
           selected: [],
           selectedUrls: [],
           best: "",
           count: 0,
+          skippedCount: 0,
         },
       };
     }
@@ -390,7 +392,9 @@ export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
     await checkpoint();
     await ctx.log(`Preparing ${candidates.length} image link(s) for vision rating.`);
     const prepared = prepareProviderImageLinks({ candidates });
+    const skippedSourceIndexes = new Set<number>();
     for (const skipped of prepared.skipped) {
+      skippedSourceIndexes.add(skipped.sourceIndex);
       scores[skipped.sourceIndex] = {
         ...scores[skipped.sourceIndex],
         reason: `Could not use image link for vision rating: ${skipped.reason}`,
@@ -437,10 +441,18 @@ export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
     }
 
     await checkpoint();
-    const ranked = sortedRankedImages(scores);
+    const skipped = prepared.skipped.map((skipped) => ({
+      url: skipped.candidate.url,
+      reason: skipped.reason,
+      sourceIndex: skipped.sourceIndex,
+      ...(skipped.contentType ? { contentType: skipped.contentType } : {}),
+    }));
+    const ranked = sortedRankedImages(
+      scores.filter((score) => !skippedSourceIndexes.has(score.sourceIndex)),
+    );
     const selected = ranked.slice(0, legacySelectionCount(ctx.rawConfig));
     await ctx.log(
-      `Ranked ${ranked.length} image(s); ${scores.filter((score) => score.rated).length} received model ratings.`,
+      `Ranked ${ranked.length} supported image(s); ${scores.filter((score) => score.rated).length} received model ratings; skipped ${skipped.length} unsupported image(s).`,
     );
 
     return {
@@ -456,10 +468,12 @@ export const rankImagesNode: NodeDefinition<RankImagesConfig> = {
           rated: candidate.rated,
           sourceIndex: candidate.sourceIndex,
         })),
+        skipped,
         selected,
         selectedUrls: selected.map((candidate) => candidate.url),
         best: ranked[0]?.url ?? "",
         count: ranked.length,
+        skippedCount: skipped.length,
       },
     };
   },

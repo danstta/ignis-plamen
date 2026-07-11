@@ -23,6 +23,7 @@ import {
   type PreparedImage,
   type ProviderName,
   type ResponseFormat,
+  type SkippedPreparedImage,
 } from "../vision-image-utils";
 import {
   categorizeImagesMeta,
@@ -50,6 +51,9 @@ type CategoryPatch = Pick<
   CategoryState,
   "sourceIndex" | "category" | "reason" | "categorized" | "rawCategory"
 >;
+
+const HEIC_CATEGORY = "HEIC";
+const UNSUPPORTED_IMAGE_CATEGORY = "Unsupported";
 
 function responseSchemaForCategories(categories: string[]) {
   return {
@@ -435,7 +439,18 @@ function groupedByCategory(
   categories: string[],
   categorized: ReturnType<typeof categorizedImages>,
 ) {
-  return categories.map((category) => {
+  const groupNames = [...categories];
+  const seen = new Set(categories.map((category) => category.toLowerCase()));
+  for (const image of categorized) {
+    const category = image.category?.trim();
+    if (!category) continue;
+    const key = category.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    groupNames.push(category);
+  }
+
+  return groupNames.map((category) => {
     const images = categorized.filter((image) => image.category === category);
     return {
       category,
@@ -444,6 +459,14 @@ function groupedByCategory(
       urls: images.map((image) => image.url),
     };
   });
+}
+
+function skippedImageCategory(skipped: SkippedPreparedImage): string {
+  const contentType = skipped.contentType?.toLowerCase() ?? "";
+  return contentType.startsWith("image/hei") ||
+    /\bHEIC\/HEIF\b/i.test(skipped.reason)
+    ? HEIC_CATEGORY
+    : UNSUPPORTED_IMAGE_CATEGORY;
 }
 
 export const categorizeImagesNode: NodeDefinition<CategorizeImagesConfig> = {
@@ -516,7 +539,8 @@ export const categorizeImagesNode: NodeDefinition<CategorizeImagesConfig> = {
     for (const skipped of prepared.skipped) {
       states[skipped.sourceIndex] = {
         ...states[skipped.sourceIndex],
-        reason: `Could not use image link for vision categorization: ${skipped.reason}`,
+        category: skippedImageCategory(skipped),
+        reason: skipped.reason,
         categorized: false,
       };
     }

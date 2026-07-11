@@ -52,7 +52,6 @@ const definitions: PluginDefinition[] = [
     description: "Reads and writes Google Drive folders and files from workflows.",
     nodeTypeIds: [
       "google-drive-list-images",
-      "prepare-vision-images",
       "google-drive-upload-files",
     ],
     defaultEnabled: true,

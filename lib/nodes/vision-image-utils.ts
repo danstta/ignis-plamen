@@ -32,6 +32,8 @@ export type SkippedPreparedImage = {
   candidate: ImageCandidate;
   sourceIndex: number;
   reason: string;
+  skipKind?: "unsupported-format" | "unsupported-url";
+  contentType?: string;
 };
 
 export type PreparedImagesResult = {
@@ -267,6 +269,70 @@ function imageDataUrl(bytes: Buffer, contentType: string): string {
   return `data:${normalizedType};base64,${bytes.toString("base64")}`;
 }
 
+function dataUrlContentType(url: string): string {
+  const match = url.match(/^data:([^;,]+)[;,]/i);
+  return match?.[1]?.toLowerCase() ?? "";
+}
+
+function candidateContentType(candidate: ImageCandidate): string {
+  const dataUrlType = candidate.url.startsWith("data:")
+    ? dataUrlContentType(candidate.url)
+    : "";
+  return inferImageContentType({
+    contentType: dataUrlType || candidate.mimeType,
+    name: candidate.name ?? candidate.title ?? candidate.url,
+  });
+}
+
+function providerImageSupport(candidate: ImageCandidate):
+  | { supported: true; contentType: string }
+  | {
+      supported: false;
+      contentType?: string;
+      skipKind: SkippedPreparedImage["skipKind"];
+      reason: string;
+    } {
+  const url = candidate.url.trim();
+  if (!url.startsWith("data:") && !/^https?:\/\//i.test(url)) {
+    return {
+      supported: false,
+      skipKind: "unsupported-url",
+      reason: `does not have a public http(s) image URL or data URL.`,
+    };
+  }
+
+  const contentType = candidateContentType(candidate);
+  const name = candidate.name ?? candidate.title ?? url;
+  if (isHeicLikeImage({ contentType: contentType || candidate.mimeType, name })) {
+    return {
+      supported: false,
+      contentType: contentType || "image/heic",
+      skipKind: "unsupported-format",
+      reason: `is HEIC/HEIF, which this vision model does not accept.`,
+    };
+  }
+
+  if (!contentType) {
+    return {
+      supported: false,
+      skipKind: "unsupported-format",
+      reason:
+        "has an unknown image format. Provide a JPEG, PNG, WebP, or GIF image.",
+    };
+  }
+
+  if (!PROVIDER_SUPPORTED_IMAGE_TYPES.has(contentType)) {
+    return {
+      supported: false,
+      contentType,
+      skipKind: "unsupported-format",
+      reason: `has unsupported content-type ${contentType}. Use JPEG, PNG, WebP, or GIF.`,
+    };
+  }
+
+  return { supported: true, contentType };
+}
+
 function highResolutionThumbnailUrl(candidate: ImageCandidate): string | undefined {
   const thumbnailLink = candidate.thumbnailLink?.trim();
   if (!thumbnailLink) return undefined;
@@ -441,25 +507,14 @@ export function prepareProviderImageLinks(input: {
   for (const [sourceIndex, candidate] of input.candidates.entries()) {
     const url = candidate.url.trim();
     const label = imageLogLabel(candidate, sourceIndex);
-    if (!/^https?:\/\//i.test(url)) {
+    const support = providerImageSupport({ ...candidate, url });
+    if (!support.supported) {
       skipped.push({
         candidate,
         sourceIndex,
-        reason: `${label} does not have a public http(s) image URL. Run Prepare Vision Images first or provide a public image link.`,
-      });
-      continue;
-    }
-
-    if (
-      isHeicLikeImage({
-        contentType: candidate.mimeType,
-        name: candidate.name ?? candidate.title ?? url,
-      })
-    ) {
-      skipped.push({
-        candidate,
-        sourceIndex,
-        reason: `${label} is HEIC/HEIF. Run Prepare Vision Images first so the model receives a JPEG/PNG/WebP/GIF URL.`,
+        reason: `${label} ${support.reason}`,
+        skipKind: support.skipKind,
+        ...(support.contentType ? { contentType: support.contentType } : {}),
       });
       continue;
     }

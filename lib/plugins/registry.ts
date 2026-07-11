@@ -35,7 +35,7 @@ const definitions: PluginDefinition[] = [
     id: "ai",
     name: "AI",
     description: "Calls configured AI model connections from workflows.",
-    nodeTypeIds: ["llm-prompt"],
+    nodeTypeIds: ["llm-prompt", "categorize-images"],
     defaultEnabled: true,
   },
   {

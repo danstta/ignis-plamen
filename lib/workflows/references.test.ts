@@ -32,48 +32,46 @@ const trigger = {
 };
 
 describe("resolveReferences", () => {
+  // The declared signature is (value: T) => T, but an exact-token string
+  // resolves to the raw upstream value of any type — widen so assertions can
+  // state the actual runtime type.
+  const resolve = (value: unknown, trig: Record<string, unknown> = {}) =>
+    resolveReferences<unknown>(value, outputs, trig);
+
   test("exact token preserves the raw value's type", () => {
-    expect(resolveReferences("{{node1.count}}", outputs, {})).toBe(3);
-    expect(resolveReferences("{{node1.tags}}", outputs, {})).toEqual(["a", "b"]);
-    expect(resolveReferences("{{node1.nested.deep.flag}}", outputs, {})).toBe(
-      true,
-    );
+    expect(resolve("{{node1.count}}")).toBe(3);
+    expect(resolve("{{node1.tags}}")).toEqual(["a", "b"]);
+    expect(resolve("{{node1.nested.deep.flag}}")).toBe(true);
   });
 
   test("embedded token interpolates to text", () => {
-    expect(resolveReferences("Hello {{node1.name}}!", outputs, {})).toBe(
-      "Hello Ada!",
+    expect(resolve("Hello {{node1.name}}!")).toBe("Hello Ada!");
+    expect(resolve("{{node1.name}} has {{node1.count}} tags")).toBe(
+      "Ada has 3 tags",
     );
-    expect(
-      resolveReferences("{{node1.name}} has {{node1.count}} tags", outputs, {}),
-    ).toBe("Ada has 3 tags");
   });
 
   test("unresolvable exact token resolves to undefined", () => {
-    expect(resolveReferences("{{missing.path}}", outputs, {})).toBeUndefined();
-    expect(resolveReferences("{{node1.no.such}}", outputs, {})).toBeUndefined();
+    expect(resolve("{{missing.path}}")).toBeUndefined();
+    expect(resolve("{{node1.no.such}}")).toBeUndefined();
   });
 
   test("unresolvable embedded token interpolates as empty string", () => {
-    expect(resolveReferences("x={{missing.path}}!", outputs, {})).toBe("x=!");
+    expect(resolve("x={{missing.path}}!")).toBe("x=!");
   });
 
   test("trigger tokens resolve against the trigger argument", () => {
-    expect(resolveReferences("{{trigger.body.x}}", outputs, trigger)).toBe(
-      "from-trigger",
-    );
-    expect(resolveReferences("n is {{trigger.body.n}}", outputs, trigger)).toBe(
-      "n is 42",
-    );
+    expect(resolve("{{trigger.body.x}}", trigger)).toBe("from-trigger");
+    expect(resolve("n is {{trigger.body.n}}", trigger)).toBe("n is 42");
   });
 
   test("resolves deeply inside nested objects and arrays", () => {
-    const config = {
+    const config: unknown = {
       title: "{{node1.name}}",
       list: ["{{node1.count}}", { inner: "hi {{node1.name}}" }],
       keep: { untouched: "plain" },
     };
-    expect(resolveReferences(config, outputs, {})).toEqual({
+    expect(resolve(config)).toEqual({
       title: "Ada",
       list: [3, { inner: "hi Ada" }],
       keep: { untouched: "plain" },
@@ -81,32 +79,28 @@ describe("resolveReferences", () => {
   });
 
   test("non-string leaves pass through unchanged", () => {
-    expect(resolveReferences(7, outputs, {})).toBe(7);
-    expect(resolveReferences(false, outputs, {})).toBe(false);
-    expect(resolveReferences(null, outputs, {})).toBeNull();
+    expect(resolve(7)).toBe(7);
+    expect(resolve(false)).toBe(false);
+    expect(resolve(null)).toBeNull();
   });
 
   test("wildcard path: single match yields the value itself", () => {
-    expect(resolveReferences("{{node1.single.*.url}}", outputs, {})).toBe(
-      "https://only/1",
-    );
+    expect(resolve("{{node1.single.*.url}}")).toBe("https://only/1");
   });
 
   test("wildcard path: multiple matches yield an array", () => {
-    expect(resolveReferences("{{node1.items.*.url}}", outputs, {})).toEqual([
+    expect(resolve("{{node1.items.*.url}}")).toEqual([
       "https://x/1",
       "https://x/2",
     ]);
   });
 
   test("wildcard path with zero matches resolves to undefined", () => {
-    expect(
-      resolveReferences("{{node1.items.*.missing}}", outputs, {}),
-    ).toBeUndefined();
+    expect(resolve("{{node1.items.*.missing}}")).toBeUndefined();
   });
 
   test("whitespace inside token braces is tolerated", () => {
-    expect(resolveReferences("{{ node1.name }}", outputs, {})).toBe("Ada");
+    expect(resolve("{{ node1.name }}")).toBe("Ada");
   });
 });
 

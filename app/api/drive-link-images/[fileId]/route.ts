@@ -23,7 +23,12 @@ async function readResponseWithLimit(
   maxBytes: number,
 ): Promise<{ ok: true; bytes: Uint8Array } | { ok: false }> {
   const declared = Number(res.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > maxBytes) return { ok: false };
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    // Cancel instead of abandoning the stream — an unread upstream body keeps
+    // pulling bandwidth and holds a connection-pool slot until GC.
+    await res.body?.cancel();
+    return { ok: false };
+  }
 
   const reader = res.body?.getReader();
   if (!reader) return { ok: true, bytes: new Uint8Array(0) };
@@ -35,7 +40,10 @@ async function readResponseWithLimit(
       const { done, value } = await reader.read();
       if (done) break;
       total += value.byteLength;
-      if (total > maxBytes) return { ok: false };
+      if (total > maxBytes) {
+        await reader.cancel();
+        return { ok: false };
+      }
       chunks.push(value);
     }
   } finally {

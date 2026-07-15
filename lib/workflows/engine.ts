@@ -106,8 +106,15 @@ async function execute(
   if (!run) return;
 
   // Plugin state is static for a run's duration — load the enabled set once
-  // instead of one query per node. Toggles apply to new runs, not mid-run.
-  const enabledNodeTypes = await enabledNodeTypeIds();
+  // instead of one query per node. Memoized so replays reuse the snapshot from
+  // the first execution: toggles apply to new runs, not mid-run, including
+  // across retries/resumes. Stored as an array — step results round-trip
+  // through JSON, which a Set does not survive.
+  const enabledNodeTypes = new Set(
+    await step("execute:enabled-node-types", async () => [
+      ...(await enabledNodeTypeIds()),
+    ]),
+  );
 
   const state: LocalState = {
     nodeOutputs: { ...run.nodeOutputs },

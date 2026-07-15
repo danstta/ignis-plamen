@@ -30,6 +30,16 @@ export async function getRun(id: string) {
   return rows[0] ?? null;
 }
 
+/** Cheap status probe for engine loop control — never loads the jsonb blobs. */
+export async function getRunStatus(id: string): Promise<RunStatus | null> {
+  const rows = await db()
+    .select({ status: workflowRuns.status })
+    .from(workflowRuns)
+    .where(eq(workflowRuns.id, id))
+    .limit(1);
+  return rows[0]?.status ?? null;
+}
+
 export async function listRuns(workflowId?: string) {
   const base = db()
     .select({

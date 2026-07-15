@@ -208,7 +208,17 @@ export const workflowRuns = pgTable("workflow_runs", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
-});
+}, (table) => [
+  // Serves the per-workflow runs list (filter + newest-first sort).
+  index("workflow_runs_workflow_id_created_at_idx").on(
+    table.workflowId,
+    table.createdAt.desc(),
+  ),
+  // Serves the global runs list/poll.
+  index("workflow_runs_created_at_idx").on(table.createdAt.desc()),
+  // Serves the status filter and the stale-run reaper.
+  index("workflow_runs_status_idx").on(table.status),
+]);
 
 /**
  * Append-only run log. Replay-idempotent: the engine derives (visit, seq)
@@ -269,7 +279,14 @@ export const webhookEvents = pgTable("webhook_events", {
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
-});
+}, (table) => [
+  // Serves the "latest captured sample event" lookup.
+  index("webhook_events_workflow_node_created_at_idx").on(
+    table.workflowId,
+    table.nodeId,
+    table.createdAt.desc(),
+  ),
+]);
 
 export type BrandRow = typeof brands.$inferSelect;
 export type NewBrand = typeof brands.$inferInsert;

@@ -51,13 +51,13 @@ export const rehostImageNode: NodeDefinition<RehostImageConfig> = {
   async run(ctx) {
     const source = String(ctx.config.source ?? "").trim();
     if (!source) {
-      ctx.log("no source URL — passing through empty");
+      await ctx.log("no source URL — passing through empty");
       return { type: "output", outputs: { url: "" } };
     }
 
     // A data: URL is already self-contained and permanent — nothing to rehost.
     if (source.startsWith("data:")) {
-      ctx.log("source is a data: URL — passing through unchanged");
+      await ctx.log("source is a data: URL — passing through unchanged");
       return { type: "output", outputs: { url: source } };
     }
 
@@ -90,7 +90,7 @@ export const rehostImageNode: NodeDefinition<RehostImageConfig> = {
       bytes,
       contentType,
     );
-    ctx.log(`rehosted ${bytes.byteLength}B (${contentType}) -> ${url}`);
+    await ctx.log(`rehosted ${bytes.byteLength}B (${contentType}) -> ${url}`);
 
     return { type: "output", outputs: { url } };
   },

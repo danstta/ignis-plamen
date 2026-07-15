@@ -1,8 +1,14 @@
-import { and, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { workflowRuns, workflows } from "@/lib/db/schema";
+import { workflowRunLogs, workflowRuns, workflows } from "@/lib/db/schema";
 import type { WorkflowRun } from "@/lib/db/schema";
-import type { NodeOutputs, NodeRunState, RunLogEntry, RunStatus } from "./types";
+import type {
+  NodeOutputs,
+  NodeRunState,
+  RunLogEntry,
+  RunLogLevel,
+  RunStatus,
+} from "./types";
 
 export async function createRun(
   workflowId: string,
@@ -97,11 +103,47 @@ export async function listRunsWithWorkflow(
     .limit(opts.limit ?? 200);
 }
 
+/** Insert one log line. Idempotent under replay (see workflowRunLogs). */
+export async function appendRunLog(entry: {
+  runId: string;
+  nodeId: string;
+  visit: number;
+  seq: number;
+  level: RunLogLevel;
+  message: string;
+}): Promise<void> {
+  await db().insert(workflowRunLogs).values(entry).onConflictDoNothing();
+}
+
+/** All logs for a run, grouped per node in (visit, seq) order. */
+export async function getRunLogs(
+  runId: string,
+): Promise<Record<string, RunLogEntry[]>> {
+  const rows = await db()
+    .select()
+    .from(workflowRunLogs)
+    .where(eq(workflowRunLogs.runId, runId))
+    .orderBy(
+      asc(workflowRunLogs.nodeId),
+      asc(workflowRunLogs.visit),
+      asc(workflowRunLogs.seq),
+    );
+  const grouped: Record<string, RunLogEntry[]> = {};
+  for (const row of rows) {
+    (grouped[row.nodeId] ??= []).push({
+      id: `${row.visit}:${row.seq}`,
+      timestamp: row.createdAt.toISOString(),
+      level: row.level,
+      message: row.message,
+    });
+  }
+  return grouped;
+}
+
 export type RunStatePatch = Partial<{
   status: RunStatus;
   nodeOutputs: Record<string, NodeOutputs>;
   nodeStates: Record<string, NodeRunState>;
-  nodeLogs: Record<string, RunLogEntry[]>;
   waitingNodeId: string | null;
   resumeToken: string | null;
   error: string | null;

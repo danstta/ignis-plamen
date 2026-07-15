@@ -1,12 +1,21 @@
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { connections } from "@/lib/db/schema";
+import { openConfig, sealConfig } from "./crypto";
+
+type ConnectionRow = typeof connections.$inferSelect;
+
+/** Decrypt a row's config before it leaves the service (returns a new object). */
+function openRow(row: ConnectionRow): ConnectionRow {
+  return { ...row, config: openConfig(row.config ?? {}) };
+}
 
 export async function listConnections() {
-  return db()
+  const rows = await db()
     .select()
     .from(connections)
     .orderBy(desc(connections.createdAt));
+  return rows.map(openRow);
 }
 
 export async function getConnection(id: string) {
@@ -15,7 +24,7 @@ export async function getConnection(id: string) {
     .from(connections)
     .where(eq(connections.id, id))
     .limit(1);
-  return rows[0] ?? null;
+  return rows[0] ? openRow(rows[0]) : null;
 }
 
 export async function createConnection(input: {
@@ -25,9 +34,13 @@ export async function createConnection(input: {
 }) {
   const rows = await db()
     .insert(connections)
-    .values({ type: input.type, name: input.name, config: input.config ?? {} })
+    .values({
+      type: input.type,
+      name: input.name,
+      config: sealConfig(input.config ?? {}),
+    })
     .returning();
-  return rows[0];
+  return openRow(rows[0]);
 }
 
 export async function updateConnection(
@@ -36,10 +49,14 @@ export async function updateConnection(
 ) {
   const rows = await db()
     .update(connections)
-    .set(patch)
+    .set(
+      patch.config !== undefined
+        ? { ...patch, config: sealConfig(patch.config) }
+        : patch,
+    )
     .where(eq(connections.id, id))
     .returning();
-  return rows[0] ?? null;
+  return rows[0] ? openRow(rows[0]) : null;
 }
 
 /** Shallow-merge new values into a connection's stored config. */

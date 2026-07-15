@@ -149,7 +149,8 @@ export function AppSidebar({
     <aside
       data-collapsed={collapsed || undefined}
       className={cn(
-        "flex h-svh w-64 shrink-0 flex-col overflow-hidden border-r bg-sidebar text-sidebar-foreground",
+        // Hidden on small screens, where MobileNav provides navigation.
+        "hidden h-svh w-64 shrink-0 flex-col overflow-hidden border-r bg-sidebar text-sidebar-foreground md:flex",
         "transition-[width] duration-200 ease-in-out data-collapsed:w-14",
       )}
     >

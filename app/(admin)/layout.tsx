@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 
 import { AppSidebar } from "@/components/layout/app-sidebar";
+import { MobileNav } from "@/components/layout/mobile-nav";
 import { CommandPalette } from "@/components/command/command-palette";
 import { listAssets } from "@/lib/assets/service";
 import { listFolders } from "@/lib/folders/service";
@@ -78,7 +79,8 @@ export default async function AdminLayout({
         assets={assets}
         initialPrefs={sidebarPrefs}
       />
-      <main className="flex-1 overflow-auto p-8">{children}</main>
+      <main className="flex-1 overflow-auto p-8 max-md:pb-28">{children}</main>
+      <MobileNav />
       <CommandPalette
         templates={templates.map((t) => ({ id: t.id, name: t.name }))}
         workflows={workflows.map((w) => ({ id: w.id, name: w.name }))}

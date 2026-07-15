@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { CheckCircle2, FlaskConical, Play, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { getNodeMeta } from "@/lib/nodes/catalog";
+import { nodeDisplayLabel } from "@/lib/nodes/catalog";
 import { useWorkflowEditor } from "@/lib/workflows/store";
 import type { WorkflowGraph } from "@/lib/workflows/types";
 import type { WorkflowTestResult } from "@/lib/workflows/test-runner";
@@ -64,7 +64,7 @@ export function WorkflowTestDialog({
   const targetNodeId = initialTargetNodeId ?? selectedNodeId;
   const targetNode = nodes.find((n) => n.id === targetNodeId);
   const targetLabel = targetNode
-    ? (getNodeMeta(targetNode.type ?? "")?.label ?? targetNode.type)
+    ? nodeDisplayLabel({ type: targetNode.type ?? "", name: targetNode.data?.name })
     : null;
 
   const capturedSample = useMemo(() => {

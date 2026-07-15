@@ -172,6 +172,30 @@ export async function saveRunState(
   return rows[0] ?? null;
 }
 
+/**
+ * Persist a status-changing patch only when the run is still in one of
+ * `fromStatuses`. Returns the updated row, or null when the transition lost
+ * (e.g. a concurrent stopRun already landed) — callers must treat null as
+ * "the run is no longer mine to advance" and unwind quietly.
+ */
+export async function transitionRunState(
+  id: string,
+  fromStatuses: RunStatus[],
+  patch: RunStatePatch,
+): Promise<WorkflowRun | null> {
+  const rows = await db()
+    .update(workflowRuns)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(
+      and(
+        eq(workflowRuns.id, id),
+        inArray(workflowRuns.status, fromStatuses),
+      ),
+    )
+    .returning();
+  return rows[0] ?? null;
+}
+
 export async function stopRun(id: string): Promise<WorkflowRun | null> {
   const rows = await db()
     .update(workflowRuns)

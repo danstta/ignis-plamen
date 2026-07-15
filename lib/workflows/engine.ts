@@ -2,7 +2,13 @@ import { getNodeType } from "@/lib/nodes/registry";
 import { normalizeImageCandidates } from "@/lib/nodes/image-input";
 import { isNodeTypeEnabled } from "@/lib/plugins/service";
 import { getWorkflow } from "./service";
-import { appendRunLog, createRun, getRun, saveRunState } from "./runs-service";
+import {
+  appendRunLog,
+  createRun,
+  getRun,
+  saveRunState,
+  transitionRunState,
+} from "./runs-service";
 import {
   ELSE_BRANCH_ID,
   ROUTER_TYPE_ID,
@@ -268,7 +274,7 @@ async function execute(
     if (outcome.type === "error") {
       state.nodeStates[node.id] = "error";
       await step(visitStepId(node.id, "persist"), () =>
-        saveRunState(runId, {
+        transitionRunState(runId, ["running", "waiting"], {
           status: "error",
           nodeStates: state.nodeStates,
           error: outcome.error,
@@ -284,8 +290,10 @@ async function execute(
         ...outcome.state,
         reviewUrl: `/workflows/${run.workflowId}/runs/${runId}`,
       } as NodeOutputs;
+      // A null transition means a concurrent stop won while the node was
+      // pausing — either way the walk unwinds here.
       await step(visitStepId(node.id, "persist"), () =>
-        saveRunState(runId, {
+        transitionRunState(runId, ["running"], {
           status: "waiting",
           nodeStates: state.nodeStates,
           nodeOutputs: state.nodeOutputs,
@@ -398,9 +406,12 @@ async function execute(
     orderLane(trunkSteps(graph), graph.edges),
   );
   if (!finished) return;
-  if ((await currentRunStatus()) === "stopped") return;
 
-  await step("execute:finish", () => saveRunState(runId, { status: "success" }));
+  // Guarded transition: if a stop landed after the last node persisted, the
+  // update matches zero rows and the stop is preserved.
+  await step("execute:finish", () =>
+    transitionRunState(runId, ["running"], { status: "success" }),
+  );
 }
 
 /**
@@ -712,8 +723,8 @@ export async function resumeRun(
   );
   nodeStates[run.waitingNodeId] = "done";
 
-  await step("resume:apply-choice", () =>
-    saveRunState(runId, {
+  const resumed = await step("resume:apply-choice", () =>
+    transitionRunState(runId, ["waiting"], {
       status: "running",
       nodeOutputs,
       nodeStates,
@@ -721,6 +732,7 @@ export async function resumeRun(
       resumeToken: null,
     }),
   );
+  if (!resumed) throw new Error("Run is not awaiting input");
 
   await execute(runId, workflow.graph as WorkflowGraph, step);
 }

@@ -31,7 +31,7 @@ export const renderTemplateNode: NodeDefinition<RenderTemplateConfig> = {
     });
 
     const renderUrls = await renderTemplateToStorage(template, data);
-    ctx.log(`rendered ${renderUrls.length} page(s)`);
+    await ctx.log(`rendered ${renderUrls.length} page(s)`);
 
     return {
       type: "output",

@@ -361,7 +361,7 @@ async function execute(
             if (!redoTarget || redoDef?.category === "trigger") {
               state.nodeStates[node.id] = "error";
               await step(`router:${node.id}:redo-target-error`, () =>
-                saveRunState(runId, {
+                transitionRunState(runId, ["running", "waiting"], {
                   status: "error",
                   nodeStates: state.nodeStates,
                   error: "Router cannot redo because there is no previous non-trigger step.",
@@ -375,7 +375,7 @@ async function execute(
             if (redoCounts[key] > maxAttempts) {
               state.nodeStates[node.id] = "error";
               await step(`router:${node.id}:redo-limit:${chosen}`, () =>
-                saveRunState(runId, {
+                transitionRunState(runId, ["running", "waiting"], {
                   status: "error",
                   nodeStates: state.nodeStates,
                   error: `Router exceeded ${maxAttempts} redo attempt(s) for "${redoDef?.label ?? redoTarget.type}".`,
@@ -446,7 +446,7 @@ export async function startRun(
       : [];
     if (missing.length > 0) {
       await step("start:trigger-validation", () =>
-        saveRunState(run.id, {
+        transitionRunState(run.id, ["running"], {
           status: "error",
           nodeStates: { [triggerNodeId]: "error" },
           error: `Webhook payload is missing expected field(s): ${missing.join(", ")}`,

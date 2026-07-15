@@ -2,7 +2,7 @@ import { getNodeType } from "@/lib/nodes/registry";
 import { normalizeImageCandidates } from "@/lib/nodes/image-input";
 import { isNodeTypeEnabled } from "@/lib/plugins/service";
 import { getWorkflow } from "./service";
-import { createRun, getRun, saveRunState } from "./runs-service";
+import { appendRunLog, createRun, getRun, saveRunState } from "./runs-service";
 import {
   ELSE_BRANCH_ID,
   ROUTER_TYPE_ID,
@@ -22,7 +22,6 @@ import {
 import type {
   NodeOutputs,
   NodeRunState,
-  RunLogEntry,
   RunLogLevel,
   RunStatus,
   WorkflowGraph,
@@ -69,7 +68,6 @@ const inlineRunner: StepRunner = (_id, fn) => fn();
 type LocalState = {
   nodeOutputs: Record<string, NodeOutputs>;
   nodeStates: Record<string, NodeRunState>;
-  nodeLogs: Record<string, RunLogEntry[]>;
 };
 
 /**
@@ -103,11 +101,12 @@ async function execute(
   const state: LocalState = {
     nodeOutputs: { ...run.nodeOutputs },
     nodeStates: { ...run.nodeStates },
-    nodeLogs: { ...(run.nodeLogs ?? {}) },
   };
   const trigger = run.trigger ?? {};
   const nodeVisitCounts: Record<string, number> = {};
   const redoCounts: Record<string, number> = {};
+  /** Per-(node, visit) log entry counter — deterministic on replay. */
+  const logSeqCounts: Record<string, number> = {};
 
   const currentRunStatus = async (): Promise<RunStatus | null> => {
     const current = await getRun(runId);
@@ -126,26 +125,20 @@ async function execute(
       : `node:${nodeId}:${phase}:${visit}`;
   };
 
+  // Deliberately NOT step-wrapped: logNode is called from inside node `run()`
+  // steps (nested steps are forbidden). Replay safety comes from the insert
+  // being idempotent by its deterministic (runId, nodeId, visit, seq) key.
   const logNode = async (
     nodeId: string,
     message: string,
     level: RunLogLevel = "info",
   ) => {
-    const entry: RunLogEntry = {
-      id:
-        typeof crypto.randomUUID === "function"
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      timestamp: new Date().toISOString(),
-      level,
-      message,
-    };
-    state.nodeLogs[nodeId] = [...(state.nodeLogs[nodeId] ?? []), entry].slice(
-      -200,
-    );
     console.log(`[run ${runId}][${nodeId}] ${message}`);
+    const visit = nodeVisitCounts[nodeId] ?? 1;
+    const key = `${nodeId}:${visit}`;
+    const seq = (logSeqCounts[key] = (logSeqCounts[key] ?? 0) + 1);
     try {
-      await saveRunState(runId, { nodeLogs: state.nodeLogs });
+      await appendRunLog({ runId, nodeId, visit, seq, level, message });
     } catch (err) {
       console.warn(
         `[run ${runId}][${nodeId}] failed to persist log: ${
@@ -187,7 +180,6 @@ async function execute(
         await throwIfStopped();
         await saveRunState(runId, {
           nodeStates: state.nodeStates,
-          nodeLogs: state.nodeLogs,
         });
         return null;
       });
@@ -279,7 +271,6 @@ async function execute(
         saveRunState(runId, {
           status: "error",
           nodeStates: state.nodeStates,
-          nodeLogs: state.nodeLogs,
           error: outcome.error,
         }),
       );
@@ -298,7 +289,6 @@ async function execute(
           status: "waiting",
           nodeStates: state.nodeStates,
           nodeOutputs: state.nodeOutputs,
-          nodeLogs: state.nodeLogs,
           waitingNodeId: node.id,
           // Minted inside the step so the token is memoized with the write.
           resumeToken: crypto.randomUUID(),
@@ -313,7 +303,6 @@ async function execute(
       saveRunState(runId, {
         nodeStates: state.nodeStates,
         nodeOutputs: state.nodeOutputs,
-        nodeLogs: state.nodeLogs,
       }),
     );
     return "continue";

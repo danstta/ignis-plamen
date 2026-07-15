@@ -257,6 +257,41 @@ describe("guarded status transitions", () => {
   });
 });
 
+describe("hot-path reads", () => {
+  test("a stopped run aborts via the status-only probe before any node work", async () => {
+    graphs["wf-1"] = {
+      nodes: [node("a", "t-log")],
+      edges: [],
+    };
+    runRow.status = "stopped";
+
+    await startRun("wf-1", {});
+
+    expect(nodeRuns).toEqual([]);
+    expect(getRunStatusCalls).toBeGreaterThan(0);
+    // Full-row reads stay confined to the memoized execute:load-run step.
+    expect(getRunCalls).toBe(1);
+    expect(transitionCalls).toEqual([]);
+  });
+
+  test("a disabled node type errors without per-node plugin queries", async () => {
+    graphs["wf-1"] = {
+      nodes: [node("a", "t-log"), node("b", "t-log")],
+      edges: [{ id: "e1", source: "a", target: "b" }],
+    };
+    enabledTypes = new Set();
+
+    await startRun("wf-1", {});
+
+    expect(nodeRuns).toEqual([]);
+    const error = transitionCalls.filter((c) => c.patch.status === "error");
+    expect(error).toHaveLength(1);
+    expect(error[0].patch.error).toContain("belongs to a disabled plugin");
+    // The enabled set is loaded exactly once per execution.
+    expect(enabledSetLoads).toBe(1);
+  });
+});
+
 describe("log keys", () => {
   test("seq increases per node and restarts when the visit count increments", async () => {
     graphs["wf-1"] = {

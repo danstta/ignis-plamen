@@ -27,6 +27,6 @@ export const config = {
   // login page, Next internals, and any path with a file extension (static
   // assets, /uploads/*.png).
   matcher: [
-    "/((?!api/auth|api/editor-fonts|api/location-images|api/drive-images|api/drive-link-images|api/hooks|api/inngest|api/link-hub|login|_next|.*\\..*).*)",
+    "/((?!api/auth|api/editor-fonts|api/location-images|api/drive-images|api/hooks|api/inngest|api/link-hub|login|_next|.*\\..*).*)",
   ],
 };

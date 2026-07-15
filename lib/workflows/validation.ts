@@ -11,6 +11,9 @@ import type { WorkflowGraph } from "./types";
 const nodeSchema = z.object({
   id: z.string().min(1),
   type: z.string().min(1),
+  // Custom step name. Must be listed here (zod strips unknown keys) or renames
+  // would be silently lost on save.
+  name: z.string().min(1).max(200).optional(),
   position: z.object({ x: z.number(), y: z.number() }),
   config: z.record(z.string(), z.unknown()).default({}),
   // Control-flow placement: present only for steps inside a router branch lane.

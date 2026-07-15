@@ -1,3 +1,4 @@
+import { nodeDisplayLabel } from "@/lib/nodes/catalog";
 import { getNodeType } from "@/lib/nodes/registry";
 import { normalizeImageCandidates } from "@/lib/nodes/image-input";
 import { enabledNodeTypeIds } from "@/lib/plugins/service";
@@ -185,14 +186,14 @@ async function execute(
     if (!enabledNodeTypes.has(node.type)) {
       return {
         type: "error",
-        error: `Node "${def.label}" belongs to a disabled plugin`,
+        error: `Node "${nodeDisplayLabel(node)}" belongs to a disabled plugin`,
       };
     }
 
     try {
       state.nodeStates[node.id] = "running";
       await smallStep("start", async () => {
-        await logNode(node.id, `Started ${def.label}.`);
+        await logNode(node.id, `Started ${nodeDisplayLabel(node)}.`);
         await throwIfStopped();
         await saveRunState(runId, {
           nodeStates: state.nodeStates,
@@ -252,7 +253,7 @@ async function execute(
       });
       return {
         type: "error",
-        error: `${def.label}: ${message}`,
+        error: `${nodeDisplayLabel(node)}: ${message}`,
       };
     }
   };
@@ -388,7 +389,7 @@ async function execute(
                 transitionRunState(runId, ["running", "waiting"], {
                   status: "error",
                   nodeStates: state.nodeStates,
-                  error: `Router exceeded ${maxAttempts} redo attempt(s) for "${redoDef?.label ?? redoTarget.type}".`,
+                  error: `Router exceeded ${maxAttempts} redo attempt(s) for "${nodeDisplayLabel(redoTarget)}".`,
                 }),
               );
               return false;

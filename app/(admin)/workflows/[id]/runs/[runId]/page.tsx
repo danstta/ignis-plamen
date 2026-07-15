@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, ChevronDown } from "lucide-react";
 import { getRun, getRunLogs } from "@/lib/workflows/runs-service";
 import { getWorkflow } from "@/lib/workflows/service";
-import { getNodeType } from "@/lib/nodes/registry";
+import { nodeDisplayLabel } from "@/lib/nodes/catalog";
 import { browserPreviewUrlForImageUrl } from "@/lib/nodes/image-input";
 import { formatRelativeTime } from "@/lib/format";
 import type { WorkflowGraph } from "@/lib/workflows/types";
@@ -99,7 +99,7 @@ function findChosenImage(
     const out = outputs[node.id];
     if (!out) continue;
 
-    const source = getNodeType(node.type)?.label ?? node.type;
+    const source = nodeDisplayLabel(node);
     const chosen =
       cleanUrl(out.chosen) ??
       (isRecord(out.chosenDesign) ? cleanUrl(out.chosenDesign.url) : undefined);
@@ -469,7 +469,7 @@ export default async function RunDetailPage({
         </div>
         <div className="flex flex-col gap-2">
           {graph.nodes.map((n) => {
-            const def = getNodeType(n.type);
+            const label = nodeDisplayLabel(n);
             const state = run.nodeStates[n.id] ?? "pending";
             const outputs = run.nodeOutputs[n.id];
             // Prefer the log table; fall back to jsonb for historical runs.
@@ -477,7 +477,7 @@ export default async function RunDetailPage({
             return (
               <RunNodeCard
                 key={n.id}
-                nodeLabel={def?.label ?? n.type}
+                nodeLabel={label}
                 state={state}
                 logs={logs}
                 isLlmNode={n.type === "llm-prompt"}

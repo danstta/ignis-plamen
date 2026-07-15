@@ -1,3 +1,4 @@
+import { nodeDisplayLabel } from "@/lib/nodes/catalog";
 import { getNodeType } from "@/lib/nodes/registry";
 import { isNodeTypeEnabled } from "@/lib/plugins/service";
 import { ELSE_BRANCH_ID, ROUTER_TYPE_ID, branchSteps, orderLane, trunkSteps } from "./control-flow";
@@ -35,11 +36,10 @@ function formatError(error: unknown): string {
 }
 
 function resultFor(node: WorkflowNode, status: TestNodeStatus): TestNodeResult {
-  const def = getNodeType(node.type);
   return {
     nodeId: node.id,
     type: node.type,
-    label: def?.label ?? node.type,
+    label: nodeDisplayLabel(node),
     status,
   };
 }
@@ -63,7 +63,7 @@ async function runNode(
   if (!(await isNodeTypeEnabled(node.type))) {
     state.results.push({
       ...resultFor(node, "error"),
-      error: `Node "${def.label}" belongs to a disabled plugin`,
+      error: `Node "${nodeDisplayLabel(node)}" belongs to a disabled plugin`,
     });
     return "stop";
   }
@@ -105,7 +105,7 @@ async function runNode(
     state.results.push({
       ...resultFor(node, "error"),
       inputs,
-      error: `${def.label}: ${formatError(error)}`,
+      error: `${nodeDisplayLabel(node)}: ${formatError(error)}`,
     });
     return "stop";
   }

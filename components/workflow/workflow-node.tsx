@@ -63,6 +63,7 @@ function WorkflowNodeImpl({ id, type, selected, data }: NodeProps) {
   }
 
   const d = data as WfNodeData;
+  const customName = d.name?.trim();
   const isTrigger = def.category === "trigger";
   const isRouter = type === ROUTER_TYPE_ID;
   const stepLabel = d.stepLabel ?? (d.step !== undefined ? String(d.step) : "?");
@@ -132,11 +133,12 @@ function WorkflowNodeImpl({ id, type, selected, data }: NodeProps) {
           <div className="min-w-0">
             <span className="flex items-center gap-1.5 truncate text-sm font-medium">
               {isRouter ? <GitBranch className="size-3.5 shrink-0" /> : null}
-              <span className="truncate">{def.label}</span>
+              <span className="truncate">{customName || def.label}</span>
             </span>
-            {isTrigger ? (
-              <span className="block text-[11px] text-muted-foreground">
-                Trigger
+            {/* A renamed step keeps its type visible as a subtitle. */}
+            {customName || isTrigger ? (
+              <span className="block truncate text-[11px] text-muted-foreground">
+                {customName ? def.label : "Trigger"}
               </span>
             ) : null}
           </div>

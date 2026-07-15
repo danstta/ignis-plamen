@@ -20,13 +20,15 @@ import { laneNodes, layoutNodes } from "./editor-structure";
 import type { BranchRef, WorkflowGraph, WorkflowNode } from "./types";
 
 /**
- * xyflow node data. `config` + `branch` are persisted (the type id lives on
- * node.type); `step`/`laneFirst`/`laneLast` are transient view fields recomputed
- * by {@link layoutNodes} on every structural change and never saved.
+ * xyflow node data. `config` + `branch` + `name` are persisted (the type id
+ * lives on node.type); `step`/`laneFirst`/`laneLast` are transient view fields
+ * recomputed by {@link layoutNodes} on every structural change and never saved.
  */
 export type WfNodeData = {
   config: Record<string, unknown>;
   branch?: BranchRef;
+  /** User-chosen step name; blank/absent = display the node type's label. */
+  name?: string;
   step?: number;
   stepLabel?: string;
   laneFirst?: boolean;
@@ -124,6 +126,8 @@ interface WorkflowEditorState {
   /** Reorder a step one slot up/down within its own lane; the trigger is pinned. */
   moveNode: (id: string, direction: "up" | "down") => void;
   updateNodeConfig: (nodeId: string, config: Record<string, unknown>) => void;
+  /** Rename a step. A blank name reverts to the node type's label. */
+  setNodeName: (nodeId: string, name: string) => void;
   /** Map an upstream output port into an input port (replaces any existing edge there). */
   setInputEdge: (
     target: string,
@@ -165,7 +169,7 @@ function graphToFlow(graph: WorkflowGraph): { nodes: WfNode[]; edges: Edge[] } {
       id: n.id,
       type: n.type,
       position: n.position,
-      data: { config: n.config, branch: n.branch },
+      data: { config: n.config, branch: n.branch, name: n.name },
     })),
     edges: graph.edges.map((e) =>
       presentEdge({
@@ -316,6 +320,14 @@ export const useWorkflowEditor = create<WorkflowEditorState>((set, get) => ({
       return { nodes: layoutNodes(next), dirty: true };
     }),
 
+  setNodeName: (nodeId, name) =>
+    set((s) => ({
+      nodes: s.nodes.map((n) =>
+        n.id === nodeId ? { ...n, data: { ...n.data, name } } : n,
+      ),
+      dirty: true,
+    })),
+
   updateNodeConfig: (nodeId, config) =>
     set((s) => {
       const sourceNode = s.nodes.find((n) => n.id === nodeId);
@@ -391,13 +403,18 @@ export const useWorkflowEditor = create<WorkflowEditorState>((set, get) => ({
   toGraph: () => {
     const { nodes, edges } = get();
     return {
-      nodes: nodes.map((n) => ({
-        id: n.id,
-        type: n.type ?? "",
-        position: n.position,
-        config: n.data?.config ?? {},
-        ...(n.data?.branch ? { branch: n.data.branch } : {}),
-      })),
+      nodes: nodes.map((n) => {
+        // Persist the trimmed name; a blank rename reverts to the type label.
+        const name = n.data?.name?.trim();
+        return {
+          id: n.id,
+          type: n.type ?? "",
+          position: n.position,
+          config: n.data?.config ?? {},
+          ...(n.data?.branch ? { branch: n.data.branch } : {}),
+          ...(name ? { name } : {}),
+        };
+      }),
       edges: edges.map((e) => ({
         id: e.id,
         source: e.source,

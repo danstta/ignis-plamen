@@ -14,6 +14,8 @@ export interface BranchRef {
 export interface WorkflowNode {
   id: string;
   type: string;
+  /** User-chosen step name. Absent = display the node type's label. */
+  name?: string;
   position: { x: number; y: number };
   /** Per-node configuration, validated by the node type's configSchema at run time. */
   config: Record<string, unknown>;

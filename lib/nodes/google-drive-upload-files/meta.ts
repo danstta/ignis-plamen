@@ -20,6 +20,7 @@ export const googleDriveUploadFilesMeta: NodeMeta<GoogleDriveUploadFilesConfig> 
   description:
     "Uploads one or more files to a Google Drive folder from file URLs or upstream outputs.",
   category: "output",
+  group: "google-drive",
   inputs: [{ id: "files", label: "Files", kind: "data" }],
   outputs: [
     { id: "files", label: "Uploaded files", kind: "data" },

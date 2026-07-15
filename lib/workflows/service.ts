@@ -14,6 +14,7 @@ export async function listWorkflows() {
     .select({
       id: workflows.id,
       name: workflows.name,
+      folderId: workflows.folderId,
       active: workflows.active,
       updatedAt: workflows.updatedAt,
     })

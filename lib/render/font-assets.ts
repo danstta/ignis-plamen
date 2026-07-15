@@ -8,6 +8,20 @@ export const FONT_SUBSET_RANGES: Record<string, string> = {
   "cyrillic-ext": "U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F",
 };
 
+const FONT_SUBSET_LABELS: Record<string, string> = {
+  latin: "Latin",
+  "latin-ext": "Latin Extended",
+  cyrillic: "Cyrillic",
+  "cyrillic-ext": "Cyrillic Extended",
+};
+
+export function fontSourceSubsetFamily(
+  def: Pick<Extract<FontDef, { kind: "fontsource" }>, "family">,
+  subset: string,
+): string {
+  return `${def.family} ${FONT_SUBSET_LABELS[subset] ?? subset}`;
+}
+
 export function fontSourceFaceUrl(
   def: Extract<FontDef, { kind: "fontsource" }>,
   subset: string,
@@ -36,6 +50,31 @@ function cssString(value: string): string {
   return JSON.stringify(value);
 }
 
+function fontFaceCss({
+  family,
+  weight,
+  src,
+  format,
+  range,
+}: {
+  family: string;
+  weight: FontWeight;
+  src: string;
+  format?: string | null;
+  range?: string;
+}): string {
+  return [
+    "@font-face {",
+    `  font-family: ${cssString(family)};`,
+    "  font-style: normal;",
+    `  font-weight: ${weight};`,
+    "  font-display: swap;",
+    `  src: url(${cssString(src)})${format ? ` format("${format}")` : ""};`,
+    ...(range ? [`  unicode-range: ${range};`] : []),
+    "}",
+  ].join("\n");
+}
+
 export function buildEditorFontCss(fonts: Record<string, FontDef>): string {
   const chunks: string[] = [
     "/* Generated from lib/render/font-registry.ts. */",
@@ -46,32 +85,34 @@ export function buildEditorFontCss(fonts: Record<string, FontDef>): string {
       if (def.kind === "fontsource") {
         for (const subset of def.subsets) {
           const range = FONT_SUBSET_RANGES[subset];
+          const route = editorFontRoute(def.family, weight, subset);
           chunks.push(
-            [
-              "@font-face {",
-              `  font-family: ${cssString(def.family)};`,
-              "  font-style: normal;",
-              `  font-weight: ${weight};`,
-              "  font-display: swap;",
-              `  src: url(${cssString(editorFontRoute(def.family, weight, subset))}) format("woff");`,
-              ...(range ? [`  unicode-range: ${range};`] : []),
-              "}",
-            ].join("\n"),
+            fontFaceCss({
+              family: def.family,
+              weight,
+              src: route,
+              format: "woff",
+              range,
+            }),
+            fontFaceCss({
+              family: fontSourceSubsetFamily(def, subset),
+              weight,
+              src: route,
+              format: "woff",
+              range,
+            }),
           );
         }
       } else {
         const file = def.file(weight);
         const format = fontFormat(file);
         chunks.push(
-          [
-            "@font-face {",
-            `  font-family: ${cssString(def.family)};`,
-            "  font-style: normal;",
-            `  font-weight: ${weight};`,
-            "  font-display: swap;",
-            `  src: url(${cssString(editorFontRoute(def.family, weight, "local"))})${format ? ` format("${format}")` : ""};`,
-            "}",
-          ].join("\n"),
+          fontFaceCss({
+            family: def.family,
+            weight,
+            src: editorFontRoute(def.family, weight, "local"),
+            format,
+          }),
         );
       }
     }

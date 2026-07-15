@@ -32,6 +32,7 @@ export const webhookMeta: NodeMeta<WebhookConfig> = {
   description:
     "Starts the workflow when data is POSTed to its URL, exposing the request body, headers, and query to downstream nodes.",
   category: "trigger",
+  group: "trigger",
   inputs: [],
   outputs: [
     { id: "body", label: "Body", kind: "data" },

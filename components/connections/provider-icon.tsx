@@ -10,6 +10,9 @@ import {
   Notion,
   OpenAIDark,
   OpenAILight,
+  Supabase,
+  VercelDark,
+  VercelLight,
 } from "@ridemountainpig/svgl-react";
 import type { ComponentType, SVGProps } from "react";
 import { cn } from "@/lib/utils";
@@ -38,6 +41,7 @@ const ICONS: Record<string, IconComponent> = {
   notion: Notion,
   "google-drive": GoogleDrive,
   "azure-foundry": MicrosoftAzure,
+  supabase: Supabase,
 };
 
 /**
@@ -66,6 +70,16 @@ export function ProviderIcon({
       <ThemedSvglIcon
         light={AnthropicLight}
         dark={AnthropicDark}
+        className={className}
+      />
+    );
+  }
+
+  if (type === "vercel") {
+    return (
+      <ThemedSvglIcon
+        light={VercelLight}
+        dark={VercelDark}
         className={className}
       />
     );

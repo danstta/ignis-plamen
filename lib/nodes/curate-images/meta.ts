@@ -17,11 +17,12 @@ export const curateImagesMeta: NodeMeta<CurateImagesConfig> = {
   id: CURATE_IMAGES_TYPE_ID,
   label: "Curate Images",
   description:
-    "Pauses so you can swap similar ranked images with alternates before continuing.",
+    "Pauses so you can swap similar images with alternates before continuing.",
   category: "control",
-  inputs: [{ id: "ranked", label: "Ranked images", kind: "data" }],
+  group: "media",
+  inputs: [{ id: "ranked", label: "Images", kind: "data" }],
   outputs: [
-    { id: "ranked", label: "Curated ranked images", kind: "data" },
+    { id: "ranked", label: "Curated images", kind: "data" },
     { id: "selected", label: "Selected images", kind: "data" },
     { id: "selectedUrls", label: "Selected image URLs", kind: "data" },
     { id: "templateData", label: "Template preview data", kind: "data" },

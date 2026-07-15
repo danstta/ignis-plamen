@@ -19,6 +19,7 @@ export const rehostImageMeta: NodeMeta<RehostImageConfig> = {
   description:
     "Copies an image from an expiring URL (e.g. a Notion file) into permanent storage, so a later step can't break when the source link expires.",
   category: "transform",
+  group: "media",
   inputs: [],
   // Stable, permanent URL. Bind a downstream image placeholder to
   // `{{<thisNodeId>.url}}` instead of the raw (expiring) source token.

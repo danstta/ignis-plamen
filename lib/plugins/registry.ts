@@ -18,6 +18,7 @@ const definitions: PluginDefinition[] = [
       "curate-images",
       "render-template",
       "render-template-batch",
+      "preview-design-image",
       "review-designs",
       "run-link",
     ],
@@ -34,22 +35,25 @@ const definitions: PluginDefinition[] = [
     id: "ai",
     name: "AI",
     description: "Calls configured AI model connections from workflows.",
-    nodeTypeIds: ["llm-prompt"],
+    nodeTypeIds: ["llm-prompt", "categorize-images"],
     defaultEnabled: true,
   },
   {
     id: "notion",
     name: "Notion",
     description:
-      "Updates Notion pages from webhook payloads and previous workflow steps.",
-    nodeTypeIds: ["notion-update-page"],
+      "Updates Notion pages and syncs Notion payloads into public Link Hub rows.",
+    nodeTypeIds: ["notion-update-page", "link-hub-supabase-sync"],
     defaultEnabled: true,
   },
   {
     id: "google-drive",
     name: "Google Drive",
     description: "Reads and writes Google Drive folders and files from workflows.",
-    nodeTypeIds: ["google-drive-list-images", "google-drive-upload-files"],
+    nodeTypeIds: [
+      "google-drive-list-images",
+      "google-drive-upload-files",
+    ],
     defaultEnabled: true,
   },
 ];

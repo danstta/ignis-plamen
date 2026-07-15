@@ -17,9 +17,11 @@ export const rankImagesConfigSchema = z.object({
   criteria: z
     .string()
     .default(
-      "Pick the best poster hero image for a youth exchange call. Prefer polished travel/destination photos: wide landscape or aerial city views, recognizable landmarks, waterfronts, mountains, old towns, castles, churches, plazas, gardens, or scenic architecture. Favor bright daylight, blue sky, vivid natural color, strong depth, clean composition, and enough open space for overlay text. Avoid dark interiors, close-up details, random people, cars as the subject, low-resolution/archive-looking images, screenshots, logos, watermarks, text in the photo, awkward crops, and dull or cluttered street snapshots.",
+      "Rate how strong each image is for the intended design or automation output. Prefer clear, high-quality, relevant images with strong composition, good lighting, useful subject framing, and no distracting text, watermarks, awkward crops, or low-resolution artifacts.",
     ),
-  selectionCount: z.coerce.number().int().min(1).max(50).default(5),
+  imagesPerCall: z.coerce.number().int().min(1).max(6).default(2),
+  concurrentCalls: z.coerce.number().int().min(1).max(4).default(1),
+  maxImages: z.coerce.number().int().min(1).max(500).default(100),
 });
 
 export type RankImagesConfig = z.infer<typeof rankImagesConfigSchema>;
@@ -27,17 +29,19 @@ export type RankImagesConfig = z.infer<typeof rankImagesConfigSchema>;
 export const rankImagesMeta: NodeMeta<RankImagesConfig> = {
   id: RANK_IMAGES_TYPE_ID,
   label: "Rank Images",
-  description: "Ranks candidate photos with GPT vision against your criteria.",
+  description:
+    "Rates supported public image URLs with vision and returns them sorted best-first.",
   category: "transform",
-  inputs: [
-    { id: "candidates", label: "Candidates", kind: "data" },
-    { id: "location", label: "Location", kind: "text" },
-  ],
+  group: "ai",
+  inputs: [{ id: "candidates", label: "Images", kind: "data" }],
   outputs: [
     { id: "ranked", label: "Ranked images", kind: "data" },
-    { id: "selected", label: "Selected ranked images", kind: "data" },
-    { id: "selectedUrls", label: "Selected image URLs", kind: "data" },
+    { id: "rankedUrls", label: "Ranked image URLs", kind: "data" },
+    { id: "scores", label: "Image scores", kind: "data" },
+    { id: "skipped", label: "Skipped images", kind: "data" },
     { id: "best", label: "Best image", kind: "image" },
+    { id: "count", label: "Count", kind: "data" },
+    { id: "skippedCount", label: "Skipped count", kind: "data" },
   ],
   configFields: [
     {
@@ -45,7 +49,7 @@ export const rankImagesMeta: NodeMeta<RankImagesConfig> = {
       label: "AI connection",
       type: "connection",
       connectionTypes: ["openai", "azure-foundry"],
-      help: "Choose an OpenAI or Azure AI Foundry connection.",
+      help: "Choose an OpenAI or Azure AI Foundry connection with a vision-capable model.",
     },
     {
       name: "model",
@@ -59,14 +63,28 @@ export const rankImagesMeta: NodeMeta<RankImagesConfig> = {
       name: "criteria",
       label: "Ranking criteria",
       type: "textarea",
-      help: "What makes a good image for this post.",
+      help: "Describe what makes one image better than another for this workflow.",
     },
     {
-      name: "selectionCount",
-      label: "Images to expose",
+      name: "imagesPerCall",
+      label: "Images per LLM call",
       type: "number",
-      placeholder: "5",
-      help: "Makes the first N ranked images available as Selected ranked images and Selected image URLs.",
+      placeholder: "2",
+      help: "Each batch creates one durable vision call. Unsupported formats are skipped before the model is called.",
+    },
+    {
+      name: "concurrentCalls",
+      label: "LLM calls at once",
+      type: "number",
+      placeholder: "1",
+      help: "Controls how many rating calls run in parallel. 1 or 2 is safest for rate limits.",
+    },
+    {
+      name: "maxImages",
+      label: "Max images",
+      type: "number",
+      placeholder: "100",
+      help: "Caps the number of incoming images this node will rate in one run.",
     },
   ],
   configSchema: rankImagesConfigSchema,

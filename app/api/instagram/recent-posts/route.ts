@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import {
   fetchInstagramRecentPosts,
+  InstagramPreviewError,
   normalizeInstagramUsername,
 } from "@/lib/instagram/recent-posts";
 
@@ -22,9 +23,10 @@ export async function GET(request: NextRequest) {
     const posts = await fetchInstagramRecentPosts(username);
     return NextResponse.json({ username, posts });
   } catch (error) {
+    const status = error instanceof InstagramPreviewError ? error.status : 502;
     return NextResponse.json(
       { error: error instanceof Error ? error.message : String(error) },
-      { status: 502 },
+      { status },
     );
   }
 }

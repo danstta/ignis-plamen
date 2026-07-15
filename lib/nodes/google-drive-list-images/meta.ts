@@ -7,6 +7,7 @@ export const googleDriveListImagesConfigSchema = z.object({
   connectionId: z.string().default(""),
   folder: z.string().default(""),
   maxImages: z.coerce.number().int().min(1).max(1000).default(100),
+  selectionCount: z.coerce.number().int().min(1).max(50).default(5),
 });
 
 export type GoogleDriveListImagesConfig = z.infer<
@@ -18,10 +19,13 @@ export const googleDriveListImagesMeta: NodeMeta<GoogleDriveListImagesConfig> = 
   label: "List Drive Images",
   description: "Lists image files inside a Google Drive folder and its subfolders.",
   category: "source",
+  group: "google-drive",
   inputs: [],
   outputs: [
     { id: "links", label: "Image links", kind: "data" },
     { id: "directLinks", label: "Direct links", kind: "data" },
+    { id: "selected", label: "Selected images", kind: "data" },
+    { id: "selectedUrls", label: "Selected image URLs", kind: "data" },
     { id: "firstLink", label: "First image link", kind: "text" },
     { id: "firstDirectLink", label: "First direct image", kind: "image" },
     { id: "images", label: "Images", kind: "data" },
@@ -48,6 +52,13 @@ export const googleDriveListImagesMeta: NodeMeta<GoogleDriveListImagesConfig> = 
       type: "number",
       placeholder: "100",
       help: "Caps how many image files this node returns from the folder tree.",
+    },
+    {
+      name: "selectionCount",
+      label: "Images to expose",
+      type: "number",
+      placeholder: "5",
+      help: "Makes the first N Drive images available as Selected images and Selected image URLs.",
     },
   ],
   configSchema: googleDriveListImagesConfigSchema,

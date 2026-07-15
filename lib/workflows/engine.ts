@@ -1,5 +1,6 @@
 import { nodeDisplayLabel } from "@/lib/nodes/catalog";
 import { getNodeType } from "@/lib/nodes/registry";
+import { normalizeImageCandidates } from "@/lib/nodes/image-input";
 import { isNodeTypeEnabled } from "@/lib/plugins/service";
 import { getWorkflow } from "./service";
 import { createRun, getRun, saveRunState } from "./runs-service";
@@ -12,15 +13,27 @@ import {
 } from "./control-flow";
 import { resolveInputs } from "./input-resolution";
 import { resolveReferences, validateLockedPaths } from "./references";
+import {
+  isPlaceholderImageValue,
+  placeholderValueToText,
+  type PlaceholderData,
+  type PlaceholderImageValue,
+  type PlaceholderValue,
+} from "@/lib/editor/types";
 import type {
   NodeOutputs,
   NodeRunState,
   RunLogEntry,
   RunLogLevel,
+  RunStatus,
   WorkflowGraph,
   WorkflowNode,
 } from "./types";
-import type { NodeRunContext, RunResult } from "@/lib/nodes/types";
+import type {
+  NodeRunContext,
+  NodeStepRunner,
+  RunResult,
+} from "@/lib/nodes/types";
 
 /**
  * Workflow execution engine.
@@ -69,7 +82,14 @@ type LocalState = {
 type NodeOutcome =
   | { type: "output"; outputs: NodeOutputs }
   | { type: "pause"; state: Record<string, unknown> }
+  | { type: "stopped" }
   | { type: "error"; error: string };
+
+class RunStoppedError extends Error {
+  constructor() {
+    super("Run stopped");
+  }
+}
 
 async function execute(
   runId: string,
@@ -89,6 +109,16 @@ async function execute(
   const trigger = run.trigger ?? {};
   const nodeVisitCounts: Record<string, number> = {};
   const redoCounts: Record<string, number> = {};
+
+  const currentRunStatus = async (): Promise<RunStatus | null> => {
+    const current = await getRun(runId);
+    return current?.status ?? null;
+  };
+
+  const isStopped = async () => (await currentRunStatus()) === "stopped";
+  const throwIfStopped = async () => {
+    if (await isStopped()) throw new RunStoppedError();
+  };
 
   const visitStepId = (nodeId: string, phase: "run" | "persist") => {
     const visit = nodeVisitCounts[nodeId] ?? 1;
@@ -131,70 +161,119 @@ async function execute(
   // outcome. Splitting this from the persist below means the common transient
   // failure (the DB write) retries only the cheap persist, while the blob/
   // OpenAI work stays memoized and is never re-run.
-  const runNode = (node: WorkflowNode) => {
-    nodeVisitCounts[node.id] = (nodeVisitCounts[node.id] ?? 0) + 1;
-    return step(visitStepId(node.id, "run"), async (): Promise<NodeOutcome> => {
-      const def = getNodeType(node.type);
-      if (!def) {
-        return { type: "error", error: `Unknown node type: ${node.type}` };
-      }
+  const cleanStepSegment = (value: string) =>
+    value.replace(/[^a-zA-Z0-9:._-]/g, "_").slice(0, 160);
 
-      // A disabled plugin neutralizes its nodes, even mid-workflow.
-      if (!(await isNodeTypeEnabled(node.type))) {
-        return {
-          type: "error",
-          error: `Node "${nodeDisplayLabel(node)}" belongs to a disabled plugin`,
-        };
-      }
+  const runNodeWork = async (
+    node: WorkflowNode,
+    substep?: NodeStepRunner,
+  ): Promise<NodeOutcome> => {
+    const smallStep: NodeStepRunner = substep ?? ((_id, fn) => fn());
+    const def = getNodeType(node.type);
+    if (!def) {
+      return { type: "error", error: `Unknown node type: ${node.type}` };
+    }
 
-      try {
-        state.nodeStates[node.id] = "running";
+    if (!(await isNodeTypeEnabled(node.type))) {
+      return {
+        type: "error",
+        error: `Node "${nodeDisplayLabel(node)}" belongs to a disabled plugin`,
+      };
+    }
+
+    try {
+      state.nodeStates[node.id] = "running";
+      await smallStep("start", async () => {
         await logNode(node.id, `Started ${nodeDisplayLabel(node)}.`);
+        await throwIfStopped();
         await saveRunState(runId, {
           nodeStates: state.nodeStates,
           nodeLogs: state.nodeLogs,
         });
+        return null;
+      });
 
-        // Substitute {{nodeId.path}} references from upstream outputs, then validate.
+      await smallStep("resolve", async () => {
         await logNode(node.id, "Resolving inputs and validating configuration.");
-        const resolvedConfig = resolveReferences(
-          node.config,
-          state.nodeOutputs,
-          trigger,
-        );
-        const config = def.configSchema.parse(resolvedConfig);
-        const ctx: NodeRunContext = {
-          config,
-          inputs: resolveInputs(graph, node.id, state.nodeOutputs),
-          trigger,
-          runId,
-          log: (msg) => logNode(node.id, msg),
-        };
-        const result: RunResult = await def.run(ctx);
+        await throwIfStopped();
+        return null;
+      });
+      const resolvedConfig = resolveReferences(
+        node.config,
+        state.nodeOutputs,
+        trigger,
+      );
+      const config = def.configSchema.parse(resolvedConfig);
+      const ctx: NodeRunContext = {
+        nodeId: node.id,
+        config,
+        rawConfig: node.config,
+        inputs: resolveInputs(graph, node.id, state.nodeOutputs),
+        trigger,
+        runId,
+        log: (msg) => logNode(node.id, msg),
+        isStopped,
+        throwIfStopped,
+        step: substep,
+      };
+      const result: RunResult = await def.run(ctx);
+      await throwIfStopped();
+      await smallStep("complete", async () => {
         await logNode(
           node.id,
           result.type === "pause"
             ? "Paused for human input."
             : "Completed successfully.",
         );
-        return result.type === "pause"
-          ? { type: "pause", state: result.state }
-          : { type: "output", outputs: result.outputs };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        await logNode(node.id, message, "error");
-        return {
-          type: "error",
-          error: `${nodeDisplayLabel(node)}: ${message}`,
-        };
+        return null;
+      });
+      return result.type === "pause"
+        ? { type: "pause", state: result.state }
+        : { type: "output", outputs: result.outputs };
+    } catch (err) {
+      if (err instanceof RunStoppedError) {
+        await smallStep("stopped", async () => {
+          await logNode(node.id, "Stopped by user.");
+          return null;
+        });
+        return { type: "stopped" };
       }
-    });
+      const message = err instanceof Error ? err.message : String(err);
+      await smallStep("error", async () => {
+        await logNode(node.id, message, "error");
+        return null;
+      });
+      return {
+        type: "error",
+        error: `${nodeDisplayLabel(node)}: ${message}`,
+      };
+    }
+  };
+
+  const runNode = (node: WorkflowNode) => {
+    nodeVisitCounts[node.id] = (nodeVisitCounts[node.id] ?? 0) + 1;
+    const def = getNodeType(node.type);
+    const runStepId = visitStepId(node.id, "run");
+    if (def?.usesDurableSteps) {
+      const substep: NodeStepRunner = (id, fn) =>
+        step(`${runStepId}:sub:${cleanStepSegment(id)}`, fn);
+      return runNodeWork(node, substep);
+    }
+    return step(runStepId, () => runNodeWork(node));
   };
 
   const persistNodeOutcome = async (
     node: WorkflowNode,
     outcome: NodeOutcome,
   ): Promise<"continue" | "stop"> => {
+    if ((await currentRunStatus()) === "stopped") {
+      return "stop";
+    }
+
+    if (outcome.type === "stopped") {
+      return "stop";
+    }
+
     if (outcome.type === "error") {
       state.nodeStates[node.id] = "error";
       await step(visitStepId(node.id, "persist"), () =>
@@ -245,6 +324,9 @@ async function execute(
     node: WorkflowNode,
     options: { force?: boolean } = {},
   ): Promise<"continue" | "stop"> => {
+    if ((await currentRunStatus()) === "stopped") {
+      return "stop";
+    }
     if (!options.force && state.nodeStates[node.id] === "done") {
       return "continue";
     }
@@ -328,6 +410,7 @@ async function execute(
     orderLane(trunkSteps(graph), graph.edges),
   );
   if (!finished) return;
+  if ((await currentRunStatus()) === "stopped") return;
 
   await step("execute:finish", () => saveRunState(runId, { status: "success" }));
 }
@@ -385,16 +468,14 @@ export async function startRun(
 
 type ResumeChoice =
   | { choiceUrl: string }
-  | { selectedUrls: string[] };
+  | { selectedUrls: string[] }
+  | { selectedImages: SelectedImageChoice[] };
 
-function isImageRecord(value: unknown): value is { url: string } {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    "url" in value &&
-    typeof value.url === "string"
-  );
-}
+type SelectedImageChoice = {
+  url: string;
+  objectPosition?: string;
+  scale?: number;
+};
 
 function isPlaceholderRecord(
   value: unknown,
@@ -419,9 +500,74 @@ function valueToOutputText(value: unknown): string {
   return JSON.stringify(value);
 }
 
+function valueForImagePlaceholder(value: unknown): PlaceholderValue {
+  if (isPlaceholderImageValue(value)) return value;
+  if (typeof value === "string") return value;
+  return value !== undefined && value !== "" ? valueToOutputText(value) : "";
+}
+
+function valueForTextPlaceholder(value: unknown): string {
+  if (isPlaceholderImageValue(value) || typeof value === "string") {
+    return placeholderValueToText(value);
+  }
+  return value !== undefined && value !== "" ? valueToOutputText(value) : "";
+}
+
+function normalizeImageScale(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  return Math.min(4, Math.max(1, value));
+}
+
+function imageChoiceToPlaceholderValue(
+  choice: SelectedImageChoice | undefined,
+): PlaceholderValue {
+  if (!choice?.url) return "";
+  const scale = normalizeImageScale(choice.scale);
+  const objectPosition = choice.objectPosition?.trim();
+  const hasCustomPosition =
+    !!objectPosition && objectPosition !== "center center";
+  const hasCustomScale = scale !== undefined && scale !== 1;
+  if (!hasCustomPosition && !hasCustomScale) return choice.url;
+
+  const value: PlaceholderImageValue = { url: choice.url };
+  if (hasCustomPosition) value.objectPosition = objectPosition;
+  if (hasCustomScale) value.scale = scale;
+  return value;
+}
+
 function templateDataForCuratedImages(
   pausedState: NodeOutputs | undefined,
-  selectedUrls: string[],
+  selectedImages: SelectedImageChoice[],
+): PlaceholderData {
+  const placeholders = Array.isArray(pausedState?.previewPlaceholders)
+    ? pausedState.previewPlaceholders.filter(isPlaceholderRecord)
+    : [];
+  const bindings =
+    pausedState?.previewBindings &&
+    typeof pausedState.previewBindings === "object" &&
+    !Array.isArray(pausedState.previewBindings)
+      ? (pausedState.previewBindings as Record<string, unknown>)
+      : {};
+  const data: PlaceholderData = {};
+  let imageIndex = 0;
+
+  for (const placeholder of placeholders) {
+    const bound = bindings[placeholder.key];
+    if (placeholder.kind === "image") {
+      const value = valueForImagePlaceholder(bound);
+      data[placeholder.key] =
+        value || imageChoiceToPlaceholderValue(selectedImages[imageIndex]);
+      imageIndex += 1;
+    } else {
+      data[placeholder.key] = valueForTextPlaceholder(bound);
+    }
+  }
+  return data;
+}
+
+function templateDataForDesignImage(
+  pausedState: NodeOutputs | undefined,
+  selectedUrl: string,
 ): Record<string, string> {
   const placeholders = Array.isArray(pausedState?.previewPlaceholders)
     ? pausedState.previewPlaceholders.filter(isPlaceholderRecord)
@@ -432,40 +578,52 @@ function templateDataForCuratedImages(
     !Array.isArray(pausedState.previewBindings)
       ? (pausedState.previewBindings as Record<string, unknown>)
       : {};
+  const dynamicKey =
+    typeof pausedState?.dynamicImagePlaceholderKey === "string"
+      ? pausedState.dynamicImagePlaceholderKey
+      : "";
   const data: Record<string, string> = {};
-  let imageIndex = 0;
 
   for (const placeholder of placeholders) {
     const bound = bindings[placeholder.key];
     const value =
       bound !== undefined && bound !== "" ? valueToOutputText(bound) : "";
-    if (placeholder.kind === "image") {
-      data[placeholder.key] = value || selectedUrls[imageIndex] || "";
-      imageIndex += 1;
-    } else {
-      data[placeholder.key] = value;
-    }
+    data[placeholder.key] =
+      placeholder.key === dynamicKey ? selectedUrl : value;
   }
+
   return data;
 }
 
 function outputForCuratedImages(
   pausedState: NodeOutputs | undefined,
-  selectedUrls: string[],
+  selectedImages: SelectedImageChoice[],
 ): NodeOutputs {
-  const ranked = Array.isArray(pausedState?.ranked)
-    ? pausedState.ranked.filter(isImageRecord)
-    : Array.isArray(pausedState?.candidates)
-      ? pausedState.candidates.filter(isImageRecord)
-      : [];
+  const ranked = normalizeImageCandidates(
+    Array.isArray(pausedState?.ranked)
+      ? pausedState.ranked
+      : pausedState?.candidates,
+  );
   const byUrl = new Map(ranked.map((candidate) => [candidate.url, candidate]));
   const seen = new Set<string>();
-  const selected = selectedUrls.flatMap((url) => {
-    if (seen.has(url)) return [];
-    const candidate = byUrl.get(url);
+  const selectedChoices = selectedImages.filter((choice) => {
+    if (!choice.url || seen.has(choice.url)) return false;
+    seen.add(choice.url);
+    return true;
+  });
+  const selected = selectedChoices.flatMap((choice) => {
+    const candidate = byUrl.get(choice.url);
     if (!candidate) return [];
-    seen.add(url);
-    return [candidate];
+    const scale = normalizeImageScale(choice.scale);
+    return [
+      {
+        ...candidate,
+        ...(choice.objectPosition
+          ? { objectPosition: choice.objectPosition }
+          : {}),
+        ...(scale !== undefined ? { scale } : {}),
+      },
+    ];
   });
   const selectedSet = new Set(selected.map((candidate) => candidate.url));
   const curatedRanked = [
@@ -479,7 +637,7 @@ function outputForCuratedImages(
     selectedUrls: selected.map((candidate) => candidate.url),
     templateData: templateDataForCuratedImages(
       pausedState,
-      selected.map((candidate) => candidate.url),
+      selectedChoices,
     ),
     best: selected[0]?.url ?? "",
   };
@@ -489,11 +647,37 @@ function outputForHumanChoice(
   pausedState: NodeOutputs | undefined,
   choice: ResumeChoice,
 ): NodeOutputs {
+  if ("selectedImages" in choice) {
+    return outputForCuratedImages(pausedState, choice.selectedImages);
+  }
+
   if ("selectedUrls" in choice) {
-    return outputForCuratedImages(pausedState, choice.selectedUrls);
+    return outputForCuratedImages(
+      pausedState,
+      choice.selectedUrls.map((url) => ({ url })),
+    );
   }
 
   const choiceUrl = choice.choiceUrl;
+  if (pausedState?.reviewKind === "design-image") {
+    const candidates = pausedState?.candidates;
+    const chosenImage = Array.isArray(candidates)
+      ? candidates.find(
+          (candidate) =>
+            candidate &&
+            typeof candidate === "object" &&
+            "url" in candidate &&
+            candidate.url === choiceUrl,
+        )
+      : undefined;
+
+    return {
+      chosen: choiceUrl,
+      chosenImage: chosenImage ?? { url: choiceUrl },
+      templateData: templateDataForDesignImage(pausedState, choiceUrl),
+    };
+  }
+
   const candidates = pausedState?.candidates;
   const chosenDesign = Array.isArray(candidates)
     ? candidates.find(

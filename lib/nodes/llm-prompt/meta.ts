@@ -20,6 +20,7 @@ export const llmPromptMeta: NodeMeta<LlmPromptConfig> = {
   label: "LLM Prompt",
   description: "Calls an AI model with a custom prompt and returns generated text.",
   category: "transform",
+  group: "ai",
   inputs: [{ id: "input", label: "Input", kind: "data" }],
   outputs: [
     { id: "text", label: "Text", kind: "text" },
@@ -31,7 +32,7 @@ export const llmPromptMeta: NodeMeta<LlmPromptConfig> = {
       label: "AI connection",
       type: "connection",
       connectionTypes: [...AI_MODEL_CONNECTION_TYPES],
-      help: "Choose an OpenAI or Azure AI Foundry connection.",
+      help: "Choose an OpenAI, Azure AI Foundry, or Claude connection.",
     },
     {
       name: "model",

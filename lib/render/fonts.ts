@@ -8,7 +8,7 @@ import {
   type FontDef,
   type FontWeight,
 } from "./font-registry";
-import { fontSourceFaceUrl } from "./font-assets";
+import { fontSourceFaceUrl, fontSourceSubsetFamily } from "./font-assets";
 
 /**
  * Satori needs fonts supplied as raw bytes (and only reads ttf/otf/woff — not
@@ -72,15 +72,18 @@ async function loadFaces(
   weights: Set<FontWeight>,
 ): Promise<SatoriFont[]> {
   const jobs: Promise<SatoriFont | null>[] = [];
-  const toFont = (data: ArrayBuffer | null, weight: FontWeight) =>
-    data ? { name: def.family, data, weight, style: "normal" as const } : null;
+  const toFont = (
+    data: ArrayBuffer | null,
+    weight: FontWeight,
+    name = def.family,
+  ) => (data ? { name, data, weight, style: "normal" as const } : null);
 
   for (const weight of weights) {
     if (def.kind === "fontsource") {
       for (const subset of def.subsets) {
         jobs.push(
           fetchBytes(fontSourceFaceUrl(def, subset, weight)).then((d) =>
-            toFont(d, weight),
+            toFont(d, weight, fontSourceSubsetFamily(def, subset)),
           ),
         );
       }
@@ -95,28 +98,39 @@ async function loadFaces(
 /**
  * Load the raw bytes of every subset face for a family + weight — the input the
  * server-side auto-fit measurer (lib/render/measure-server.ts) parses with
- * opentype.js. Satori is handed all faces and composes glyphs across them, but
+ * opentype.js. Fontsource ships script subsets as separate files, while
  * opentype measures one face at a time, so the measurer must see every subset to
- * size mixed-script text (e.g. Latin + Cyrillic) correctly; a single Latin face
- * would treat Cyrillic as missing glyphs and over-measure the text. Unknown
- * families fall back to Inter, mirroring the renderer. Returns the faces that
- * loaded — possibly empty if even the fallback can't be read (e.g. offline with
- * a local file missing), in which case the caller uses a rough estimate.
+ * size mixed-script text (e.g. Latin + Cyrillic) correctly. Inter faces for the
+ * same requested weight are appended as the ultimate glyph fallback, matching
+ * the CSS stack used by the renderer. If every face fails to load, the caller
+ * uses a rough estimate.
  */
 export async function loadFontFaceBytes(
   family: string,
   rawWeight: number,
 ): Promise<ArrayBuffer[]> {
   const def = FONTS[family] ?? FONTS[FALLBACK_FAMILY];
-  const weight = normalizeWeight(def, rawWeight);
-  if (def.kind === "local") {
-    const data = await readLocal(def.file(weight));
-    return data ? [data] : [];
-  }
-  const datas = await Promise.all(
-    def.subsets.map((subset) => fetchBytes(fontSourceFaceUrl(def, subset, weight))),
-  );
-  return datas.filter((d): d is ArrayBuffer => d !== null);
+  const load = async (font: FontDef, weight: FontWeight): Promise<ArrayBuffer[]> => {
+    if (font.kind === "local") {
+      const data = await readLocal(font.file(weight));
+      return data ? [data] : [];
+    }
+    const datas = await Promise.all(
+      font.subsets.map((subset) =>
+        fetchBytes(fontSourceFaceUrl(font, subset, weight)),
+      ),
+    );
+    return datas.filter((d): d is ArrayBuffer => d !== null);
+  };
+
+  const primary = await load(def, normalizeWeight(def, rawWeight));
+  if (def.family === FALLBACK_FAMILY) return primary;
+
+  const fallback = FONTS[FALLBACK_FAMILY];
+  return [
+    ...primary,
+    ...(await load(fallback, normalizeWeight(fallback, rawWeight))),
+  ];
 }
 
 /** Load the faces every text element on a canvas (one page) needs. */
@@ -129,6 +143,7 @@ export async function loadFontsForCanvas(
   // Unknown families (e.g. unwired brand fonts) map to Inter, preserving the
   // "previews custom, renders as Inter" behavior.
   const wanted = new Map<string, Set<FontWeight>>();
+  const fallbackWeights = new Set<FontWeight>();
   const request = (family: string, rawWeight: number) => {
     const def = FONTS[family] ?? FONTS[FALLBACK_FAMILY];
     const set = wanted.get(def.family) ?? new Set<FontWeight>();
@@ -136,12 +151,20 @@ export async function loadFontsForCanvas(
     wanted.set(def.family, set);
   };
 
+  const fallback = FONTS[FALLBACK_FAMILY];
   for (const el of canvas.elements) {
-    if (el.type === "text") request(el.fontFamily, el.fontWeight ?? 400);
+    if (el.type === "text") {
+      const rawWeight = el.fontWeight ?? 400;
+      request(el.fontFamily, rawWeight);
+      fallbackWeights.add(normalizeWeight(fallback, rawWeight));
+    }
   }
 
-  // Always keep Inter loaded as the ultimate layout/glyph fallback.
-  if (!wanted.has(FALLBACK_FAMILY)) request(FALLBACK_FAMILY, 400);
+  // Always keep Inter loaded as the ultimate layout/glyph fallback at the same
+  // weights the canvas asks for. Loading only 400 makes missing Cyrillic glyphs
+  // fall back to regular text even when the element requested 700.
+  if (fallbackWeights.size === 0) fallbackWeights.add(400);
+  for (const weight of fallbackWeights) request(FALLBACK_FAMILY, weight);
 
   const batches = await Promise.all(
     [...wanted].map(([family, weights]) => loadFaces(FONTS[family], weights)),

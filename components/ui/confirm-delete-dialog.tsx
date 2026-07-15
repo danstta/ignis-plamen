@@ -31,24 +31,32 @@ const CONFIRM_PHRASE = "Yes delete";
  */
 export function ConfirmDeleteDialog({
   children,
+  open: controlledOpen,
+  onOpenChange: setControlledOpen,
   itemLabel,
   itemName,
+  detail,
   onConfirm,
 }: {
   /** The trigger element, e.g. a delete <Button>. */
-  children: React.ReactElement;
+  children?: React.ReactElement;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   /** Lowercase noun for copy, e.g. "workflow" or "template". */
   itemLabel: string;
   /** The exact name the user must retype to confirm. */
   itemName: string;
+  detail?: React.ReactNode;
   onConfirm: () => Promise<void>;
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const [nameInput, setNameInput] = useState("");
   const [phraseInput, setPhraseInput] = useState("");
   const [pending, setPending] = useState(false);
   const nameId = useId();
   const phraseId = useId();
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = setControlledOpen ?? setInternalOpen;
 
   const nameMatches = nameInput.trim() === itemName.trim();
   const phraseMatches = phraseInput.trim() === CONFIRM_PHRASE;
@@ -88,7 +96,7 @@ export function ConfirmDeleteDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger render={children} />
+      {children ? <DialogTrigger render={children} /> : null}
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -99,6 +107,12 @@ export function ConfirmDeleteDialog({
             This permanently deletes{" "}
             <span className="font-medium text-foreground">{itemName}</span>. This
             action cannot be undone.
+            {detail ? (
+              <>
+                <br />
+                {detail}
+              </>
+            ) : null}
           </DialogDescription>
         </DialogHeader>
 

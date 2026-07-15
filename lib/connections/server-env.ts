@@ -88,18 +88,17 @@ export function listServerEnvironmentConnections(): ServerEnvironmentConnection[
       env: [{ name: "PEXELS_API_KEY" }],
     }),
     connection({
-      id: "instagram-env",
-      name: "Instagram Graph",
-      description: "Server token and business account for profile grid previews.",
-      access: "Reads media/profile preview data for the configured Instagram business account.",
-      env: [
-        { name: "INSTAGRAM_ACCESS_TOKEN" },
-        { name: "INSTAGRAM_BUSINESS_ACCOUNT_ID" },
-      ],
+      id: "google-maps-env",
+      name: "Google Maps Platform",
+      description: "Optional Places photo provider for location image search.",
+      access:
+        "Text Search and Place Photos access for exact location image candidates; server-only key.",
+      env: [{ name: "GOOGLE_MAPS_API_KEY" }],
     }),
     connection({
       id: "supabase-env",
       name: "Supabase Storage",
+      providerType: "supabase",
       description: "Asset library storage backend.",
       access:
         "Service-role storage access for uploaded assets in the configured bucket; server-only.",
@@ -110,8 +109,24 @@ export function listServerEnvironmentConnections(): ServerEnvironmentConnection[
       ],
     }),
     connection({
+      id: "link-hub-notion-env",
+      name: "Link Hub Notion Sync",
+      providerType: "notion",
+      description: "Mirrors the public links database from Notion into Supabase.",
+      access:
+        "Reads the configured Notion data source and writes public Link Hub rows with the Supabase service role.",
+      env: [
+        { name: "LINK_HUB_SUPABASE_URL", required: false },
+        { name: "LINK_HUB_SUPABASE_SERVICE_ROLE_KEY", required: false },
+        { name: "NOTION_LINK_HUB_TOKEN", required: false },
+        { name: "NOTION_LINK_HUB_DATA_SOURCE_ID", required: false },
+        { name: "NOTION_LINK_HUB_WEBHOOK_VERIFICATION_TOKEN", required: false },
+      ],
+    }),
+    connection({
       id: "vercel-blob-env",
       name: "Vercel Blob",
+      providerType: "vercel",
       description: "Render and export output storage.",
       access: "Read/write access for generated files and render artifacts stored in Blob.",
       env: [{ name: "BLOB_READ_WRITE_TOKEN" }],

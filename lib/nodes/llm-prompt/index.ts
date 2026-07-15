@@ -15,6 +15,22 @@ type ChatCompletionResponse = {
   model?: string;
 };
 
+type AnthropicMessageResponse = {
+  content?: { type?: string; text?: string }[];
+  usage?: unknown;
+  id?: string;
+  model?: string;
+};
+
+type ChatResult = {
+  text: string;
+  raw: {
+    id?: string;
+    model?: string;
+    usage?: unknown;
+  };
+};
+
 function valueToPromptText(value: unknown): string {
   if (value === null || value === undefined) return "";
   if (typeof value === "string") return value;
@@ -47,7 +63,7 @@ function buildMessages(config: LlmPromptConfig, input: unknown): ChatMessage[] {
 async function parseChatResponse(
   res: Response,
   provider: string,
-): Promise<{ text: string; raw: ChatCompletionResponse }> {
+): Promise<ChatResult> {
   if (!res.ok) {
     throw new Error(`${provider} ${res.status}: ${await res.text()}`);
   }
@@ -108,6 +124,17 @@ function openAIHeaders(config: Record<string, unknown>) {
   if (organizationId) headers["OpenAI-Organization"] = organizationId;
   if (projectId) headers["OpenAI-Project"] = projectId;
   return headers;
+}
+
+function anthropicHeaders(config: Record<string, unknown>) {
+  const apiKey = String(config.apiKey ?? "").trim();
+  if (!apiKey) throw new Error("Claude connection is missing an API key.");
+
+  return {
+    "Content-Type": "application/json",
+    "x-api-key": apiKey,
+    "anthropic-version": "2023-06-01",
+  };
 }
 
 async function callOpenAI(
@@ -183,6 +210,58 @@ async function callAzure(
   );
 }
 
+function anthropicMessages(messages: ChatMessage[]) {
+  const system = messages
+    .filter((message) => message.role === "system")
+    .map((message) => message.content)
+    .join("\n\n");
+  const userMessages = messages
+    .filter((message) => message.role === "user")
+    .map((message) => ({ role: "user" as const, content: message.content }));
+
+  return { system, messages: userMessages };
+}
+
+async function callAnthropic(
+  config: Record<string, unknown>,
+  nodeConfig: LlmPromptConfig,
+  messages: ChatMessage[],
+): Promise<ChatResult> {
+  const anthropicPayload = anthropicMessages(messages);
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: anthropicHeaders(config),
+    body: JSON.stringify({
+      model: nodeConfig.model,
+      messages: anthropicPayload.messages,
+      ...(anthropicPayload.system
+        ? { system: anthropicPayload.system }
+        : {}),
+      temperature: nodeConfig.temperature,
+      max_tokens: nodeConfig.maxTokens,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Claude ${res.status}: ${await res.text()}`);
+  }
+
+  const raw = (await res.json()) as AnthropicMessageResponse;
+  return {
+    text:
+      raw.content
+        ?.filter((block) => block.type === "text")
+        .map((block) => block.text?.trim() ?? "")
+        .filter(Boolean)
+        .join("\n\n") ?? "",
+    raw: {
+      id: raw.id,
+      model: raw.model,
+      usage: raw.usage,
+    },
+  };
+}
+
 export const llmPromptNode: NodeDefinition<LlmPromptConfig> = {
   ...llmPromptMeta,
 
@@ -215,6 +294,8 @@ export const llmPromptNode: NodeDefinition<LlmPromptConfig> = {
         ? await callOpenAI(connection.config ?? {}, ctx.config, messages)
         : connection.type === "azure-foundry"
           ? await callAzure(connection.config ?? {}, ctx.config, messages)
+          : connection.type === "anthropic"
+            ? await callAnthropic(connection.config ?? {}, ctx.config, messages)
           : (() => {
               throw new Error(
                 `Unsupported AI connection type: ${connection.type}`,

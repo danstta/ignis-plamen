@@ -5,9 +5,17 @@ import { useRouter } from "next/navigation";
 import { Check, Grid2X2, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { imagePreviewSrc } from "@/lib/nodes/image-preview";
 import { cn } from "@/lib/utils";
 
-type Candidate = { url: string; attribution?: string };
+type Candidate = {
+  url: string;
+  attribution?: string;
+  previewUrl?: string;
+  thumbnailLink?: string;
+  mimeType?: string;
+  name?: string;
+};
 type InstagramPreview = { enabled?: boolean; username?: string };
 type InstagramPost = {
   id: string;
@@ -88,17 +96,20 @@ export function ManualReviewPicker({
   }, [gridPreviewEnabled, username]);
 
   const previewTiles = useMemo(() => {
-    const selected = effectiveSelectedUrl
+    const selectedCandidate = effectiveSelectedUrl
+      ? candidates.find((candidate) => candidate.url === effectiveSelectedUrl)
+      : undefined;
+    const selected = selectedCandidate
       ? [
           {
             id: "selected-design",
-            imageUrl: effectiveSelectedUrl,
+            imageUrl: imagePreviewSrc(selectedCandidate),
             isSelectedDesign: true,
           },
         ]
       : [];
     return [...selected, ...posts].slice(0, 9);
-  }, [posts, effectiveSelectedUrl]);
+  }, [posts, effectiveSelectedUrl, candidates]);
 
   async function pick(url: string) {
     setSubmitting(url);
@@ -145,9 +156,9 @@ export function ManualReviewPicker({
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={c.url}
+                src={imagePreviewSrc(c)}
                 alt=""
-                className="aspect-square w-full object-contain"
+                className="aspect-[4/5] w-full object-contain"
               />
               {selected ? (
                 <span className="absolute right-2 top-2 rounded-full bg-foreground p-1 text-background">

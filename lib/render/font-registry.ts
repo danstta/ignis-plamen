@@ -42,13 +42,11 @@ export type FontDef =
     };
 
 // Subsets fetched for every Fontsource family. Latin + Latin-Extended cover
-// Western/Balkan diacritics (č/ć/š/ž/đ); Cyrillic + Cyrillic-Extended cover
-// Serbian/Russian/etc. Satori composes glyphs across all loaded subset faces,
-// and the server-side auto-fit measurer (lib/render/measure-server.ts) mirrors
-// that, so a document mixing scripts both renders and fits correctly. Other
-// scripts (Greek, Vietnamese) still fall back to .notdef — add their subsets
-// here to support them. A subset a given weight doesn't ship 404s and is
-// skipped gracefully, so over-listing is safe.
+// Western/Balkan diacritics (č/ć/š/ž/đ); Cyrillic covers modern Serbian
+// Cyrillic (ђ/љ/њ/ћ/џ), and Cyrillic-Extended widens coverage for other
+// Cyrillic scripts. Satori composes glyphs across all loaded subset faces, and
+// the server-side auto-fit measurer (lib/render/measure-server.ts) mirrors that,
+// so a document mixing scripts both renders and fits correctly.
 const SUBSETS = ["latin", "latin-ext", "cyrillic", "cyrillic-ext"] as const;
 
 /** The font every render keeps loaded as the ultimate layout/glyph fallback. */
@@ -80,20 +78,21 @@ export const FONTS: Record<string, FontDef> = {
     subsets: SUBSETS,
     weights: [100, 200, 300, 400, 500, 600, 700, 800, 900],
   },
-  // Licensed faces — supply the files in public/fonts/ (see the README there).
-  // Until the files exist these render as Inter. Adjust the weights to match the
-  // files you actually drop in.
-  "Canva Sans": {
-    family: "Canva Sans",
-    kind: "local",
-    file: (w) => `canva-sans-${w}.woff`,
-    weights: [400, 500, 700],
+  "Open Sans": {
+    family: "Open Sans",
+    kind: "fontsource",
+    pkg: "@fontsource/open-sans@5.2.7",
+    slug: "open-sans",
+    subsets: SUBSETS,
+    weights: [300, 400, 500, 600, 700, 800],
   },
+  // Licensed faces — supply the files in public/fonts/ (see the README there).
+  // Adjust the weights to match the files you actually drop in.
   Garet: {
     family: "Garet",
     kind: "local",
-    file: (w) => `garet-${w}.woff`,
-    weights: [400, 500, 700],
+    file: (w) => `garet-${w}.otf`,
+    weights: [400, 700],
   },
 };
 

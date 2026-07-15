@@ -1,7 +1,13 @@
+import { cookies } from "next/headers";
+
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { CommandPalette } from "@/components/command/command-palette";
 import { listAssets } from "@/lib/assets/service";
 import { listFolders } from "@/lib/folders/service";
+import {
+  parseSidebarPrefs,
+  SIDEBAR_PREFS_COOKIE,
+} from "@/lib/sidebar-prefs";
 import { listTemplates } from "@/lib/templates/service";
 import { listWorkflows } from "@/lib/workflows/service";
 
@@ -36,6 +42,13 @@ export default async function AdminLayout({
     assets = await listAssets();
   } catch {}
 
+  // Server-render the sidebar in its persisted state (collapsed rail, open
+  // sections) so there is no flash of the default layout before hydration.
+  const cookieStore = await cookies();
+  const sidebarPrefs = parseSidebarPrefs(
+    cookieStore.get(SIDEBAR_PREFS_COOKIE)?.value,
+  );
+
   return (
     <div className="flex h-svh overflow-hidden">
       <AppSidebar
@@ -63,6 +76,7 @@ export default async function AdminLayout({
           iconUrl: f.iconUrl,
         }))}
         assets={assets}
+        initialPrefs={sidebarPrefs}
       />
       <main className="flex-1 overflow-auto p-8">{children}</main>
       <CommandPalette

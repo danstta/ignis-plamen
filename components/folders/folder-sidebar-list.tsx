@@ -3,18 +3,10 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  ChevronRight,
-  FolderPlus,
-  LayoutTemplate,
-  Workflow,
-} from "lucide-react";
+import { ChevronRight, LayoutTemplate, Workflow } from "lucide-react";
 import { toast } from "sonner";
 
-import {
-  createFolderAction,
-  moveFolderItemAction,
-} from "@/app/(admin)/folders/actions";
+import { moveFolderItemAction } from "@/app/(admin)/folders/actions";
 import { cn } from "@/lib/utils";
 import type { Asset } from "@/lib/assets/types";
 import type { FolderItem, FolderKind, FolderSummary } from "@/lib/folders/types";
@@ -48,7 +40,7 @@ export function FolderSidebarList({
   assets: Asset[];
 }) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [activeDrag, setActiveDrag] = useState<FolderDragPayload | null>(null);
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(
@@ -79,22 +71,6 @@ export function FolderSidebarList({
         router.refresh();
       } catch (err) {
         toast.error("Move failed", { description: String(err) });
-      }
-    });
-  };
-
-  const createFolder = () => {
-    const name = window.prompt(
-      kind === "design" ? "Design folder name" : "Workflow folder name",
-    );
-    if (name === null) return;
-    startTransition(async () => {
-      try {
-        await createFolderAction(kind, name);
-        toast.success("Folder created");
-        router.refresh();
-      } catch (err) {
-        toast.error("Folder not created", { description: String(err) });
       }
     });
   };
@@ -157,27 +133,14 @@ export function FolderSidebarList({
 
   if (folders.length === 0 && items.length === 0) {
     return (
-      <>
-        <FolderHeader
-          label={kind === "design" ? "Designs" : "Workflows"}
-          disabled={isPending}
-          onCreateFolder={createFolder}
-        />
-        <p className="px-2.5 py-1.5 text-sm text-muted-foreground/60">
-          {kind === "design" ? "No designs yet." : "No workflows yet."}
-        </p>
-      </>
+      <p className="px-2.5 py-1.5 text-sm text-muted-foreground/60">
+        {kind === "design" ? "No designs yet." : "No workflows yet."}
+      </p>
     );
   }
 
   return (
     <>
-      <FolderHeader
-        label={kind === "design" ? "Designs" : "Workflows"}
-        disabled={isPending}
-        onCreateFolder={createFolder}
-      />
-
       {folders.map((folder) => {
         const folderItems = itemsByFolder.get(folder.id) ?? [];
         const collapsed = collapsedFolders.has(folder.id);
@@ -276,34 +239,6 @@ function NoFolderDivider() {
       <span className="h-px flex-1 bg-sidebar-border/70" />
       <span>No folder</span>
       <span className="h-px flex-1 bg-sidebar-border/70" />
-    </div>
-  );
-}
-
-function FolderHeader({
-  label,
-  disabled,
-  onCreateFolder,
-}: {
-  label: string;
-  disabled: boolean;
-  onCreateFolder: () => void;
-}) {
-  return (
-    <div className="flex items-center gap-1 px-2.5 pt-4 pb-1">
-      <div className="min-w-0 flex-1 text-xs font-medium tracking-wide text-muted-foreground/70">
-        {label}
-      </div>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={onCreateFolder}
-        title={`New ${label.toLowerCase()} folder`}
-        aria-label={`New ${label.toLowerCase()} folder`}
-        className="flex size-6 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring disabled:opacity-50"
-      >
-        <FolderPlus className="size-3.5" />
-      </button>
     </div>
   );
 }

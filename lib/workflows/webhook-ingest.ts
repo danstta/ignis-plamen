@@ -34,7 +34,12 @@ export async function readBodyWithLimit(
   maxBytes: number,
 ): Promise<{ ok: true; bytes: Buffer } | { ok: false }> {
   const declared = Number(req.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > maxBytes) return { ok: false };
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    // Cancel instead of abandoning the stream — an unread body keeps the
+    // socket draining until GC.
+    await req.body?.cancel();
+    return { ok: false };
+  }
 
   const reader = req.body?.getReader();
   if (!reader) return { ok: true, bytes: Buffer.alloc(0) };
@@ -48,7 +53,10 @@ export async function readBodyWithLimit(
       total += value.byteLength;
       // Content-Length can lie (or be absent for chunked bodies) — the streamed
       // total is what actually bounds memory.
-      if (total > maxBytes) return { ok: false };
+      if (total > maxBytes) {
+        await reader.cancel();
+        return { ok: false };
+      }
       chunks.push(value);
     }
   } finally {

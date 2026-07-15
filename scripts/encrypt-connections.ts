@@ -12,7 +12,7 @@ config({ path: ".env.local" });
 import { eq } from "drizzle-orm";
 import { db } from "../lib/db";
 import { connections } from "../lib/db/schema";
-import { isSealedConfig, sealConfig } from "../lib/connections/crypto";
+import { isSealedConfig, openConfig, sealConfig } from "../lib/connections/crypto";
 import { connectionsEncryptionKey } from "../lib/env";
 
 async function main() {
@@ -25,6 +25,23 @@ async function main() {
   }
 
   const rows = await db().select().from(connections);
+
+  // Preflight: verify the active key opens every already-sealed row before any
+  // writes. A wrong or rotated key would otherwise produce a mixed-key dataset.
+  for (const row of rows) {
+    if (!isSealedConfig(row.config)) continue;
+    try {
+      openConfig(row.config);
+    } catch (err) {
+      console.error(
+        `Connection ${row.id} is sealed with a different key — refusing to ` +
+          "write a mixed-key dataset. Fix CONNECTIONS_ENCRYPTION_KEY first.",
+        err,
+      );
+      process.exit(1);
+    }
+  }
+
   let sealedNow = 0;
   let alreadySealed = 0;
 

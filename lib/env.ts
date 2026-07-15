@@ -102,6 +102,15 @@ export const notionLinkHubCallDeadlineProperty = () =>
 export const notionLinkHubSortOrderProperty = () =>
   process.env.NOTION_LINK_HUB_SORT_ORDER_PROPERTY?.trim() || "Sort order";
 
+// --- Connection credential encryption ---
+/**
+ * AES-256-GCM key (32 random bytes, base64) sealing `connections.config` at rest.
+ * Optional: when unset, credentials are stored plaintext (documented tradeoff for
+ * minimal self-hosted setups). Changing/losing it makes sealed rows unreadable.
+ */
+export const connectionsEncryptionKey = () =>
+  process.env.CONNECTIONS_ENCRYPTION_KEY?.trim() || undefined;
+
 // --- Background queue (Inngest) ---
 /**
  * Inngest event key used by the client to send events. Non-throwing (like

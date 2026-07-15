@@ -126,7 +126,7 @@ export function WorkflowEditor({
       </aside>
 
       <div className="relative min-w-0 flex-1">
-        <WorkflowCanvas />
+        <WorkflowCanvas enabledNodeTypeIds={enabledNodeTypeIds} />
       </div>
 
       <aside className="flex w-[28rem] shrink-0 flex-col overflow-hidden border-l bg-background 2xl:w-[32rem]">

@@ -119,6 +119,16 @@ interface WorkflowEditorState {
     routerId: string,
     branchId: string,
   ) => void;
+  /**
+   * Insert a step on a spine connector, between `sourceId` and `targetId`. The
+   * new step joins the target's lane (so it lands between the two visually);
+   * on a rejoin connector (branch's last step → trunk) it extends the branch.
+   */
+  insertNodeBetween: (
+    nodeTypeId: string,
+    sourceId: string,
+    targetId: string,
+  ) => void;
   /** Add an empty branch to a router. */
   addRouterBranch: (routerId: string) => void;
   /** Remove a branch from a router, deleting every step in that lane. */
@@ -260,6 +270,28 @@ export const useWorkflowEditor = create<WorkflowEditorState>((set, get) => ({
         selectedNodeId: node.id,
         dirty: true,
       };
+    }),
+
+  insertNodeBetween: (nodeTypeId, sourceId, targetId) =>
+    set((s) => {
+      // Triggers are pinned to the top; they can never sit between two steps.
+      if (isTriggerType(nodeTypeId)) return {};
+      const source = s.nodes.find((n) => n.id === sourceId);
+      const target = s.nodes.find((n) => n.id === targetId);
+      if (!source || !target) return {};
+      // Lane the new step joins: the target's (covers trunk→trunk, router→first
+      // branch step, and step→step within a lane). On a rejoin connector the
+      // target is back on the trunk, so the step extends the source's branch.
+      const branch = target.data.branch ?? source.data.branch;
+      // Branch lanes can't hold nested routers (mirrors addNodeToBranch).
+      if (branch && nodeTypeId === ROUTER_TYPE_ID) return {};
+      const node = makeNode(nodeTypeId, branch);
+      const next = [...s.nodes];
+      const at = target.data.branch || !source.data.branch
+        ? next.indexOf(target) // before the target, within its lane
+        : next.indexOf(source) + 1; // rejoin: append after the branch's last step
+      next.splice(at, 0, node);
+      return { nodes: layoutNodes(next), selectedNodeId: node.id, dirty: true };
     }),
 
   addRouterBranch: (routerId) =>

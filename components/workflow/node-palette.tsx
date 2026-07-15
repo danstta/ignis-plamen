@@ -2,43 +2,10 @@
 
 import { Plus } from "lucide-react";
 import { getNodeMeta, listNodeCatalog } from "@/lib/nodes/catalog";
+import { NODE_GROUP_LABELS, groupNodes } from "@/lib/nodes/grouping";
 import type { NodeGroup, NodeMeta } from "@/lib/nodes/types";
 import { useWorkflowEditor } from "@/lib/workflows/store";
 import { cn } from "@/lib/utils";
-
-const NODE_GROUP_LABELS: Record<NodeGroup, string> = {
-  trigger: "Trigger",
-  media: "Media",
-  ai: "AI",
-  design: "Design",
-  flow: "Flow",
-  "google-drive": "Google Drive",
-  notion: "Notion",
-  utility: "Utility",
-};
-
-const STEP_GROUP_ORDER: NodeGroup[] = [
-  "media",
-  "ai",
-  "design",
-  "google-drive",
-  "notion",
-  "flow",
-  "utility",
-];
-
-function groupNodes(nodes: NodeMeta[]) {
-  const grouped = new Map<NodeGroup, NodeMeta[]>();
-
-  for (const node of nodes) {
-    grouped.set(node.group, [...(grouped.get(node.group) ?? []), node]);
-  }
-
-  return STEP_GROUP_ORDER.map((group) => ({
-    group,
-    nodes: grouped.get(group) ?? [],
-  })).filter((entry) => entry.nodes.length > 0);
-}
 
 /** A single add-node button. Disabled buttons explain why via `hint`. */
 function PaletteButton({

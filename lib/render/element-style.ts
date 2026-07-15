@@ -9,8 +9,12 @@ import {
   type TemplateElement,
   type TextElement,
   isGradient,
+  isPlaceholderImageValue,
+  placeholderValueToText,
 } from "@/lib/editor/types";
 import { shapeGeometryStyle } from "@/lib/editor/shapes";
+import { FALLBACK_FAMILY, FONTS, type FontDef } from "./font-registry";
+import { fontSourceSubsetFamily } from "./font-assets";
 
 /**
  * Pure element -> CSS helpers shared by the editor canvas and the Satori renderer.
@@ -40,6 +44,33 @@ export function fillToStyle(fill: Fill): CSSProperties {
 /** A text element in "chip" mode hugs its text horizontally (intrinsic width). */
 function isAutoWidth(el: TemplateElement): el is TextElement {
   return el.type === "text" && !!el.autoWidth;
+}
+
+function cssFontFamily(family: string): string {
+  return JSON.stringify(family);
+}
+
+function fontDefFamilyNames(def: FontDef): string[] {
+  if (def.kind === "fontsource") {
+    return [
+      ...def.subsets.map((subset) => fontSourceSubsetFamily(def, subset)),
+      def.family,
+    ];
+  }
+  return [def.family];
+}
+
+function fontFamilyStack(family: string): string {
+  const primary = FONTS[family];
+  const fallback = FONTS[FALLBACK_FAMILY];
+  const names = [
+    ...(primary ? fontDefFamilyNames(primary) : [family]),
+    ...fontDefFamilyNames(fallback),
+  ];
+  return [
+    ...new Set(names.filter(Boolean).map(cssFontFamily)),
+    "sans-serif",
+  ].join(", ");
 }
 
 export function baseStyle(el: TemplateElement): CSSProperties {
@@ -75,7 +106,7 @@ export function textStyle(el: TextElement): CSSProperties {
         : el.textAlign === "right"
           ? "flex-end"
           : "flex-start",
-    fontFamily: el.fontFamily,
+    fontFamily: fontFamilyStack(el.fontFamily),
     fontSize: el.fontSize,
     fontWeight: el.fontWeight ?? 400,
     fontStyle: el.fontStyle ?? "normal",
@@ -161,12 +192,85 @@ export function imageClipStyle(el: ImageElement): CSSProperties {
   return { borderRadius: imageBorderRadius(el) };
 }
 
+export type ResolvedImage = {
+  src?: string;
+  objectPosition?: string;
+  scale: number;
+};
+
+function normalizedScale(value: unknown): number {
+  const scale = typeof value === "number" && Number.isFinite(value) ? value : 1;
+  return Math.min(4, Math.max(1, scale));
+}
+
+function alignmentFromObjectPosition(position: string | undefined): {
+  justifyContent: CSSProperties["justifyContent"];
+  alignItems: CSSProperties["alignItems"];
+} {
+  const normalized = position?.toLowerCase() ?? "center center";
+  const justifyContent = normalized.includes("left")
+    ? "flex-start"
+    : normalized.includes("right")
+      ? "flex-end"
+      : "center";
+  const alignItems = normalized.includes("top")
+    ? "flex-start"
+    : normalized.includes("bottom")
+      ? "flex-end"
+      : "center";
+  return { justifyContent, alignItems };
+}
+
+export function imageContentStyle(
+  el: ImageElement,
+  image: ResolvedImage,
+): CSSProperties {
+  const scale = image.scale || 1;
+  return {
+    width: el.width * scale,
+    height: el.height * scale,
+    objectFit: el.objectFit ?? "cover",
+    objectPosition: image.objectPosition ?? "center center",
+    display: "block",
+    flexShrink: 0,
+    ...imageClipStyle(el),
+  };
+}
+
+export function imagePlacementContainerStyle(
+  image: ResolvedImage,
+): CSSProperties {
+  return alignmentFromObjectPosition(image.objectPosition);
+}
+
 /** Resolve the text shown for a text element given (optional) placeholder data. */
 export function resolveText(el: TextElement, data?: PlaceholderData): string {
   if (el.placeholderKey) {
-    return data?.[el.placeholderKey] ?? `{${el.placeholderKey}}`;
+    return placeholderValueToText(data?.[el.placeholderKey]) || `{${el.placeholderKey}}`;
   }
   return el.text;
+}
+
+/** Resolve the image and crop controls for an image element. */
+export function resolveImage(
+  el: ImageElement,
+  data?: PlaceholderData,
+): ResolvedImage {
+  if (el.placeholderKey) {
+    const value = data?.[el.placeholderKey];
+    if (isPlaceholderImageValue(value)) {
+      return {
+        src: value.url || el.src,
+        objectPosition: value.objectPosition,
+        scale: normalizedScale(value.scale),
+      };
+    }
+    return {
+      src: placeholderValueToText(value) || el.src,
+      scale: 1,
+    };
+  }
+  return { src: el.src, scale: 1 };
 }
 
 /** Resolve the image src for an image element given (optional) placeholder data. */
@@ -174,8 +278,5 @@ export function resolveImageSrc(
   el: ImageElement,
   data?: PlaceholderData,
 ): string | undefined {
-  if (el.placeholderKey) {
-    return data?.[el.placeholderKey] ?? el.src;
-  }
-  return el.src;
+  return resolveImage(el, data).src;
 }

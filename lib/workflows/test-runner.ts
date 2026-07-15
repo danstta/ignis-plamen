@@ -73,11 +73,14 @@ async function runNode(
     const resolvedConfig = resolveReferences(node.config, state.nodeOutputs, trigger);
     const config = def.configSchema.parse(resolvedConfig);
     const ctx: NodeRunContext = {
+      nodeId: node.id,
       config,
+      rawConfig: node.config,
       inputs,
       trigger,
       runId,
       log: (msg) => console.log(`[test ${runId}][${node.id}] ${msg}`),
+      step: (_id, fn) => fn(),
     };
     const outcome: RunResult = await def.run(ctx);
     if (outcome.type === "pause") {

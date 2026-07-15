@@ -131,6 +131,10 @@ OPENAI_API_KEY=
 
 # Pexels (optional, for polished Find Location Images results)
 PEXELS_API_KEY=
+
+# Instagram-style Review Designs preview (optional testing feed)
+# Comma- or newline-separated image URLs. When empty, mock grid posts are generated.
+INSTAGRAM_PREVIEW_POST_URLS=
 ```
 
 Only `DATABASE_URL`, `ADMIN_PASSWORD`, and `SESSION_SECRET` are required to run the core app. The other variables are needed only for the specific integrations they power.
@@ -140,6 +144,10 @@ Only `DATABASE_URL`, `ADMIN_PASSWORD`, and `SESSION_SECRET` are required to run 
 The Find Location Images node uses OpenStreetMap Nominatim to geocode the location query, then searches image providers. Pexels is best for polished poster-style destination photos and requires `PEXELS_API_KEY`. Wikimedia Commons gives the most precise nearby geotagged search. Openverse adds a broader open-licensed image catalog, but quality varies. None of these require a Google Maps key.
 
 In the workflow editor, capture a webhook sample first, select only the fields you want to expose downstream, then insert those selected fields into the node's Location query. For example, combine a city, country, venue name, or street address instead of wiring the entire webhook body. Returned candidates include source, author, license, and attribution URLs when the provider returns them.
+
+### Review Designs grid preview
+
+The Review Designs node can show an Instagram-style grid on the paused review screen without Instagram OAuth or Meta Graph API credentials. For layout testing, set `INSTAGRAM_PREVIEW_POST_URLS` to a comma- or newline-separated list of existing image URLs. If it is empty, Ignis generates mock grid tiles for the entered username.
 
 ### 1. Deploy to Vercel (recommended)
 

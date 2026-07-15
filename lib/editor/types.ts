@@ -238,8 +238,33 @@ export const CANVAS_PRESETS = {
 
 export type CanvasPreset = keyof typeof CANVAS_PRESETS;
 
-/** Resolved values that fill placeholders at render time: key -> text or image URL. */
-export type PlaceholderData = Record<string, string>;
+/** Resolved image value for a placeholder, including optional crop controls. */
+export interface PlaceholderImageValue {
+  url: string;
+  objectPosition?: string;
+  scale?: number;
+}
+
+/** Resolved values that fill placeholders at render time. */
+export type PlaceholderValue = string | PlaceholderImageValue;
+export type PlaceholderData = Record<string, PlaceholderValue>;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+export function isPlaceholderImageValue(
+  value: unknown,
+): value is PlaceholderImageValue {
+  return isRecord(value) && typeof value.url === "string";
+}
+
+export function placeholderValueToText(
+  value: PlaceholderValue | undefined,
+): string {
+  if (value === undefined) return "";
+  return isPlaceholderImageValue(value) ? value.url : value;
+}
 
 /** A fresh empty page with the given background. */
 export function createPage(background: Fill = "#ffffff"): Page {

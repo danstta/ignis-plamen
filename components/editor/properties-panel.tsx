@@ -8,6 +8,7 @@ import {
   AlignVerticalJustifyStart,
   AlignVerticalJustifyCenter,
   AlignVerticalJustifyEnd,
+  Bold,
   Copy,
   Trash2,
   BringToFront,
@@ -20,6 +21,8 @@ import {
 import { activeBrand, currentPage, useEditor } from "@/lib/editor/store";
 import type { BrandColor, BrandFont } from "@/lib/brand/types";
 import {
+  CANVAS_PRESETS,
+  type CanvasPreset,
   type BorderStyle,
   type Fill,
   type Gradient,
@@ -35,11 +38,16 @@ import {
 import { isPolygonShape } from "@/lib/editor/shapes";
 import { fillToStyle } from "@/lib/render/element-style";
 import { FIT_MAX_FONT_SIZE, FIT_MIN_FONT_SIZE } from "@/lib/render/fit-text";
-import { FONT_FAMILIES, FONTS } from "@/lib/render/font-registry";
+import {
+  FONT_FAMILIES,
+  FONTS,
+  normalizeWeight,
+} from "@/lib/render/font-registry";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Toggle } from "@/components/ui/toggle";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
@@ -59,6 +67,9 @@ import {
 // Driven by the shared registry (lib/render/font-registry.ts) — add fonts there.
 // Brand fonts are merged in on top of this base (see TextProps).
 const BASE_FONTS = FONT_FAMILIES;
+const FONT_WEIGHT_OPTIONS = [100, 200, 300, 400, 500, 600, 700, 800, 900] as const;
+const NORMAL_FONT_WEIGHT = 400;
+const BOLD_FONT_WEIGHT = 700;
 
 // Stable empty references so brand selectors don't return a fresh array each render.
 const NO_COLORS: BrandColor[] = [];
@@ -66,6 +77,10 @@ const NO_FONTS: BrandFont[] = [];
 
 function cssFontFamily(family: string) {
   return `"${family.replaceAll('"', '\\"')}", sans-serif`;
+}
+
+function isBoldWeight(weight: number | undefined) {
+  return (weight ?? NORMAL_FONT_WEIGHT) >= BOLD_FONT_WEIGHT;
 }
 
 function snapshot() {
@@ -346,10 +361,41 @@ function CanvasPanel() {
   const setCanvasSize = useEditor((s) => s.setCanvasSize);
   const brands = useEditor((s) => s.brands);
   const setBrandId = useEditor((s) => s.setBrandId);
+  const currentPreset = (Object.keys(CANVAS_PRESETS) as CanvasPreset[]).find(
+    (p) =>
+      CANVAS_PRESETS[p].width === doc.width &&
+      CANVAS_PRESETS[p].height === doc.height,
+  );
 
   return (
     <Panel>
       <SectionTitle>Canvas</SectionTitle>
+      <Field label="Ratio">
+        <Select
+          value={currentPreset ?? "custom"}
+          onValueChange={(v) => {
+            if (!v || v === "custom") return;
+            const preset = CANVAS_PRESETS[v as CanvasPreset];
+            setCanvasSize(preset.width, preset.height);
+          }}
+        >
+          <SelectTrigger size="sm" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {(Object.keys(CANVAS_PRESETS) as CanvasPreset[]).map((p) => (
+              <SelectItem key={p} value={p}>
+                {CANVAS_PRESETS[p].label}
+              </SelectItem>
+            ))}
+            {!currentPreset ? (
+              <SelectItem value="custom">
+                Custom ({doc.width}x{doc.height})
+              </SelectItem>
+            ) : null}
+          </SelectContent>
+        </Select>
+      </Field>
       {brands.length > 0 ? (
         <Field label="Brand">
           <Select
@@ -517,6 +563,18 @@ function TextProps({ element }: { element: TextElement }) {
   const update = useEditor((s) => s.updateElement);
   const brandFonts = useEditor((s) => activeBrand(s)?.fonts ?? NO_FONTS);
   const id = element.id;
+  const fontDef = FONTS[element.fontFamily];
+  const effectiveFontWeight = fontDef
+    ? normalizeWeight(fontDef, element.fontWeight ?? NORMAL_FONT_WEIGHT)
+    : (element.fontWeight ?? NORMAL_FONT_WEIGHT);
+  const fontWeightOptions = fontDef?.weights ?? FONT_WEIGHT_OPTIONS;
+  const bold = isBoldWeight(effectiveFontWeight);
+
+  useEffect(() => {
+    if (fontDef && (element.fontWeight ?? NORMAL_FONT_WEIGHT) !== effectiveFontWeight) {
+      update(id, { fontWeight: effectiveFontWeight });
+    }
+  }, [effectiveFontWeight, element.fontWeight, fontDef, id, update]);
 
   // Registry fonts (Satori-rendered) + brand fonts + whatever this element
   // already uses, de-duplicated.
@@ -559,8 +617,20 @@ function TextProps({ element }: { element: TextElement }) {
             value={element.fontFamily}
             onValueChange={(v) => {
               if (!v) return;
+              const nextDef = FONTS[v];
               snapshot();
-              update(id, { fontFamily: v });
+              update(
+                id,
+                nextDef
+                  ? {
+                      fontFamily: v,
+                      fontWeight: normalizeWeight(
+                        nextDef,
+                        element.fontWeight ?? NORMAL_FONT_WEIGHT,
+                      ),
+                    }
+                  : { fontFamily: v },
+              );
             }}
           >
             <SelectTrigger
@@ -593,9 +663,28 @@ function TextProps({ element }: { element: TextElement }) {
             />
           )}
         </Field>
+        <Field label="Style">
+          <Toggle
+            pressed={bold}
+            variant="outline"
+            size="default"
+            className="h-8 w-full justify-start px-2.5"
+            aria-label="Bold"
+            title="Bold"
+            onPressedChange={(pressed) => {
+              snapshot();
+              update(id, {
+                fontWeight: pressed ? BOLD_FONT_WEIGHT : NORMAL_FONT_WEIGHT,
+              });
+            }}
+          >
+            <Bold className="size-4" />
+            Bold
+          </Toggle>
+        </Field>
         <Field label="Weight">
           <Select
-            value={String(element.fontWeight ?? 400)}
+            value={String(effectiveFontWeight)}
             onValueChange={(v) => {
               if (!v) return;
               snapshot();
@@ -606,7 +695,7 @@ function TextProps({ element }: { element: TextElement }) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {[300, 400, 500, 600, 700, 800, 900].map((w) => (
+              {fontWeightOptions.map((w) => (
                 <SelectItem key={w} value={String(w)}>
                   {w}
                 </SelectItem>

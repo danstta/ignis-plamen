@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { workflowRuns, workflows } from "@/lib/db/schema";
 import type { WorkflowRun } from "@/lib/db/schema";
@@ -107,6 +107,16 @@ export type RunStatePatch = Partial<{
   error: string | null;
 }>;
 
+function stoppedNodeStates(
+  states: Record<string, NodeRunState>,
+): Record<string, NodeRunState> {
+  const next: Record<string, NodeRunState> = {};
+  for (const [id, state] of Object.entries(states)) {
+    next[id] = state === "running" || state === "waiting" ? "stopped" : state;
+  }
+  return next;
+}
+
 /** Persist a run's evolving state. Called after each node so pauses are durable. */
 export async function saveRunState(
   id: string,
@@ -118,4 +128,32 @@ export async function saveRunState(
     .where(eq(workflowRuns.id, id))
     .returning();
   return rows[0] ?? null;
+}
+
+export async function stopRun(id: string): Promise<WorkflowRun | null> {
+  const rows = await db()
+    .update(workflowRuns)
+    .set({
+      status: "stopped",
+      waitingNodeId: null,
+      resumeToken: null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(workflowRuns.id, id),
+        inArray(workflowRuns.status, ["running", "waiting"]),
+      ),
+    )
+    .returning();
+  const stopped = rows[0];
+  if (!stopped) return null;
+
+  const nodeStates = stoppedNodeStates(stopped.nodeStates);
+  const stateRows = await db()
+    .update(workflowRuns)
+    .set({ nodeStates, updatedAt: new Date() })
+    .where(eq(workflowRuns.id, id))
+    .returning();
+  return stateRows[0] ?? stopped;
 }

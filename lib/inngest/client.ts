@@ -14,6 +14,11 @@ export type RunResumeData = {
   resumeToken: string;
   choiceUrl?: string;
   selectedUrls?: string[];
+  selectedImages?: {
+    url: string;
+    objectPosition?: string;
+    scale?: number;
+  }[];
 };
 
 /**

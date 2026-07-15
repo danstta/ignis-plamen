@@ -19,6 +19,7 @@ export async function listTemplates() {
     .select({
       id: templates.id,
       name: templates.name,
+      folderId: templates.folderId,
       width: templates.width,
       height: templates.height,
       doc: templates.doc,

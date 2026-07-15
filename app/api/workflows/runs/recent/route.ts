@@ -15,7 +15,13 @@ import type { RunStatus } from "@/lib/workflows/types";
  */
 export const dynamic = "force-dynamic";
 
-const STATUSES: RunStatus[] = ["running", "waiting", "success", "error"];
+const STATUSES: RunStatus[] = [
+  "running",
+  "waiting",
+  "success",
+  "error",
+  "stopped",
+];
 
 export async function GET(req: NextRequest) {
   try {

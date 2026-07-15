@@ -1,4 +1,6 @@
+import { createHmac, timingSafeEqual } from "crypto";
 import { ensureFreshToken } from "@/lib/connections/oauth";
+import { publicAppUrl, sessionSecret } from "@/lib/env";
 
 const DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files";
 const DRIVE_UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files";
@@ -60,6 +62,43 @@ function driveDirectLink(fileId: string): string {
   return `https://drive.google.com/uc?export=view&id=${encodeURIComponent(fileId)}`;
 }
 
+function googleDriveImageSignature(connectionId: string, fileId: string): string {
+  return createHmac("sha256", sessionSecret())
+    .update(`${connectionId}:${fileId}`)
+    .digest("base64url");
+}
+
+function proxyBaseUrl(): string {
+  return (
+    publicAppUrl() ??
+    (process.env.NODE_ENV === "production" ? "" : "http://localhost:3000")
+  );
+}
+
+export function verifyGoogleDriveImageSignature(input: {
+  connectionId: string;
+  fileId: string;
+  signature: string;
+}): boolean {
+  const expected = Buffer.from(
+    googleDriveImageSignature(input.connectionId, input.fileId),
+  );
+  const actual = Buffer.from(input.signature);
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
+}
+
+export function signedGoogleDriveImageUrl(input: {
+  connectionId: string;
+  fileId: string;
+}): string {
+  const path = `/api/drive-images/${encodeURIComponent(input.fileId)}`;
+  const params = new URLSearchParams({
+    connectionId: input.connectionId,
+    sig: googleDriveImageSignature(input.connectionId, input.fileId),
+  });
+  return `${proxyBaseUrl()}${path}?${params.toString()}`;
+}
+
 function escapeDriveQueryValue(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
@@ -109,13 +148,16 @@ export function parseGoogleDriveFolderId(input: string): string {
   return value;
 }
 
-function toImageFile(file: DriveFileResponse): GoogleDriveImageFile | undefined {
+function toImageFile(
+  file: DriveFileResponse,
+  connectionId: string,
+): GoogleDriveImageFile | undefined {
   if (!file.id || !file.mimeType?.startsWith("image/")) return undefined;
   return {
     id: file.id,
     name: file.name ?? file.id,
     mimeType: file.mimeType,
-    url: driveDirectLink(file.id),
+    url: signedGoogleDriveImageUrl({ connectionId, fileId: file.id }),
     webViewLink: file.webViewLink ?? driveViewLink(file.id),
     webContentLink: file.webContentLink,
     thumbnailLink: file.thumbnailLink,
@@ -130,6 +172,7 @@ function isDriveFolder(file: DriveFileResponse): file is DriveFileResponse & { i
 }
 
 async function listGoogleDriveFolderChildren(input: {
+  connectionId: string;
   token: string;
   folderId: string;
   maxImages: number;
@@ -182,7 +225,7 @@ async function listGoogleDriveFolderChildren(input: {
         continue;
       }
 
-      const image = toImageFile(file);
+      const image = toImageFile(file, input.connectionId);
       if (!image) continue;
       input.images.push(image);
       if (input.images.length >= input.maxImages) break;
@@ -216,6 +259,7 @@ export async function listGoogleDriveFolderImages(input: {
 
     const childFolderIds = await listGoogleDriveFolderChildren({
       token,
+      connectionId: input.connectionId,
       folderId: currentFolderId,
       maxImages,
       images,
@@ -227,6 +271,33 @@ export async function listGoogleDriveFolderImages(input: {
   }
 
   return images;
+}
+
+export async function fetchGoogleDriveImageFile(input: {
+  connectionId: string;
+  fileId: string;
+}): Promise<{ bytes: ArrayBuffer; contentType: string }> {
+  const token = await ensureFreshToken(input.connectionId);
+  const url = new URL(
+    `${DRIVE_FILES_URL}/${encodeURIComponent(input.fileId)}`,
+  );
+  url.searchParams.set("alt", "media");
+  url.searchParams.set("supportsAllDrives", "true");
+
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!res.ok) {
+    const message = await res.text().catch(() => res.statusText);
+    throw new Error(`Google Drive image fetch failed (${res.status}): ${message}`);
+  }
+
+  return {
+    bytes: await res.arrayBuffer(),
+    contentType: res.headers.get("content-type") ?? "image/jpeg",
+  };
 }
 
 export async function uploadGoogleDriveFile(input: {

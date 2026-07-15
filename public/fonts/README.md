@@ -11,17 +11,21 @@ exported PNGs. These are read at render time by `lib/render/fonts.ts`.
 
 ## Expected files
 
-The registry currently references these (adjust the `weights` array there to
-match whatever you actually add):
+The registry currently references this local family (adjust the `weights` array
+there to match whatever you actually add):
 
-| Family     | Files                                                        |
-| ---------- | ------------------------------------------------------------ |
-| Canva Sans | `canva-sans-400.woff`, `canva-sans-500.woff`, `canva-sans-700.woff` |
-| Garet      | `garet-400.woff`, `garet-500.woff`, `garet-700.woff`         |
+| Family | Files                            |
+| ------ | -------------------------------- |
+| Garet  | `garet-400.otf`, `garet-700.otf` |
+
+The checked-in Garet files are the free Book and Heavy weights. They are mapped
+to `400` and `700` so normal and bold text render close to the Garet available in
+Canva while keeping the editor and PNG renderer on the same files.
 
 A missing file is not an error — the renderer just falls back to Inter for that
-family until the file is added. The editor's font picker shows a note for any
-family whose face can't be embedded.
+family until the file is added. Only list local fonts in the registry once their
+files are present, so the editor's built-in picker stays limited to fonts the PNG
+renderer can actually embed.
 
 ## Adding another local font
 

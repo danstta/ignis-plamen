@@ -20,6 +20,7 @@ export const renderTemplateBatchMeta: NodeMeta<RenderTemplateBatchConfig> = {
   description:
     "Renders several template versions from an input image list and returns them as an array.",
   category: "output",
+  group: "design",
   inputs: [{ id: "images", label: "Images", kind: "data" }],
   outputs: [
     { id: "designs", label: "Designs", kind: "data" },

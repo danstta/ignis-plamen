@@ -6,6 +6,7 @@ const STYLES: Record<string, string> = {
   success:
     "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
   error: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
+  stopped: "bg-zinc-100 text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300",
 };
 
 const LABELS: Record<string, string> = {
@@ -13,6 +14,7 @@ const LABELS: Record<string, string> = {
   waiting: "Waiting for review",
   success: "Success",
   error: "Error",
+  stopped: "Stopped",
 };
 
 export function RunStatusBadge({ status }: { status: string }) {

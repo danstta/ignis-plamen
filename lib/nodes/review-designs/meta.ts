@@ -18,6 +18,7 @@ export const reviewDesignsMeta: NodeMeta<ReviewDesignsConfig> = {
   description:
     "Pauses the workflow so you can pick one generated design, then continues with that choice.",
   category: "control",
+  group: "design",
   inputs: [{ id: "designs", label: "Designs", kind: "data" }],
   outputs: [
     { id: "chosen", label: "Chosen design URL", kind: "image" },
@@ -43,14 +44,14 @@ export const reviewDesignsMeta: NodeMeta<ReviewDesignsConfig> = {
       name: "instagramPreviewEnabled",
       label: "Instagram grid preview",
       type: "boolean",
-      help: "When enabled, the paused review screen fetches the profile's latest 8 posts and previews each design as the next grid tile.",
+      help: "When enabled, the paused review screen previews each design as the next grid tile. Uses configured test post URLs, or generated mock posts when none are set.",
     },
     {
       name: "instagramUsername",
       label: "Instagram username",
       type: "text",
       placeholder: "brandhandle",
-      help: "Use a public username. Requires Instagram API credentials on the server.",
+      help: "Used to label and seed the testing grid preview. No Instagram API credentials are required.",
     },
   ],
   configSchema: reviewDesignsConfigSchema,

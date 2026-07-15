@@ -14,6 +14,7 @@ export const manualReviewMeta: NodeMeta<ManualReviewConfig> = {
   description:
     "Choose the final image — automatically (top-ranked) or by pausing for a human pick.",
   category: "control",
+  group: "flow",
   inputs: [{ id: "ranked", label: "Ranked images", kind: "data" }],
   outputs: [{ id: "chosen", label: "Chosen image", kind: "image" }],
   configFields: [

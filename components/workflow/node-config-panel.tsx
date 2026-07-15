@@ -44,7 +44,12 @@ import {
   type NotionPropertyUpdate,
 } from "@/lib/nodes/notion-update-page/meta";
 import { CURATE_IMAGES_TYPE_ID } from "@/lib/nodes/curate-images/meta";
+import { PREVIEW_DESIGN_IMAGE_TYPE_ID } from "@/lib/nodes/preview-design-image/meta";
 import { RENDER_TEMPLATE_BATCH_TYPE_ID } from "@/lib/nodes/render-template-batch/meta";
+import {
+  FIND_LOCATION_IMAGES_TYPE_ID,
+  MAX_LOCATION_IMAGE_QUERIES,
+} from "@/lib/nodes/find-location-images/meta";
 import { useWorkflowEditor } from "@/lib/workflows/store";
 import {
   collectConnectablePorts,
@@ -137,22 +142,27 @@ function TokenMenu({
 }
 
 /**
- * Single-line binding input: literal text plus a "Data" picker that inserts a
- * `{{nodeId.path}}` token at the cursor. Used for each template placeholder.
+ * Binding input: literal text plus a "Data" picker that inserts a
+ * `{{nodeId.path}}` token at the cursor.
  */
 function TokenBindingInput({
   value,
   onChange,
   fields,
   placeholder,
+  multiline = false,
 }: {
   value: string;
   onChange: (v: string) => void;
   fields: FieldRef[];
   placeholder?: string;
+  multiline?: boolean;
 }) {
-  const ref = useRef<HTMLInputElement>(null);
+  const ref = useRef<FieldEl>(null);
   const [open, setOpen] = useState(false);
+  const setBindingRef = (el: FieldEl) => {
+    ref.current = el;
+  };
 
   const insert = (token: string) => {
     const el = ref.current;
@@ -174,13 +184,24 @@ function TokenBindingInput({
   return (
     <div className="relative">
       <div className="flex items-start gap-1.5">
-        <Input
-          ref={ref}
-          value={value}
-          placeholder={placeholder}
-          onChange={(e) => onChange(e.target.value)}
-          autoComplete="off"
-        />
+        {multiline ? (
+          <Textarea
+            ref={setBindingRef}
+            value={value}
+            placeholder={placeholder}
+            onChange={(e) => onChange(e.target.value)}
+            rows={3}
+            className="min-h-20 resize-y"
+          />
+        ) : (
+          <Input
+            ref={setBindingRef}
+            value={value}
+            placeholder={placeholder}
+            onChange={(e) => onChange(e.target.value)}
+            autoComplete="off"
+          />
+        )}
         {fields.length > 0 ? (
           <Button
             type="button"
@@ -426,7 +447,9 @@ export function NodeConfigPanel({
   };
 
   const renderField = (f: NodeConfigField) => {
-    const value = config[f.name];
+    const value =
+      config[f.name] ??
+      (f.legacyValueField ? config[f.legacyValueField] : undefined);
     const str = value === undefined || value === null ? "" : String(value);
     const setRef = (el: FieldEl) => {
       fieldEls.current[f.name] = el;
@@ -466,6 +489,56 @@ export function NodeConfigPanel({
             onChange={(e) => set(f.name, e.target.value)}
           />
         );
+      case "checkbox-group": {
+        const options = f.options ?? [];
+        const legacyValue =
+          f.legacyValueMap && typeof config[f.legacyValueMap.field] === "string"
+            ? f.legacyValueMap.values[String(config[f.legacyValueMap.field])]
+            : undefined;
+        const currentValues = Array.isArray(value)
+          ? value
+          : Array.isArray(legacyValue)
+            ? legacyValue
+            : Array.isArray(f.defaultValue)
+              ? f.defaultValue
+              : [];
+        const selectedValues = currentValues
+          .map((item) => String(item))
+          .filter((item) => options.some((option) => option.value === item));
+
+        return (
+          <div className="grid gap-1.5">
+            {options.map((option) => {
+              const checked = selectedValues.includes(option.value);
+              const disableLast = checked && selectedValues.length === 1;
+              return (
+                <label
+                  key={option.value}
+                  className={cn(
+                    "flex min-h-9 cursor-pointer items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent",
+                    checked && "border-ring bg-accent/50",
+                    disableLast && "cursor-default opacity-80",
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    className="size-4 rounded border-input accent-foreground"
+                    checked={checked}
+                    disabled={disableLast}
+                    onChange={(event) => {
+                      const next = event.target.checked
+                        ? [...selectedValues, option.value]
+                        : selectedValues.filter((item) => item !== option.value);
+                      set(f.name, next);
+                    }}
+                  />
+                  <span>{option.label}</span>
+                </label>
+              );
+            })}
+          </div>
+        );
+      }
       case "select": {
         const options = modelOptionsForField(f);
         const selectValue = options.some((o) => o.value === str) ? str : "";
@@ -709,8 +782,22 @@ export function NodeConfigPanel({
         </div>
       ))}
 
+      {node.type === FIND_LOCATION_IMAGES_TYPE_ID ? (
+        <FindLocationQueriesEditor
+          queries={locationQueriesFromConfig(config)}
+          fields={upstreamFields}
+          onChange={(next) =>
+            setConfig({
+              locationQueries: next,
+              locationQuery: next[0] ?? "",
+            })
+          }
+        />
+      ) : null}
+
       {node.type === "render-template" ||
       node.type === RENDER_TEMPLATE_BATCH_TYPE_ID ||
+      node.type === PREVIEW_DESIGN_IMAGE_TYPE_ID ||
       node.type === CURATE_IMAGES_TYPE_ID ? (
         <RenderTemplatePlaceholders
           templateId={String(config.templateId ?? "")}
@@ -825,6 +912,92 @@ export function NodeConfigPanel({
   );
 }
 
+function locationQueriesFromConfig(config: Record<string, unknown>): string[] {
+  const queries = Array.isArray(config.locationQueries)
+    ? config.locationQueries.map((query) =>
+        typeof query === "string" ? query : "",
+      )
+    : [];
+  if (queries.length > 0) return queries;
+  const legacy = typeof config.locationQuery === "string" ? config.locationQuery : "";
+  return [legacy];
+}
+
+function FindLocationQueriesEditor({
+  queries,
+  fields,
+  onChange,
+}: {
+  queries: string[];
+  fields: FieldRef[];
+  onChange: (next: string[]) => void;
+}) {
+  const update = (index: number, value: string) => {
+    const next = queries.map((query, i) => (i === index ? value : query));
+    onChange(next);
+  };
+  const canAdd = queries.length < MAX_LOCATION_IMAGE_QUERIES;
+  const add = () => {
+    if (canAdd) onChange([...queries, ""]);
+  };
+  const remove = (index: number) => {
+    const next = queries.filter((_, i) => i !== index);
+    onChange(next.length > 0 ? next : [""]);
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium tracking-wide text-muted-foreground/70">
+            Location queries
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Search each location with the same providers and result limits.
+          </p>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-7 shrink-0 gap-1 px-2 text-xs"
+          disabled={!canAdd}
+          onClick={add}
+        >
+          <Plus className="size-3.5" /> Add
+        </Button>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        {queries.map((query, index) => (
+          <div key={index} className="flex items-start gap-1.5">
+            <div className="min-w-0 flex-1">
+              <Label className="sr-only">Location query {index + 1}</Label>
+              <TokenBindingInput
+                value={query}
+                onChange={(value) => update(index, value)}
+                fields={fields}
+                placeholder="Venue, city, country, or insert webhook data"
+              />
+            </div>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="size-9 shrink-0 text-muted-foreground hover:text-destructive"
+              title="Remove query"
+              disabled={queries.length === 1}
+              onClick={() => remove(index)}
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** Dynamic property mapping rows for the Notion Update Page node. */
 function NotionPropertiesEditor({
   properties,
@@ -926,6 +1099,7 @@ function NotionPropertiesEditor({
               value={String(row.value ?? "")}
               onChange={(value) => updateProperty(row.id, { value })}
               fields={fields}
+              multiline
               placeholder="Value - or insert data"
             />
           </div>

@@ -107,6 +107,11 @@ DATABASE_URL_UNPOOLED=postgresql://user:password@host:5432/dbname
 ADMIN_PASSWORD=your-admin-password
 SESSION_SECRET=a-long-random-secret-string
 
+# Encrypts connection credentials (OAuth tokens, API keys) at rest in Postgres.
+# Generate: bun -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+# Strongly recommended in production. Changing/losing it makes existing connections unreadable.
+CONNECTIONS_ENCRYPTION_KEY=
+
 # Public URL (used for OAuth redirects and webhooks)
 PUBLIC_APP_URL=https://your-domain.com
 
@@ -138,6 +143,8 @@ INSTAGRAM_PREVIEW_POST_URLS=
 ```
 
 Only `DATABASE_URL`, `ADMIN_PASSWORD`, and `SESSION_SECRET` are required to run the core app. The other variables are needed only for the specific integrations they power.
+
+Existing deployments enabling `CONNECTIONS_ENCRYPTION_KEY` should set the key and run `bun scripts/encrypt-connections.ts` once to seal rows stored before encryption; treat credentials stored before encryption was enabled as having been readable at rest — rotate them (reconnect OAuth accounts / reissue API keys) if the database or its backups may have been exposed.
 
 ### Find Location Images setup
 

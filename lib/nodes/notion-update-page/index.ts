@@ -165,7 +165,7 @@ export const notionUpdatePageNode: NodeDefinition<NotionUpdatePageConfig> = {
       throw new Error(`Notion update failed: ${message}`);
     }
 
-    ctx.log(`updated ${Object.keys(properties).length} Notion property value(s)`);
+    await ctx.log(`updated ${Object.keys(properties).length} Notion property value(s)`);
 
     return {
       type: "output",

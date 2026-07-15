@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ChevronDown } from "lucide-react";
-import { getRun } from "@/lib/workflows/runs-service";
+import { getRun, getRunLogs } from "@/lib/workflows/runs-service";
 import { getWorkflow } from "@/lib/workflows/service";
 import { getNodeType } from "@/lib/nodes/registry";
 import { browserPreviewUrlForImageUrl } from "@/lib/nodes/image-input";
@@ -170,6 +170,7 @@ export default async function RunDetailPage({
   if (!run || run.workflowId !== id) notFound();
   const workflow = await getWorkflow(id);
   if (!workflow) notFound();
+  const runLogs = await getRunLogs(runId);
 
   const graph = workflow.graph as WorkflowGraph;
   const renderUrls = findRenderUrls(run.nodeOutputs);
@@ -471,7 +472,8 @@ export default async function RunDetailPage({
             const def = getNodeType(n.type);
             const state = run.nodeStates[n.id] ?? "pending";
             const outputs = run.nodeOutputs[n.id];
-            const logs = run.nodeLogs?.[n.id] ?? [];
+            // Prefer the log table; fall back to jsonb for historical runs.
+            const logs = runLogs[n.id] ?? run.nodeLogs?.[n.id] ?? [];
             return (
               <RunNodeCard
                 key={n.id}

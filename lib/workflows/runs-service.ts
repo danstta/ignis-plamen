@@ -1,8 +1,14 @@
-import { and, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { workflowRuns, workflows } from "@/lib/db/schema";
+import { workflowRunLogs, workflowRuns, workflows } from "@/lib/db/schema";
 import type { WorkflowRun } from "@/lib/db/schema";
-import type { NodeOutputs, NodeRunState, RunLogEntry, RunStatus } from "./types";
+import type {
+  NodeOutputs,
+  NodeRunState,
+  RunLogEntry,
+  RunLogLevel,
+  RunStatus,
+} from "./types";
 
 export async function createRun(
   workflowId: string,
@@ -22,6 +28,16 @@ export async function getRun(id: string) {
     .where(eq(workflowRuns.id, id))
     .limit(1);
   return rows[0] ?? null;
+}
+
+/** Cheap status probe for engine loop control — never loads the jsonb blobs. */
+export async function getRunStatus(id: string): Promise<RunStatus | null> {
+  const rows = await db()
+    .select({ status: workflowRuns.status })
+    .from(workflowRuns)
+    .where(eq(workflowRuns.id, id))
+    .limit(1);
+  return rows[0]?.status ?? null;
 }
 
 export async function listRuns(workflowId?: string) {
@@ -97,11 +113,47 @@ export async function listRunsWithWorkflow(
     .limit(opts.limit ?? 200);
 }
 
+/** Insert one log line. Idempotent under replay (see workflowRunLogs). */
+export async function appendRunLog(entry: {
+  runId: string;
+  nodeId: string;
+  visit: number;
+  seq: number;
+  level: RunLogLevel;
+  message: string;
+}): Promise<void> {
+  await db().insert(workflowRunLogs).values(entry).onConflictDoNothing();
+}
+
+/** All logs for a run, grouped per node in (visit, seq) order. */
+export async function getRunLogs(
+  runId: string,
+): Promise<Record<string, RunLogEntry[]>> {
+  const rows = await db()
+    .select()
+    .from(workflowRunLogs)
+    .where(eq(workflowRunLogs.runId, runId))
+    .orderBy(
+      asc(workflowRunLogs.nodeId),
+      asc(workflowRunLogs.visit),
+      asc(workflowRunLogs.seq),
+    );
+  const grouped: Record<string, RunLogEntry[]> = {};
+  for (const row of rows) {
+    (grouped[row.nodeId] ??= []).push({
+      id: `${row.visit}:${row.seq}`,
+      timestamp: row.createdAt.toISOString(),
+      level: row.level,
+      message: row.message,
+    });
+  }
+  return grouped;
+}
+
 export type RunStatePatch = Partial<{
   status: RunStatus;
   nodeOutputs: Record<string, NodeOutputs>;
   nodeStates: Record<string, NodeRunState>;
-  nodeLogs: Record<string, RunLogEntry[]>;
   waitingNodeId: string | null;
   resumeToken: string | null;
   error: string | null;
@@ -128,6 +180,54 @@ export async function saveRunState(
     .where(eq(workflowRuns.id, id))
     .returning();
   return rows[0] ?? null;
+}
+
+/**
+ * Persist a status-changing patch only when the run is still in one of
+ * `fromStatuses`. Returns the updated row, or null when the transition lost
+ * (e.g. a concurrent stopRun already landed) — callers must treat null as
+ * "the run is no longer mine to advance" and unwind quietly.
+ */
+export async function transitionRunState(
+  id: string,
+  fromStatuses: RunStatus[],
+  patch: RunStatePatch,
+): Promise<WorkflowRun | null> {
+  const rows = await db()
+    .update(workflowRuns)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(
+      and(
+        eq(workflowRuns.id, id),
+        inArray(workflowRuns.status, fromStatuses),
+      ),
+    )
+    .returning();
+  return rows[0] ?? null;
+}
+
+/**
+ * Reap runs stuck in "running" whose last persist is older than
+ * `staleMinutes`. Only "running" — "waiting" runs legitimately pause for days.
+ * Every node boundary persists (touching updated_at), so a healthy run never
+ * goes this long without a write. Returns the number of runs reaped.
+ */
+export async function markStaleRunsAsError(staleMinutes = 30): Promise<number> {
+  const rows = await db()
+    .update(workflowRuns)
+    .set({
+      status: "error",
+      error: "Run stalled and was reaped.",
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(workflowRuns.status, "running"),
+        sql`${workflowRuns.updatedAt} < now() - make_interval(mins => ${staleMinutes})`,
+      ),
+    )
+    .returning({ id: workflowRuns.id });
+  return rows.length;
 }
 
 export async function stopRun(id: string): Promise<WorkflowRun | null> {

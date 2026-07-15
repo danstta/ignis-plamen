@@ -664,7 +664,7 @@ export const findLocationImagesNode: NodeDefinition<FindLocationImagesConfig> = 
       queryResults.flatMap((result) => result.candidates),
     );
     if (selected.length === 0) {
-      ctx.log(`No reusable photos found for ${locations.length} location query(s)`);
+      await ctx.log(`No reusable photos found for ${locations.length} location query(s)`);
     }
 
     return {

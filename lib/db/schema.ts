@@ -7,6 +7,7 @@ import {
   boolean,
   jsonb,
   timestamp,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 import type { TemplateDoc } from "@/lib/editor/types";
 import type { BrandColor, BrandFont } from "@/lib/brand/types";
@@ -207,7 +208,48 @@ export const workflowRuns = pgTable("workflow_runs", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
-});
+}, (table) => [
+  // Serves the per-workflow runs list (filter + newest-first sort).
+  index("workflow_runs_workflow_id_created_at_idx").on(
+    table.workflowId,
+    table.createdAt.desc(),
+  ),
+  // Serves the global runs list/poll.
+  index("workflow_runs_created_at_idx").on(table.createdAt.desc()),
+  // Serves the status filter and the stale-run reaper.
+  index("workflow_runs_status_idx").on(table.status),
+]);
+
+/**
+ * Append-only run log. Replay-idempotent: the engine derives (visit, seq)
+ * deterministically, so a replayed Inngest execution re-inserts the same keys
+ * and ON CONFLICT DO NOTHING makes the write a no-op. Never UPDATE this table.
+ */
+export const workflowRunLogs = pgTable(
+  "workflow_run_logs",
+  {
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => workflowRuns.id, { onDelete: "cascade" }),
+    nodeId: text("node_id").notNull(),
+    /** Engine visit number for the node (redoPrevious re-runs increment it). */
+    visit: integer("visit").notNull().default(1),
+    /** Per-(node, visit) monotonically increasing entry number. */
+    seq: integer("seq").notNull(),
+    level: text("level", { enum: ["info", "warn", "error"] })
+      .notNull()
+      .default("info"),
+    message: text("message").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.runId, table.nodeId, table.visit, table.seq],
+    }),
+  ],
+);
 
 /** On/off state for a registry plugin. The row id IS the plugin id. */
 export const plugins = pgTable("plugins", {
@@ -237,7 +279,14 @@ export const webhookEvents = pgTable("webhook_events", {
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
-});
+}, (table) => [
+  // Serves the "latest captured sample event" lookup.
+  index("webhook_events_workflow_node_created_at_idx").on(
+    table.workflowId,
+    table.nodeId,
+    table.createdAt.desc(),
+  ),
+]);
 
 export type BrandRow = typeof brands.$inferSelect;
 export type NewBrand = typeof brands.$inferInsert;
@@ -253,6 +302,7 @@ export type Workflow = typeof workflows.$inferSelect;
 export type NewWorkflow = typeof workflows.$inferInsert;
 export type WorkflowRun = typeof workflowRuns.$inferSelect;
 export type NewWorkflowRun = typeof workflowRuns.$inferInsert;
+export type WorkflowRunLog = typeof workflowRunLogs.$inferSelect;
 export type PluginRow = typeof plugins.$inferSelect;
 export type NewPluginRow = typeof plugins.$inferInsert;
 export type WebhookEvent = typeof webhookEvents.$inferSelect;

@@ -1,8 +1,15 @@
 import { getNodeType } from "@/lib/nodes/registry";
 import { normalizeImageCandidates } from "@/lib/nodes/image-input";
-import { isNodeTypeEnabled } from "@/lib/plugins/service";
+import { enabledNodeTypeIds } from "@/lib/plugins/service";
 import { getWorkflow } from "./service";
-import { createRun, getRun, saveRunState } from "./runs-service";
+import {
+  appendRunLog,
+  createRun,
+  getRun,
+  getRunStatus,
+  saveRunState,
+  transitionRunState,
+} from "./runs-service";
 import {
   ELSE_BRANCH_ID,
   ROUTER_TYPE_ID,
@@ -22,7 +29,6 @@ import {
 import type {
   NodeOutputs,
   NodeRunState,
-  RunLogEntry,
   RunLogLevel,
   RunStatus,
   WorkflowGraph,
@@ -69,7 +75,6 @@ const inlineRunner: StepRunner = (_id, fn) => fn();
 type LocalState = {
   nodeOutputs: Record<string, NodeOutputs>;
   nodeStates: Record<string, NodeRunState>;
-  nodeLogs: Record<string, RunLogEntry[]>;
 };
 
 /**
@@ -100,19 +105,29 @@ async function execute(
   const run = await step("execute:load-run", () => getRun(runId));
   if (!run) return;
 
+  // Plugin state is static for a run's duration — load the enabled set once
+  // instead of one query per node. Memoized so replays reuse the snapshot from
+  // the first execution: toggles apply to new runs, not mid-run, including
+  // across retries/resumes. Stored as an array — step results round-trip
+  // through JSON, which a Set does not survive.
+  const enabledNodeTypes = new Set(
+    await step("execute:enabled-node-types", async () => [
+      ...(await enabledNodeTypeIds()),
+    ]),
+  );
+
   const state: LocalState = {
     nodeOutputs: { ...run.nodeOutputs },
     nodeStates: { ...run.nodeStates },
-    nodeLogs: { ...(run.nodeLogs ?? {}) },
   };
   const trigger = run.trigger ?? {};
   const nodeVisitCounts: Record<string, number> = {};
   const redoCounts: Record<string, number> = {};
+  /** Per-(node, visit) log entry counter — deterministic on replay. */
+  const logSeqCounts: Record<string, number> = {};
 
-  const currentRunStatus = async (): Promise<RunStatus | null> => {
-    const current = await getRun(runId);
-    return current?.status ?? null;
-  };
+  const currentRunStatus = async (): Promise<RunStatus | null> =>
+    getRunStatus(runId);
 
   const isStopped = async () => (await currentRunStatus()) === "stopped";
   const throwIfStopped = async () => {
@@ -126,26 +141,20 @@ async function execute(
       : `node:${nodeId}:${phase}:${visit}`;
   };
 
+  // Deliberately NOT step-wrapped: logNode is called from inside node `run()`
+  // steps (nested steps are forbidden). Replay safety comes from the insert
+  // being idempotent by its deterministic (runId, nodeId, visit, seq) key.
   const logNode = async (
     nodeId: string,
     message: string,
     level: RunLogLevel = "info",
   ) => {
-    const entry: RunLogEntry = {
-      id:
-        typeof crypto.randomUUID === "function"
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      timestamp: new Date().toISOString(),
-      level,
-      message,
-    };
-    state.nodeLogs[nodeId] = [...(state.nodeLogs[nodeId] ?? []), entry].slice(
-      -200,
-    );
     console.log(`[run ${runId}][${nodeId}] ${message}`);
+    const visit = nodeVisitCounts[nodeId] ?? 1;
+    const key = `${nodeId}:${visit}`;
+    const seq = (logSeqCounts[key] = (logSeqCounts[key] ?? 0) + 1);
     try {
-      await saveRunState(runId, { nodeLogs: state.nodeLogs });
+      await appendRunLog({ runId, nodeId, visit, seq, level, message });
     } catch (err) {
       console.warn(
         `[run ${runId}][${nodeId}] failed to persist log: ${
@@ -173,7 +182,7 @@ async function execute(
       return { type: "error", error: `Unknown node type: ${node.type}` };
     }
 
-    if (!(await isNodeTypeEnabled(node.type))) {
+    if (!enabledNodeTypes.has(node.type)) {
       return {
         type: "error",
         error: `Node "${def.label}" belongs to a disabled plugin`,
@@ -187,7 +196,6 @@ async function execute(
         await throwIfStopped();
         await saveRunState(runId, {
           nodeStates: state.nodeStates,
-          nodeLogs: state.nodeLogs,
         });
         return null;
       });
@@ -276,10 +284,9 @@ async function execute(
     if (outcome.type === "error") {
       state.nodeStates[node.id] = "error";
       await step(visitStepId(node.id, "persist"), () =>
-        saveRunState(runId, {
+        transitionRunState(runId, ["running", "waiting"], {
           status: "error",
           nodeStates: state.nodeStates,
-          nodeLogs: state.nodeLogs,
           error: outcome.error,
         }),
       );
@@ -293,12 +300,13 @@ async function execute(
         ...outcome.state,
         reviewUrl: `/workflows/${run.workflowId}/runs/${runId}`,
       } as NodeOutputs;
+      // A null transition means a concurrent stop won while the node was
+      // pausing — either way the walk unwinds here.
       await step(visitStepId(node.id, "persist"), () =>
-        saveRunState(runId, {
+        transitionRunState(runId, ["running"], {
           status: "waiting",
           nodeStates: state.nodeStates,
           nodeOutputs: state.nodeOutputs,
-          nodeLogs: state.nodeLogs,
           waitingNodeId: node.id,
           // Minted inside the step so the token is memoized with the write.
           resumeToken: crypto.randomUUID(),
@@ -313,7 +321,6 @@ async function execute(
       saveRunState(runId, {
         nodeStates: state.nodeStates,
         nodeOutputs: state.nodeOutputs,
-        nodeLogs: state.nodeLogs,
       }),
     );
     return "continue";
@@ -364,7 +371,7 @@ async function execute(
             if (!redoTarget || redoDef?.category === "trigger") {
               state.nodeStates[node.id] = "error";
               await step(`router:${node.id}:redo-target-error`, () =>
-                saveRunState(runId, {
+                transitionRunState(runId, ["running", "waiting"], {
                   status: "error",
                   nodeStates: state.nodeStates,
                   error: "Router cannot redo because there is no previous non-trigger step.",
@@ -378,7 +385,7 @@ async function execute(
             if (redoCounts[key] > maxAttempts) {
               state.nodeStates[node.id] = "error";
               await step(`router:${node.id}:redo-limit:${chosen}`, () =>
-                saveRunState(runId, {
+                transitionRunState(runId, ["running", "waiting"], {
                   status: "error",
                   nodeStates: state.nodeStates,
                   error: `Router exceeded ${maxAttempts} redo attempt(s) for "${redoDef?.label ?? redoTarget.type}".`,
@@ -409,9 +416,12 @@ async function execute(
     orderLane(trunkSteps(graph), graph.edges),
   );
   if (!finished) return;
-  if ((await currentRunStatus()) === "stopped") return;
 
-  await step("execute:finish", () => saveRunState(runId, { status: "success" }));
+  // Guarded transition: if a stop landed after the last node persisted, the
+  // update matches zero rows and the stop is preserved.
+  await step("execute:finish", () =>
+    transitionRunState(runId, ["running"], { status: "success" }),
+  );
 }
 
 /**
@@ -446,7 +456,7 @@ export async function startRun(
       : [];
     if (missing.length > 0) {
       await step("start:trigger-validation", () =>
-        saveRunState(run.id, {
+        transitionRunState(run.id, ["running"], {
           status: "error",
           nodeStates: { [triggerNodeId]: "error" },
           error: `Webhook payload is missing expected field(s): ${missing.join(", ")}`,
@@ -723,8 +733,8 @@ export async function resumeRun(
   );
   nodeStates[run.waitingNodeId] = "done";
 
-  await step("resume:apply-choice", () =>
-    saveRunState(runId, {
+  const resumed = await step("resume:apply-choice", () =>
+    transitionRunState(runId, ["waiting"], {
       status: "running",
       nodeOutputs,
       nodeStates,
@@ -732,6 +742,7 @@ export async function resumeRun(
       resumeToken: null,
     }),
   );
+  if (!resumed) throw new Error("Run is not awaiting input");
 
   await execute(runId, workflow.graph as WorkflowGraph, step);
 }

@@ -94,8 +94,15 @@ mock.module("./service", () => ({
   }),
 }));
 
+/** Node types whose (mock) owning plugin is enabled. */
+let enabledTypes: Set<string>;
+let enabledSetLoads = 0;
+
 mock.module("@/lib/plugins/service", () => ({
-  isNodeTypeEnabled: async () => true,
+  enabledNodeTypeIds: async () => {
+    enabledSetLoads += 1;
+    return enabledTypes;
+  },
 }));
 
 /** Node ids in the order their run() bodies actually executed. */
@@ -189,6 +196,8 @@ beforeEach(() => {
   routerOutputQueue = [];
   getRunCalls = 0;
   getRunStatusCalls = 0;
+  enabledTypes = new Set(Object.keys(nodeDefs));
+  enabledSetLoads = 0;
   transitionImpl = (_id, from, patch) =>
     from.includes(runRow.status) ? { ...runRow, ...patch } : null;
 });

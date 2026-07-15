@@ -1,6 +1,6 @@
 import { getNodeType } from "@/lib/nodes/registry";
 import { normalizeImageCandidates } from "@/lib/nodes/image-input";
-import { isNodeTypeEnabled } from "@/lib/plugins/service";
+import { enabledNodeTypeIds } from "@/lib/plugins/service";
 import { getWorkflow } from "./service";
 import {
   appendRunLog,
@@ -105,6 +105,10 @@ async function execute(
   const run = await step("execute:load-run", () => getRun(runId));
   if (!run) return;
 
+  // Plugin state is static for a run's duration — load the enabled set once
+  // instead of one query per node. Toggles apply to new runs, not mid-run.
+  const enabledNodeTypes = await enabledNodeTypeIds();
+
   const state: LocalState = {
     nodeOutputs: { ...run.nodeOutputs },
     nodeStates: { ...run.nodeStates },
@@ -171,7 +175,7 @@ async function execute(
       return { type: "error", error: `Unknown node type: ${node.type}` };
     }
 
-    if (!(await isNodeTypeEnabled(node.type))) {
+    if (!enabledNodeTypes.has(node.type)) {
       return {
         type: "error",
         error: `Node "${def.label}" belongs to a disabled plugin`,

@@ -6,6 +6,7 @@ import {
   appendRunLog,
   createRun,
   getRun,
+  getRunStatus,
   saveRunState,
   transitionRunState,
 } from "./runs-service";
@@ -114,10 +115,8 @@ async function execute(
   /** Per-(node, visit) log entry counter — deterministic on replay. */
   const logSeqCounts: Record<string, number> = {};
 
-  const currentRunStatus = async (): Promise<RunStatus | null> => {
-    const current = await getRun(runId);
-    return current?.status ?? null;
-  };
+  const currentRunStatus = async (): Promise<RunStatus | null> =>
+    getRunStatus(runId);
 
   const isStopped = async () => (await currentRunStatus()) === "stopped";
   const throwIfStopped = async () => {

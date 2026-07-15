@@ -54,13 +54,22 @@ let transitionImpl: (
   from: RunStatus[],
   patch: RunStatePatch,
 ) => Row | null;
+let getRunCalls = 0;
+let getRunStatusCalls = 0;
 
 mock.module("./runs-service", () => ({
   appendRunLog: async (entry: (typeof appendCalls)[number]) => {
     appendCalls.push(entry);
   },
   createRun: async () => runRow,
-  getRun: async () => runRow,
+  getRun: async () => {
+    getRunCalls += 1;
+    return runRow;
+  },
+  getRunStatus: async () => {
+    getRunStatusCalls += 1;
+    return runRow.status;
+  },
   saveRunState: async (id: string, patch: RunStatePatch) => {
     saveCalls.push({ id, patch });
     return runRow;
@@ -178,6 +187,8 @@ beforeEach(() => {
   saveCalls = [];
   nodeRuns = [];
   routerOutputQueue = [];
+  getRunCalls = 0;
+  getRunStatusCalls = 0;
   transitionImpl = (_id, from, patch) =>
     from.includes(runRow.status) ? { ...runRow, ...patch } : null;
 });

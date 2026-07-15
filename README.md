@@ -23,7 +23,10 @@
 ### Connections
 - OAuth 2.0 integration framework for third-party services
 - **Google Drive** — OAuth 2.0
-- **Notion** — API key authentication
+- **OpenAI** — API key
+- **Claude (Anthropic)** — API key
+- **Azure AI Foundry** — endpoint + API key (per-deployment model names)
+- **Notion** — internal integration token
 
 ### Workflow Automation
 - Visual workflow canvas built on [@xyflow/react](https://reactflow.dev/)
@@ -32,11 +35,24 @@
 **Available workflow nodes:**
 | Node | Description |
 |---|---|
-| Webhook Trigger | Starts a workflow from an inbound HTTP webhook |
-| Find Location Images | Finds reusable location photos via OpenStreetMap, Pexels, Wikimedia Commons, and Openverse |
-| Rank Images | Uses OpenAI GPT-4 Vision to score and filter images |
-| Manual Review | Pauses the run for a human to select an option |
-| Render Template | Fills template placeholders and renders a PNG |
+| Webhook | Starts the workflow when data is POSTed to its URL, exposing the request body, headers, and query to downstream nodes |
+| Find Location Images | Searches free/open image sources for real, reusable photos near the location |
+| Rank Images | Scores images with a vision model via an OpenAI or Azure AI Foundry connection (default model `gpt-4.1-mini`) and returns them sorted best-first |
+| Categorize Images | Assigns each image to one of your categories with vision and preserves the category downstream |
+| Curate Images | Pauses so you can swap similar images with alternates before continuing |
+| LLM Prompt | Calls an AI model with a custom prompt and returns generated text |
+| Manual Review | Chooses the final image — automatically (top-ranked) or by pausing for a human pick |
+| Render Template | Fills a template's placeholders and renders the final PNG |
+| Render Template Batch | Renders several template versions from an input image list and returns them as an array |
+| Preview Design Image | Pauses so you can preview candidate images inside a selected design before locking one |
+| Review Designs | Pauses the workflow so you can pick one generated design, then continues with that choice |
+| Rehost Image | Copies an image from an expiring URL (e.g. a Notion file) into permanent storage so a later step can't break when the source link expires |
+| Run Link | Outputs a link to the current workflow run so you can inspect progress and review paused steps |
+| Router | Routes the workflow down one of several branches based on conditions over upstream data — the first matching branch wins, otherwise the Else branch runs |
+| Update Notion Page | Updates selected Notion page properties from webhook or step data |
+| Sync Link Hub | Upserts Link Hub project rows into Supabase from a Notion webhook payload |
+| List Drive Images | Lists image files inside a Google Drive folder and its subfolders |
+| Upload Drive Files | Uploads one or more files to a Google Drive folder from file URLs or upstream outputs |
 
 ### Background Job Execution
 - Durable workflow execution via [Inngest](https://www.inngest.com/)
@@ -101,11 +117,19 @@ Create a `.env.local` file in the project root:
 ```env
 # Database
 DATABASE_URL=postgresql://user:password@host:5432/dbname
-DATABASE_URL_UNPOOLED=postgresql://user:password@host:5432/dbname
+# Direct (session-pooler / non-pooled) connection used by drizzle-kit migrations.
+# Falls back to DATABASE_URL when unset — fine for direct Postgres, required on
+# transaction poolers (Supabase port 6543, Neon pooled) where DDL must not run pooled.
+DIRECT_URL=postgresql://user:password@host:5432/dbname
 
 # Auth
 ADMIN_PASSWORD=your-admin-password
 SESSION_SECRET=a-long-random-secret-string
+
+# Encrypts connection credentials (OAuth tokens, API keys) at rest in Postgres.
+# Generate: bun -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+# Strongly recommended in production. Changing/losing it makes existing connections unreadable.
+CONNECTIONS_ENCRYPTION_KEY=
 
 # Public URL (used for OAuth redirects and webhooks)
 PUBLIC_APP_URL=https://your-domain.com
@@ -132,12 +156,26 @@ OPENAI_API_KEY=
 # Pexels (optional, for polished Find Location Images results)
 PEXELS_API_KEY=
 
+# Google Maps Platform (optional, for exact Google Places photos in Find Location Images)
+GOOGLE_MAPS_API_KEY=
+
+# Link Hub Notion -> Supabase sync (server-only)
+# Optional: set these when Link Hub writes to a different Supabase project than this app.
+LINK_HUB_SUPABASE_URL=
+LINK_HUB_SUPABASE_SERVICE_ROLE_KEY=
+NOTION_LINK_HUB_TOKEN=
+NOTION_LINK_HUB_DATA_SOURCE_ID=
+NOTION_LINK_HUB_WEBHOOK_VERIFICATION_TOKEN=
+# Notion property-name overrides for the Link Hub sync are listed in .env.example.
+
 # Instagram-style Review Designs preview (optional testing feed)
 # Comma- or newline-separated image URLs. When empty, mock grid posts are generated.
 INSTAGRAM_PREVIEW_POST_URLS=
 ```
 
 Only `DATABASE_URL`, `ADMIN_PASSWORD`, and `SESSION_SECRET` are required to run the core app. The other variables are needed only for the specific integrations they power.
+
+Existing deployments enabling `CONNECTIONS_ENCRYPTION_KEY` should set the key and run `bun scripts/encrypt-connections.ts` once to seal rows stored before encryption; treat credentials stored before encryption was enabled as having been readable at rest — rotate them (reconnect OAuth accounts / reissue API keys) if the database or its backups may have been exposed.
 
 ### Find Location Images setup
 

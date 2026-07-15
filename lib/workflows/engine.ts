@@ -1,3 +1,4 @@
+import { nodeDisplayLabel } from "@/lib/nodes/catalog";
 import { getNodeType } from "@/lib/nodes/registry";
 import { isNodeTypeEnabled } from "@/lib/plugins/service";
 import { getWorkflow } from "./service";
@@ -142,13 +143,13 @@ async function execute(
       if (!(await isNodeTypeEnabled(node.type))) {
         return {
           type: "error",
-          error: `Node "${def.label}" belongs to a disabled plugin`,
+          error: `Node "${nodeDisplayLabel(node)}" belongs to a disabled plugin`,
         };
       }
 
       try {
         state.nodeStates[node.id] = "running";
-        await logNode(node.id, `Started ${def.label}.`);
+        await logNode(node.id, `Started ${nodeDisplayLabel(node)}.`);
         await saveRunState(runId, {
           nodeStates: state.nodeStates,
           nodeLogs: state.nodeLogs,
@@ -184,7 +185,7 @@ async function execute(
         await logNode(node.id, message, "error");
         return {
           type: "error",
-          error: `${def.label}: ${message}`,
+          error: `${nodeDisplayLabel(node)}: ${message}`,
         };
       }
     });
@@ -299,7 +300,7 @@ async function execute(
                 saveRunState(runId, {
                   status: "error",
                   nodeStates: state.nodeStates,
-                  error: `Router exceeded ${maxAttempts} redo attempt(s) for "${redoDef?.label ?? redoTarget.type}".`,
+                  error: `Router exceeded ${maxAttempts} redo attempt(s) for "${nodeDisplayLabel(redoTarget)}".`,
                 }),
               );
               return false;

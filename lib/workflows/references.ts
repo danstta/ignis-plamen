@@ -1,4 +1,4 @@
-import { getNodeMeta } from "@/lib/nodes/catalog";
+import { getNodeMeta, nodeDisplayLabel } from "@/lib/nodes/catalog";
 import { CURATE_IMAGES_TYPE_ID } from "@/lib/nodes/curate-images/meta";
 import { RANK_IMAGES_TYPE_ID } from "@/lib/nodes/rank-images/meta";
 
@@ -19,6 +19,8 @@ import { RANK_IMAGES_TYPE_ID } from "@/lib/nodes/rank-images/meta";
 export type RefNode = {
   id: string;
   type: string;
+  /** Custom step name; shown instead of the type label in pickers when set. */
+  name?: string;
   config: Record<string, unknown>;
 };
 export type RefEdge = { source: string; target: string };
@@ -143,7 +145,7 @@ export function collectUpstreamFields(
   const refs: FieldRef[] = [];
   for (const n of priorNodes(nodeId, nodes, edges)) {
     const meta = getNodeMeta(n.type);
-    const nodeLabel = meta?.label ?? n.type;
+    const nodeLabel = nodeDisplayLabel(n);
 
     // Nothing selected means nothing exposed downstream. This keeps the Inputs
     // dropdowns and token pickers scoped to the contract the user chose.
@@ -200,7 +202,7 @@ export function collectConnectablePorts(
     for (const path of selectedOutputPaths(n)) {
       ports.push({
         nodeId: n.id,
-        nodeLabel: meta.label,
+        nodeLabel: nodeDisplayLabel(n),
         portId: path,
         portLabel: selectedOutputLabel(path, meta.outputs),
       });

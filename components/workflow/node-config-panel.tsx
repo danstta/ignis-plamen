@@ -17,7 +17,11 @@ import {
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { getNodeMeta, listNodeCatalog } from "@/lib/nodes/catalog";
+import {
+  getNodeMeta,
+  listNodeCatalog,
+  nodeDisplayLabel,
+} from "@/lib/nodes/catalog";
 import type { NodeConfigField } from "@/lib/nodes/types";
 import type { WorkflowGraph } from "@/lib/workflows/types";
 import type { TestNodeResult, WorkflowTestResult } from "@/lib/workflows/test-runner";
@@ -229,6 +233,7 @@ export function NodeConfigPanel({
   const edges = useWorkflowEditor((s) => s.edges);
   const workflowId = useWorkflowEditor((s) => s.workflowId);
   const updateNodeConfig = useWorkflowEditor((s) => s.updateNodeConfig);
+  const setNodeName = useWorkflowEditor((s) => s.setNodeName);
   const setInputEdge = useWorkflowEditor((s) => s.setInputEdge);
   const clearInputEdge = useWorkflowEditor((s) => s.clearInputEdge);
   const removeNode = useWorkflowEditor((s) => s.removeNode);
@@ -276,6 +281,7 @@ export function NodeConfigPanel({
     .map((n) => ({
       id: n.id,
       type: n.type ?? "",
+      name: n.data?.name,
       config: (n.data?.config ?? {}) as Record<string, unknown>,
     }));
   const refEdges = edges.map((e) => ({ source: e.source, target: e.target }));
@@ -545,8 +551,16 @@ export function NodeConfigPanel({
   return (
     <div className="flex flex-col gap-4 p-4">
       <div>
-        <p className="text-sm font-semibold">{def.label}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">{def.description}</p>
+        <Input
+          value={node.data?.name ?? ""}
+          onChange={(e) => setNodeName(selectedNodeId, e.target.value)}
+          placeholder={def.label}
+          aria-label="Step name"
+          className="h-8 font-semibold"
+        />
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          {def.label} — {def.description}
+        </p>
       </div>
 
       <Tabs defaultValue="config" className="min-w-0 gap-4">
@@ -1228,7 +1242,6 @@ function BranchStepList({
   return (
     <div className="flex flex-col gap-1.5">
       {steps.map((n, i) => {
-        const meta = getNodeMeta(n.type ?? "");
         return (
           <div
             key={n.id}
@@ -1239,7 +1252,7 @@ function BranchStepList({
               className="min-w-0 flex-1 truncate text-left font-medium"
               onClick={() => selectNode(n.id)}
             >
-              {meta?.label ?? n.type}
+              {nodeDisplayLabel({ type: n.type ?? "", name: n.data?.name })}
             </button>
             <button
               type="button"

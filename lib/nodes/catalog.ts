@@ -48,3 +48,13 @@ export function listNodeCatalog(): NodeMeta[] {
 export function getNodeMeta(id: string): NodeMeta | undefined {
   return byId.get(id);
 }
+
+/**
+ * Display label for a placed workflow node: its custom name when set, else the
+ * node type's label. Every surface that shows a step name (canvas card, config
+ * panel, token pickers, test results, run detail, engine logs) goes through
+ * this so renames apply everywhere consistently.
+ */
+export function nodeDisplayLabel(node: { type: string; name?: string }): string {
+  return node.name?.trim() || getNodeMeta(node.type)?.label || node.type;
+}

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { getRun } from "@/lib/workflows/runs-service";
 import { getWorkflow } from "@/lib/workflows/service";
-import { getNodeType } from "@/lib/nodes/registry";
+import { nodeDisplayLabel } from "@/lib/nodes/catalog";
 import type { WorkflowGraph } from "@/lib/workflows/types";
 import { RunStatusBadge } from "@/components/workflow/run-status-badge";
 import { CurateImagesPicker } from "@/components/workflow/curate-images-picker";
@@ -197,22 +197,20 @@ export default async function RunDetailPage({
         <h2 className="text-sm font-semibold">Nodes</h2>
         <div className="mt-2 divide-y rounded-lg border">
           {graph.nodes.map((n) => {
-            const def = getNodeType(n.type);
+            const label = nodeDisplayLabel(n);
             const state = run.nodeStates[n.id] ?? "pending";
             const outputs = run.nodeOutputs[n.id];
             const logs = run.nodeLogs?.[n.id] ?? [];
             return (
               <div key={n.id} className="px-4 py-3">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium">
-                    {def?.label ?? n.type}
-                  </span>
+                  <span className="text-sm font-medium">{label}</span>
                   <span className="text-xs text-muted-foreground">
                     {STATE_LABEL[state] ?? state}
                   </span>
                 </div>
                 <RunNodeLogPanel
-                  nodeLabel={def?.label ?? n.type}
+                  nodeLabel={label}
                   state={state}
                   logs={logs}
                   isLlmNode={n.type === "llm-prompt"}

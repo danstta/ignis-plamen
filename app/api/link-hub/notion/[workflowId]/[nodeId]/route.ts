@@ -8,6 +8,11 @@ import {
 import { isUuid } from "@/lib/utils";
 import { getWorkflow } from "@/lib/workflows/service";
 import { recordWebhookEvent } from "@/lib/workflows/webhook-events";
+import {
+  WEBHOOK_MAX_BODY_BYTES,
+  readBodyWithLimit,
+  sanitizeWebhookHeaders,
+} from "@/lib/workflows/webhook-ingest";
 import type { WorkflowGraph } from "@/lib/workflows/types";
 
 export const runtime = "nodejs";
@@ -28,7 +33,11 @@ export async function POST(
   ctx: RouteContext<"/api/link-hub/notion/[workflowId]/[nodeId]">,
 ) {
   const { workflowId, nodeId } = await ctx.params;
-  const rawBody = Buffer.from(await req.arrayBuffer());
+  const read = await readBodyWithLimit(req, WEBHOOK_MAX_BODY_BYTES);
+  if (!read.ok) {
+    return jsonError("Request body too large.", 413);
+  }
+  const rawBody = read.bytes;
 
   let body: unknown;
   try {
@@ -39,15 +48,26 @@ export async function POST(
 
   const signal = readNotionWebhookSignal(body);
   if (signal.verificationToken) {
+    // Never log the full token — it is the permanent HMAC signing key for this
+    // subscription, and Notion delivers it ONLY in this request (the settings
+    // UI can resend it here, not display it). The operator must capture it
+    // from this delivery through a channel of their choosing.
     console.info(
-      `[link-hub/notion ${workflowId}/${nodeId}] Notion verification_token: ${signal.verificationToken}`,
+      `[link-hub/notion ${workflowId}/${nodeId}] Notion verification handshake received (token ends …${signal.verificationToken.slice(-4)}). The full value is deliberately not logged; capture it at subscription time and set NOTION_LINK_HUB_WEBHOOK_VERIFICATION_TOKEN, or use Notion's "Resend token" once a capture channel is in place.`,
     );
     return NextResponse.json({ ok: true, verification: "received" });
   }
 
   const verificationToken = notionLinkHubWebhookVerificationToken();
+  if (!verificationToken) {
+    // Fail closed: without the token we cannot authenticate deliveries, and
+    // accepting them unsigned would let anyone with the URL start runs.
+    return jsonError(
+      "Notion webhook is not configured: set NOTION_LINK_HUB_WEBHOOK_VERIFICATION_TOKEN (captured from the subscription's verification request), then retry.",
+      503,
+    );
+  }
   if (
-    verificationToken &&
     !verifyNotionWebhookSignature(
       rawBody,
       req.headers.get("x-notion-signature"),
@@ -87,10 +107,9 @@ export async function POST(
     );
   }
 
-  const headers: Record<string, string> = {};
-  req.headers.forEach((value, key) => {
-    headers[key] = value;
-  });
+  // Persisted/forwarded headers are redacted (x-notion-signature included);
+  // signature verification above and dedupe below read req.headers directly.
+  const headers = sanitizeWebhookHeaders(req.headers);
   const query = Object.fromEntries(new URL(req.url).searchParams.entries());
   const payload = {
     body,
@@ -117,10 +136,11 @@ export async function POST(
   }
 
   const deliveryId =
-    headers["x-notion-delivery"] ??
-    headers["x-notion-request-id"] ??
-    headers["x-idempotency-key"] ??
-    headers["x-request-id"];
+    req.headers.get("x-notion-delivery") ??
+    req.headers.get("x-notion-request-id") ??
+    req.headers.get("x-idempotency-key") ??
+    req.headers.get("x-request-id") ??
+    undefined;
 
   await inngest.send(
     runStartEvent.create(

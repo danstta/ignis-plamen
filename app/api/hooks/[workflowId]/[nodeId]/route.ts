@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { getWorkflow } from "@/lib/workflows/service";
 import { recordWebhookEvent } from "@/lib/workflows/webhook-events";
+import {
+  WEBHOOK_MAX_BODY_BYTES,
+  readBodyWithLimit,
+  sanitizeWebhookHeaders,
+} from "@/lib/workflows/webhook-ingest";
 import { inngest, runStartEvent } from "@/lib/inngest/client";
 import type { WorkflowGraph } from "@/lib/workflows/types";
 import { isUuid } from "@/lib/utils";
@@ -17,17 +22,21 @@ export async function POST(
 ) {
   const { workflowId, nodeId } = await ctx.params;
 
-  const rawBody = await req.text();
+  const read = await readBodyWithLimit(req, WEBHOOK_MAX_BODY_BYTES);
+  if (!read.ok) {
+    return NextResponse.json({ error: "Request body too large." }, { status: 413 });
+  }
+  const rawBody = read.bytes.toString("utf8");
   let body: unknown;
   try {
     body = rawBody ? JSON.parse(rawBody) : {};
   } catch {
     body = rawBody; // not JSON — keep the raw string
   }
-  const headers: Record<string, string> = {};
-  req.headers.forEach((v, k) => {
-    headers[k] = v;
-  });
+  // Persisted/forwarded headers are redacted: workflows binding
+  // {{trigger.headers.<sensitive>}} see "[redacted]" — deliberate; secrets
+  // don't belong in run payloads. Dedupe below reads req.headers directly.
+  const headers = sanitizeWebhookHeaders(req.headers);
   const query = Object.fromEntries(new URL(req.url).searchParams.entries());
   const payload = { body, headers, query };
 
@@ -95,9 +104,10 @@ export async function POST(
     // id (that would never dedupe) nor a function-level idempotency expression
     // (that would collapse all header-less events into a single run).
     const deliveryId =
-      headers["x-idempotency-key"] ??
-      headers["x-github-delivery"] ??
-      headers["x-request-id"];
+      req.headers.get("x-idempotency-key") ??
+      req.headers.get("x-github-delivery") ??
+      req.headers.get("x-request-id") ??
+      undefined;
     // Let a send failure propagate to a 500 so the sender retries — the sample was
     // already captured above, so there is no data loss.
     await inngest.send(

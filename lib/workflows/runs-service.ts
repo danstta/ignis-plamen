@@ -196,6 +196,30 @@ export async function transitionRunState(
   return rows[0] ?? null;
 }
 
+/**
+ * Reap runs stuck in "running" whose last persist is older than
+ * `staleMinutes`. Only "running" — "waiting" runs legitimately pause for days.
+ * Every node boundary persists (touching updated_at), so a healthy run never
+ * goes this long without a write. Returns the number of runs reaped.
+ */
+export async function markStaleRunsAsError(staleMinutes = 30): Promise<number> {
+  const rows = await db()
+    .update(workflowRuns)
+    .set({
+      status: "error",
+      error: "Run stalled and was reaped.",
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(workflowRuns.status, "running"),
+        sql`${workflowRuns.updatedAt} < now() - make_interval(mins => ${staleMinutes})`,
+      ),
+    )
+    .returning({ id: workflowRuns.id });
+  return rows.length;
+}
+
 export async function stopRun(id: string): Promise<WorkflowRun | null> {
   const rows = await db()
     .update(workflowRuns)

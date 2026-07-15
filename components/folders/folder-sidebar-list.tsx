@@ -43,7 +43,8 @@ export function FolderSidebarList({
   const [, startTransition] = useTransition();
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [activeDrag, setActiveDrag] = useState<FolderDragPayload | null>(null);
-  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(
+  // Folders start closed; the set tracks the ones the user has opened.
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
     () => new Set(),
   );
   const itemIcon =
@@ -120,7 +121,7 @@ export function FolderSidebarList({
 
   const unfiled = itemsByFolder.get(null) ?? [];
   const toggleFolder = (id: string) => {
-    setCollapsedFolders((current) => {
+    setExpandedFolders((current) => {
       const next = new Set(current);
       if (next.has(id)) {
         next.delete(id);
@@ -143,7 +144,7 @@ export function FolderSidebarList({
     <>
       {folders.map((folder) => {
         const folderItems = itemsByFolder.get(folder.id) ?? [];
-        const collapsed = collapsedFolders.has(folder.id);
+        const collapsed = !expandedFolders.has(folder.id);
         return renderDropTarget({
           id: folder.id,
           label: folder.name,
@@ -275,7 +276,7 @@ function FolderItemLink({
           "ml-3 flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground outline-none transition-colors",
           "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
           "focus-visible:ring-2 focus-visible:ring-sidebar-ring",
-          "data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-accent-foreground",
+          "data-active:font-medium data-active:text-sidebar-foreground",
         )}
       >
         {icon}

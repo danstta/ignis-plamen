@@ -7,7 +7,6 @@ import {
   Activity,
   ArrowLeft,
   Blocks,
-  ChevronDown,
   ChevronRight,
   CircleUser,
   FolderPlus,
@@ -30,7 +29,6 @@ import {
   persistSidebarPrefs,
   type SidebarPrefs,
 } from "@/lib/sidebar-prefs";
-import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   DropdownMenu,
@@ -217,19 +215,8 @@ function ExpandedSidebar({
         </button>
       </div>
 
-      <div className="flex flex-col gap-2 px-3 pt-3">
+      <div className="px-3 pt-3">
         <SearchButton />
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button variant="secondary" className="w-full justify-start">
-                <Plus /> Create
-                <ChevronDown className="ml-auto size-3.5 text-muted-foreground" />
-              </Button>
-            }
-          />
-          <CreateMenuContent />
-        </DropdownMenu>
       </div>
 
       <ScrollArea className="min-h-0 flex-1">
@@ -277,19 +264,29 @@ function ExpandedSidebar({
             open={prefs.design}
             onToggle={() => onToggleSection("design")}
             action={
-              <NewFolderPopover
-                kind="design"
-                trigger={
-                  <button
-                    type="button"
-                    title="New design folder"
-                    aria-label="New design folder"
-                    className={iconButtonClass("size-6")}
-                  >
-                    <FolderPlus className="size-3.5" />
-                  </button>
-                }
-              />
+              <>
+                <Link
+                  href="/editor/new"
+                  title="New design"
+                  aria-label="New design"
+                  className={iconButtonClass("size-6")}
+                >
+                  <Plus className="size-3.5" />
+                </Link>
+                <NewFolderPopover
+                  kind="design"
+                  trigger={
+                    <button
+                      type="button"
+                      title="New design folder"
+                      aria-label="New design folder"
+                      className={iconButtonClass("size-6")}
+                    >
+                      <FolderPlus className="size-3.5" />
+                    </button>
+                  }
+                />
+              </>
             }
           >
             <FolderSidebarList
@@ -311,19 +308,29 @@ function ExpandedSidebar({
             open={prefs.workflows}
             onToggle={() => onToggleSection("workflows")}
             action={
-              <NewFolderPopover
-                kind="workflow"
-                trigger={
-                  <button
-                    type="button"
-                    title="New workflow folder"
-                    aria-label="New workflow folder"
-                    className={iconButtonClass("size-6")}
-                  >
-                    <FolderPlus className="size-3.5" />
-                  </button>
-                }
-              />
+              <>
+                <Link
+                  href="/workflows/new"
+                  title="New workflow"
+                  aria-label="New workflow"
+                  className={iconButtonClass("size-6")}
+                >
+                  <Plus className="size-3.5" />
+                </Link>
+                <NewFolderPopover
+                  kind="workflow"
+                  trigger={
+                    <button
+                      type="button"
+                      title="New workflow folder"
+                      aria-label="New workflow folder"
+                      className={iconButtonClass("size-6")}
+                    >
+                      <FolderPlus className="size-3.5" />
+                    </button>
+                  }
+                />
+              </>
             }
           >
             <FolderSidebarList
@@ -399,7 +406,7 @@ function SidebarSection({
           />
         </button>
         {action ? (
-          <div className="flex items-center opacity-0 transition-opacity group-focus-within/section:opacity-100 group-hover/section:opacity-100">
+          <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-focus-within/section:opacity-100 group-hover/section:opacity-100">
             {action}
           </div>
         ) : null}
@@ -683,7 +690,7 @@ function SidebarLink({
         "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground outline-none transition-colors",
         "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
         "focus-visible:ring-2 focus-visible:ring-sidebar-ring",
-        "data-active:bg-sidebar-accent data-active:font-medium data-active:text-sidebar-accent-foreground",
+        "data-active:font-medium data-active:text-sidebar-foreground",
       )}
     >
       {icon}

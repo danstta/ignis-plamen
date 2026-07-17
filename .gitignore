@@ -24,7 +24,7 @@
 .DS_Store
 *.pem
 
-# private notes (never publish)
+# private notes
 /NOTES
 
 # debug

@@ -2,10 +2,11 @@ import type { ZodType } from "zod";
 import type { NodeOutputs } from "@/lib/workflows/types";
 
 /**
- * The workflow node contract. Adding a node type = implement this and register it
- * in `registry.ts`. The canvas palette, the generic node renderer (one Handle per
- * port), the config panel, and the execution engine are all driven off these
- * definitions — mirroring the connection registry pattern.
+ * The workflow node contract. Adding a node type = implement this inside a
+ * plugin under `plugins/` and list it on the plugin's manifest/server entry
+ * points (see plugins/README.md). The canvas palette, the generic node renderer
+ * (one Handle per port), the config panel, and the execution engine are all
+ * driven off these definitions — mirroring the connection registry pattern.
  */
 
 /** A typed input/output port. `kind` informs handle styling and binding hints. */

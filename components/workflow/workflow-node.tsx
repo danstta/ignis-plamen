@@ -10,7 +10,7 @@ import {
 import { ChevronDown, ChevronUp, GitBranch, Trash2 } from "lucide-react";
 import { getNodeMeta } from "@/lib/nodes/catalog";
 import { ROUTER_TYPE_ID } from "@/lib/workflows/conditions";
-import { routerBranchColumns } from "@/lib/nodes/router/meta";
+import { routerBranchColumns } from "@/plugins/core/nodes/router/meta";
 import { useWorkflowEditor, type WfNodeData } from "@/lib/workflows/store";
 import { cn } from "@/lib/utils";
 

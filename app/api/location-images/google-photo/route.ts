@@ -3,7 +3,7 @@ import {
   fetchGooglePlacePhoto,
   isGooglePlacePhotoName,
   verifyGooglePlacePhotoSignature,
-} from "@/lib/location-images/google-places";
+} from "@/plugins/location-image-finder/lib/google-places";
 
 const MIN_WIDTH = 200;
 const MAX_WIDTH = 4000;

@@ -35,21 +35,21 @@ import {
 import {
   routerBranchColumns,
   type RouterBranch,
-} from "@/lib/nodes/router/meta";
+} from "@/plugins/core/nodes/router/meta";
 import {
   NOTION_UPDATE_PAGE_TYPE_ID,
   notionPropertyTypeLabels,
   notionPropertyTypes,
   type NotionPropertyType,
   type NotionPropertyUpdate,
-} from "@/lib/nodes/notion-update-page/meta";
-import { CURATE_IMAGES_TYPE_ID } from "@/lib/nodes/curate-images/meta";
-import { PREVIEW_DESIGN_IMAGE_TYPE_ID } from "@/lib/nodes/preview-design-image/meta";
-import { RENDER_TEMPLATE_BATCH_TYPE_ID } from "@/lib/nodes/render-template-batch/meta";
+} from "@/plugins/notion/nodes/notion-update-page/meta";
+import { CURATE_IMAGES_TYPE_ID } from "@/plugins/core/nodes/curate-images/meta";
+import { PREVIEW_DESIGN_IMAGE_TYPE_ID } from "@/plugins/core/nodes/preview-design-image/meta";
+import { RENDER_TEMPLATE_BATCH_TYPE_ID } from "@/plugins/core/nodes/render-template-batch/meta";
 import {
   FIND_LOCATION_IMAGES_TYPE_ID,
   MAX_LOCATION_IMAGE_QUERIES,
-} from "@/lib/nodes/find-location-images/meta";
+} from "@/plugins/location-image-finder/nodes/find-location-images/meta";
 import { useWorkflowEditor } from "@/lib/workflows/store";
 import {
   collectConnectablePorts,

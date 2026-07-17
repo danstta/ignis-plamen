@@ -1,48 +1,13 @@
+import { pluginServers } from "@/plugins/server";
 import type { NodeDefinition } from "./types";
-import { webhookNode } from "./webhook";
-import { findLocationImagesNode } from "./find-location-images";
-import { rankImagesNode } from "./rank-images";
-import { categorizeImagesNode } from "./categorize-images";
-import { curateImagesNode } from "./curate-images";
-import { llmPromptNode } from "./llm-prompt";
-import { manualReviewNode } from "./manual-review";
-import { renderTemplateNode } from "./render-template";
-import { renderTemplateBatchNode } from "./render-template-batch";
-import { reviewDesignsNode } from "./review-designs";
-import { previewDesignImageNode } from "./preview-design-image";
-import { rehostImageNode } from "./rehost-image";
-import { runLinkNode } from "./run-link";
-import { routerNode } from "./router";
-import { notionUpdatePageNode } from "./notion-update-page";
-import { linkHubSupabaseSyncNode } from "./link-hub-supabase-sync";
-import { googleDriveListImagesNode } from "./google-drive-list-images";
-import { googleDriveUploadFilesNode } from "./google-drive-upload-files";
 
 /**
- * Registry of available workflow node types. To add a node, implement a
- * NodeDefinition and list it here — the canvas palette, config panel, and engine
+ * Server registry of runnable workflow node types, flattened from the plugin
+ * server bundles in plugins/server.ts. To add a node, implement it inside a
+ * plugin (see plugins/README.md) — the canvas palette, config panel, and engine
  * pick it up. Gating by enabled plugins happens in lib/plugins/service.
  */
-const definitions: NodeDefinition[] = [
-  webhookNode as unknown as NodeDefinition,
-  findLocationImagesNode as unknown as NodeDefinition,
-  rankImagesNode as unknown as NodeDefinition,
-  categorizeImagesNode as unknown as NodeDefinition,
-  curateImagesNode as unknown as NodeDefinition,
-  llmPromptNode as unknown as NodeDefinition,
-  manualReviewNode as unknown as NodeDefinition,
-  renderTemplateNode as unknown as NodeDefinition,
-  renderTemplateBatchNode as unknown as NodeDefinition,
-  previewDesignImageNode as unknown as NodeDefinition,
-  reviewDesignsNode as unknown as NodeDefinition,
-  rehostImageNode as unknown as NodeDefinition,
-  runLinkNode as unknown as NodeDefinition,
-  routerNode as unknown as NodeDefinition,
-  notionUpdatePageNode as unknown as NodeDefinition,
-  linkHubSupabaseSyncNode as unknown as NodeDefinition,
-  googleDriveListImagesNode as unknown as NodeDefinition,
-  googleDriveUploadFilesNode as unknown as NodeDefinition,
-];
+const definitions: NodeDefinition[] = pluginServers.flatMap((p) => p.nodes);
 
 const byId = new Map(definitions.map((d) => [d.id, d]));
 

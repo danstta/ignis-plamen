@@ -1,19 +1,47 @@
+import type { NodeDefinition, NodeMeta } from "@/lib/nodes/types";
+
 /**
- * A plugin is a togglable bundle of features. Today every plugin contributes one
- * or more workflow node types: a node type appears in the canvas palette (and is
- * allowed to run) only while its owning plugin is enabled.
+ * A plugin is a togglable bundle of workflow node types that lives in the
+ * top-level `plugins/` directory. Each plugin ships two entry points:
  *
- * Plugins reference node types by id (strings) rather than importing the node
- * registry, keeping this module free of cycles.
+ * - `plugin.ts` — a client-safe {@link PluginManifest}: plugin info plus its
+ *   node metas (no run() implementations, so no server-only imports).
+ * - `server.ts` — a {@link PluginServer}: the full node definitions with run().
+ *
+ * A node type appears in the canvas palette (and is allowed to run) only while
+ * its owning plugin is enabled.
  */
-export interface PluginDefinition {
+
+/** Client-safe plugin descriptor: identity plus the node metas it contributes. */
+export interface PluginManifest {
   /** Stable id, persisted as the `plugins` row primary key. */
   id: string;
   name: string;
   description: string;
-  /** Node-type ids contributed by this plugin (see lib/nodes/registry). */
-  nodeTypeIds: string[];
+  /** Node metas contributed by this plugin (drives palette, config panel, gating). */
+  nodes: NodeMeta[];
   /** Seeded enabled on first sight (e.g. the built-in "core" plugin). */
+  defaultEnabled?: boolean;
+}
+
+/** Server half of a plugin: the runnable definitions for its node metas. */
+export interface PluginServer {
+  /** Must match the manifest's id. */
+  id: string;
+  nodes: NodeDefinition[];
+}
+
+/**
+ * Flattened plugin view used by the admin Plugins page and the enablement
+ * service. Derived from manifests in `lib/plugins/registry` — node types are
+ * referenced by id here so the service layer stays independent of node shapes.
+ */
+export interface PluginDefinition {
+  id: string;
+  name: string;
+  description: string;
+  /** Node-type ids contributed by this plugin. */
+  nodeTypeIds: string[];
   defaultEnabled?: boolean;
 }
 

@@ -1,6 +1,6 @@
 import { getNodeMeta, nodeDisplayLabel } from "@/lib/nodes/catalog";
-import { CURATE_IMAGES_TYPE_ID } from "@/lib/nodes/curate-images/meta";
-import { GOOGLE_DRIVE_LIST_IMAGES_TYPE_ID } from "@/lib/nodes/google-drive-list-images/meta";
+import { CURATE_IMAGES_TYPE_ID } from "@/plugins/core/nodes/curate-images/meta";
+import { GOOGLE_DRIVE_LIST_IMAGES_TYPE_ID } from "@/plugins/google-drive/nodes/google-drive-list-images/meta";
 
 /**
  * Field propagation between connected nodes. Two surfaces share this module:

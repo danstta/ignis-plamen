@@ -2,7 +2,7 @@ import { ROUTER_TYPE_ID } from "./conditions";
 import {
   routerBranchColumns,
   type BranchColumn,
-} from "@/lib/nodes/router/meta";
+} from "@/plugins/core/nodes/router/meta";
 import type { WfNode } from "./store";
 
 /**

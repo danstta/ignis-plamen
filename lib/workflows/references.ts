@@ -1,5 +1,9 @@
-import { getNodeMeta, nodeDisplayLabel } from "@/lib/nodes/catalog";
-import { CURATE_IMAGES_TYPE_ID } from "@/plugins/core/nodes/curate-images/meta";
+import {
+  canonicalNodeTypeId,
+  getNodeMeta,
+  nodeDisplayLabel,
+} from "@/lib/nodes/catalog";
+import { SELECT_IMAGES_TYPE_ID } from "@/plugins/core/nodes/select-images/meta";
 import { GOOGLE_DRIVE_LIST_IMAGES_TYPE_ID } from "@/plugins/google-drive/nodes/google-drive-list-images/meta";
 
 /**
@@ -58,9 +62,10 @@ function exposedImageSelectionCount(n: RefNode): number {
 }
 
 function exposedSelectedImagePaths(n: RefNode): string[] {
+  const typeId = canonicalNodeTypeId(n.type);
   if (
-    n.type !== CURATE_IMAGES_TYPE_ID &&
-    n.type !== GOOGLE_DRIVE_LIST_IMAGES_TYPE_ID
+    typeId !== SELECT_IMAGES_TYPE_ID &&
+    typeId !== GOOGLE_DRIVE_LIST_IMAGES_TYPE_ID
   ) {
     return [];
   }

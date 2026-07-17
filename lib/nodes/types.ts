@@ -108,6 +108,10 @@ export interface NodeRunContext<C = Record<string, unknown>> {
 export interface NodeMeta<C extends Record<string, unknown> = Record<string, unknown>> {
   /** Stable type id stored on graph nodes, e.g. "webhook". */
   id: string;
+  /** Former type ids this node was saved under. Graphs and runs that still
+   * reference an alias resolve to this node everywhere (catalog, server
+   * registry, plugin gating). */
+  aliases?: string[];
   label: string;
   description: string;
   category: NodeCategory;

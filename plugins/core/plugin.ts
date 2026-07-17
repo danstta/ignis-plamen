@@ -4,7 +4,7 @@ import { webhookMeta } from "./nodes/webhook/meta";
 import { routerMeta } from "./nodes/router/meta";
 import { rehostImageMeta } from "./nodes/rehost-image/meta";
 import { manualReviewMeta } from "./nodes/manual-review/meta";
-import { curateImagesMeta } from "./nodes/curate-images/meta";
+import { selectImagesMeta } from "./nodes/select-images/meta";
 import { renderTemplateMeta } from "./nodes/render-template/meta";
 import { renderTemplateBatchMeta } from "./nodes/render-template-batch/meta";
 import { previewDesignImageMeta } from "./nodes/preview-design-image/meta";
@@ -22,7 +22,7 @@ export const corePlugin: PluginManifest = {
     routerMeta as unknown as NodeMeta,
     rehostImageMeta as unknown as NodeMeta,
     manualReviewMeta as unknown as NodeMeta,
-    curateImagesMeta as unknown as NodeMeta,
+    selectImagesMeta as unknown as NodeMeta,
     renderTemplateMeta as unknown as NodeMeta,
     renderTemplateBatchMeta as unknown as NodeMeta,
     previewDesignImageMeta as unknown as NodeMeta,

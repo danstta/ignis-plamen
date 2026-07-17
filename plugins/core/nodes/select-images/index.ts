@@ -9,7 +9,7 @@ import { getTemplate } from "@/lib/templates/service";
 import { valueToText } from "@/lib/workflows/references";
 import { normalizeImageCandidates } from "@/lib/nodes/image-input";
 import type { ImageCandidate, NodeDefinition } from "@/lib/nodes/types";
-import { curateImagesMeta, type CurateImagesConfig } from "./meta";
+import { selectImagesMeta, type SelectImagesConfig } from "./meta";
 
 function outputsFromSelection(
   ranked: ImageCandidate[],
@@ -70,13 +70,13 @@ function valueForTextPlaceholder(value: unknown): string {
   return value !== undefined && value !== "" ? valueToText(value) : "";
 }
 
-export const curateImagesNode: NodeDefinition<CurateImagesConfig> = {
-  ...curateImagesMeta,
+export const selectImagesNode: NodeDefinition<SelectImagesConfig> = {
+  ...selectImagesMeta,
 
   async run(ctx) {
     const ranked = normalizeImageCandidates(ctx.inputs.ranked);
     if (ranked.length === 0) {
-      ctx.log("No images were available to curate.");
+      ctx.log("No images were available to select from.");
       return {
         type: "output",
         outputs: { ranked: [], selected: [], selectedUrls: [], best: "" },
@@ -104,7 +104,7 @@ export const curateImagesNode: NodeDefinition<CurateImagesConfig> = {
 
     return {
       type: "pause",
-      reason: "Awaiting manual image curation",
+      reason: "Awaiting manual image selection",
       state: {
         reviewKind: "image-set",
         selectionCount: ctx.config.selectionCount,

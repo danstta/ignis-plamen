@@ -183,7 +183,8 @@ async function execute(
       return { type: "error", error: `Unknown node type: ${node.type}` };
     }
 
-    if (!enabledNodeTypes.has(node.type)) {
+    // def.id is canonical even when node.type is a legacy alias.
+    if (!enabledNodeTypes.has(def.id)) {
       return {
         type: "error",
         error: `Node "${nodeDisplayLabel(node)}" belongs to a disabled plugin`,

@@ -30,11 +30,14 @@ export function getPlugin(id: string): PluginDefinition | undefined {
   return byId.get(id);
 }
 
-/** Reverse lookup: node-type id -> the plugin that owns it. */
+/** Reverse lookup: node-type id (or legacy alias) -> the plugin that owns it. */
 const pluginByNodeType = new Map<string, PluginDefinition>();
-for (const def of definitions) {
-  for (const nodeTypeId of def.nodeTypeIds) {
-    pluginByNodeType.set(nodeTypeId, def);
+for (const [index, manifest] of pluginManifests.entries()) {
+  const def = definitions[index];
+  for (const node of manifest.nodes) {
+    for (const id of [node.id, ...(node.aliases ?? [])]) {
+      pluginByNodeType.set(id, def);
+    }
   }
 }
 

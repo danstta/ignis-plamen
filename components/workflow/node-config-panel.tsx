@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import {
+  canonicalNodeTypeId,
   getNodeMeta,
   listNodeCatalog,
   nodeDisplayLabel,
@@ -43,7 +44,7 @@ import {
   type NotionPropertyType,
   type NotionPropertyUpdate,
 } from "@/plugins/notion/nodes/notion-update-page/meta";
-import { CURATE_IMAGES_TYPE_ID } from "@/plugins/core/nodes/curate-images/meta";
+import { SELECT_IMAGES_TYPE_ID } from "@/plugins/core/nodes/select-images/meta";
 import { PREVIEW_DESIGN_IMAGE_TYPE_ID } from "@/plugins/core/nodes/preview-design-image/meta";
 import { RENDER_TEMPLATE_BATCH_TYPE_ID } from "@/plugins/core/nodes/render-template-batch/meta";
 import {
@@ -798,7 +799,7 @@ export function NodeConfigPanel({
       {node.type === "render-template" ||
       node.type === RENDER_TEMPLATE_BATCH_TYPE_ID ||
       node.type === PREVIEW_DESIGN_IMAGE_TYPE_ID ||
-      node.type === CURATE_IMAGES_TYPE_ID ? (
+      canonicalNodeTypeId(node.type ?? "") === SELECT_IMAGES_TYPE_ID ? (
         <RenderTemplatePlaceholders
           templateId={String(config.templateId ?? "")}
           templates={templates}

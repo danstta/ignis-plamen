@@ -39,7 +39,7 @@
 | Find Location Images | Searches free/open image sources for real, reusable photos near the location |
 | Rank Images | Scores images with a vision model via an OpenAI or Azure AI Foundry connection (default model `gpt-4.1-mini`) and returns them sorted best-first |
 | Categorize Images | Assigns each image to one of your categories with vision and preserves the category downstream |
-| Curate Images | Pauses so you can swap similar images with alternates before continuing |
+| Select Images | Pauses so you can pick and order the images used by the next template render |
 | LLM Prompt | Calls an AI model with a custom prompt and returns generated text |
 | Manual Review | Chooses the final image — automatically (top-ranked) or by pausing for a human pick |
 | Render Template | Fills a template's placeholders and renders the final PNG |

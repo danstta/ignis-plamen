@@ -12,20 +12,32 @@ const catalog: NodeMeta[] = pluginManifests.flatMap((p) => p.nodes);
 
 const byId = new Map<string, NodeMeta>();
 for (const meta of catalog) {
-  if (byId.has(meta.id)) {
-    throw new Error(
-      `Duplicate node type id "${meta.id}" — two plugins contribute a node with the same id.`,
-    );
+  for (const id of [meta.id, ...(meta.aliases ?? [])]) {
+    if (byId.has(id)) {
+      throw new Error(
+        `Duplicate node type id "${id}" — two plugins contribute a node (or alias) with the same id.`,
+      );
+    }
+    byId.set(id, meta);
   }
-  byId.set(meta.id, meta);
 }
 
 export function listNodeCatalog(): NodeMeta[] {
   return catalog;
 }
 
+/** Resolves the id or a legacy alias (see NodeMeta.aliases). */
 export function getNodeMeta(id: string): NodeMeta | undefined {
   return byId.get(id);
+}
+
+/**
+ * Maps a stored node type (possibly a legacy alias) to its current id, so
+ * `canonicalNodeTypeId(node.type) === SOME_TYPE_ID` comparisons keep working
+ * for graphs saved before a rename.
+ */
+export function canonicalNodeTypeId(id: string): string {
+  return byId.get(id)?.id ?? id;
 }
 
 /**

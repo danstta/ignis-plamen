@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { DragEvent, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowDown,
@@ -9,7 +9,9 @@ import {
   ArrowRight,
   ArrowUp,
   Check,
+  Crop,
   Crosshair,
+  GripVertical,
   Loader2,
   MoveDown,
   MoveUp,
@@ -34,7 +36,7 @@ import {
   type PlaceholderValue,
 } from "@/lib/editor/types";
 import { normalizeImageCandidates } from "@/lib/nodes/image-input";
-import { imagePreviewSrc } from "@/lib/nodes/image-preview";
+import { imagePreviewSrc, imageThumbnailSrc } from "@/lib/nodes/image-preview";
 import { cn } from "@/lib/utils";
 
 type Candidate = {
@@ -56,6 +58,11 @@ const DEFAULT_PLACEMENT: ImagePlacement = {
   objectPosition: "center center",
   scale: 1,
 };
+
+/** Alternates reveal this many tiles per "Show more" so a big pool never mounts at once. */
+const ALTERNATES_BATCH = 10;
+/** Pixel size requested from Google's CDN thumbnail for grid tiles. */
+const TILE_THUMBNAIL_SIZE = 400;
 
 const POSITION_PRESETS = [
   { value: "left top", label: "Top left", icon: ArrowUp },
@@ -127,6 +134,21 @@ function hasCustomPlacement(placement: ImagePlacement): boolean {
   );
 }
 
+/** Move `fromUrl` to sit where `toUrl` currently is, preserving the rest of the order. */
+function reorderUrls(
+  urls: string[],
+  fromUrl: string,
+  toUrl: string,
+): string[] {
+  const from = urls.indexOf(fromUrl);
+  const to = urls.indexOf(toUrl);
+  if (from < 0 || to < 0 || from === to) return urls;
+  const next = [...urls];
+  next.splice(from, 1);
+  next.splice(to, 0, fromUrl);
+  return next;
+}
+
 function imagePlaceholderValue(image: SelectedImageValue | undefined): PlaceholderValue {
   if (!image) return "";
   if (!hasCustomPlacement(image)) return image.url;
@@ -152,48 +174,17 @@ function valueForTextPlaceholder(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function ImageTile({
-  image,
-  action,
-  label,
-  disabled,
-  children,
-  className,
-}: {
-  image: Candidate;
-  action: () => void;
-  label: string;
-  disabled?: boolean;
-  children?: ReactNode;
-  className?: string;
-}) {
+function TileImage({ image }: { image: Candidate }) {
   return (
-    <div
-      className={cn(
-        "group relative overflow-hidden rounded-md border bg-muted/20",
-        className,
-      )}
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={imagePreviewSrc(image)}
-        alt=""
-        className="aspect-square w-full object-cover"
-      />
-      {children}
-      <CategoryBadge image={image} />
-      <Button
-        type="button"
-        size="icon-sm"
-        variant="secondary"
-        onClick={action}
-        disabled={disabled}
-        aria-label={label}
-        className="absolute right-2 top-2 opacity-[0.85] shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
-      >
-        {label === "Remove" ? <X className="size-4" /> : <Plus className="size-4" />}
-      </Button>
-    </div>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={imageThumbnailSrc(image, TILE_THUMBNAIL_SIZE)}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      draggable={false}
+      className="aspect-square w-full object-cover"
+    />
   );
 }
 
@@ -209,7 +200,7 @@ function CategoryBadge({ image }: { image: Candidate }) {
           : category
       }
       className={cn(
-        "absolute bottom-2 left-2 max-w-[calc(100%-1rem)] truncate rounded bg-background/85 px-1.5 py-0.5 text-[10px] font-medium text-foreground shadow-sm backdrop-blur",
+        "pointer-events-none absolute bottom-2 left-2 max-w-[calc(100%-1rem)] truncate rounded bg-background/85 px-1.5 py-0.5 text-[10px] font-medium text-foreground shadow-sm backdrop-blur",
         image.categorized === false &&
           "border border-destructive/35 text-destructive",
       )}
@@ -256,30 +247,153 @@ function ToolButton({
   );
 }
 
-function PlacementControls({
+function SelectedTile({
+  image,
+  index,
+  active,
+  dragging,
+  dropTarget,
+  disabled,
+  onRemove,
+  onFrame,
+  onDragStart,
+  onDragEnter,
+  onDrop,
+  onDragEnd,
+}: {
+  image: Candidate;
+  index: number;
+  active: boolean;
+  dragging: boolean;
+  dropTarget: boolean;
+  disabled?: boolean;
+  onRemove: () => void;
+  onFrame: () => void;
+  onDragStart: () => void;
+  onDragEnter: () => void;
+  onDrop: () => void;
+  onDragEnd: () => void;
+}) {
+  return (
+    <div
+      draggable={!disabled}
+      onDragStart={(event: DragEvent) => {
+        event.dataTransfer.effectAllowed = "move";
+        // Firefox requires data to be set for a drag to start.
+        event.dataTransfer.setData("text/plain", image.url);
+        onDragStart();
+      }}
+      onDragOver={(event: DragEvent) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+      }}
+      onDragEnter={onDragEnter}
+      onDrop={(event: DragEvent) => {
+        event.preventDefault();
+        onDrop();
+      }}
+      onDragEnd={onDragEnd}
+      className={cn(
+        "group relative overflow-hidden rounded-md border bg-muted/20 transition",
+        !disabled && "cursor-grab active:cursor-grabbing",
+        active && "border-primary/70 ring-2 ring-primary/35",
+        dropTarget && !dragging && "ring-2 ring-primary",
+        dragging && "opacity-40",
+      )}
+    >
+      <TileImage image={image} />
+      <CategoryBadge image={image} />
+
+      <span className="pointer-events-none absolute left-2 top-2 inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-background/85 px-1.5 text-[11px] font-medium text-foreground shadow-sm backdrop-blur">
+        {index + 1}
+      </span>
+
+      <span className="pointer-events-none absolute inset-x-0 top-0 flex justify-center py-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <GripVertical className="size-4 text-white drop-shadow" />
+      </span>
+
+      <Button
+        type="button"
+        size="icon-sm"
+        variant="secondary"
+        onClick={onRemove}
+        disabled={disabled}
+        aria-label="Remove"
+        className="absolute right-2 top-2 opacity-[0.85] shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+      >
+        <X className="size-4" />
+      </Button>
+
+      <ToolButton
+        label="Frame image"
+        active={active}
+        disabled={disabled}
+        onClick={onFrame}
+        className={cn(
+          "absolute bottom-2 right-2 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100",
+          active && "opacity-100",
+        )}
+      >
+        <Crop className="size-3" />
+      </ToolButton>
+    </div>
+  );
+}
+
+function AlternateTile({
+  image,
+  disabled,
+  onAdd,
+}: {
+  image: Candidate;
+  disabled?: boolean;
+  onAdd: () => void;
+}) {
+  return (
+    <div className="group relative overflow-hidden rounded-md border bg-muted/20">
+      <TileImage image={image} />
+      <CategoryBadge image={image} />
+      <Button
+        type="button"
+        size="icon-sm"
+        variant="secondary"
+        onClick={onAdd}
+        disabled={disabled}
+        aria-label="Add"
+        className="absolute right-2 top-2 opacity-[0.85] shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+      >
+        <Plus className="size-4" />
+      </Button>
+    </div>
+  );
+}
+
+function FramingPanel({
   image,
   placement,
   disabled,
+  activeIndex,
+  canMoveEarlier,
+  canMoveLater,
   onPositionChange,
   onScaleChange,
   onReset,
   onMoveEarlier,
   onMoveLater,
-  activeIndex,
-  canMoveEarlier,
-  canMoveLater,
+  onClose,
 }: {
   image?: Candidate;
   placement: ImagePlacement;
   disabled?: boolean;
+  activeIndex?: number;
+  canMoveEarlier: boolean;
+  canMoveLater: boolean;
   onPositionChange: (objectPosition: string) => void;
   onScaleChange: (scale: number) => void;
   onReset: () => void;
   onMoveEarlier: () => void;
   onMoveLater: () => void;
-  activeIndex?: number;
-  canMoveEarlier: boolean;
-  canMoveLater: boolean;
+  onClose: () => void;
 }) {
   return (
     <div className="mt-3 grid gap-3 rounded-md border bg-card p-3 sm:grid-cols-[88px_minmax(0,1fr)]">
@@ -289,6 +403,8 @@ function PlacementControls({
           <img
             src={imagePreviewSrc(image)}
             alt=""
+            loading="lazy"
+            decoding="async"
             className="aspect-square w-full object-cover"
             style={{
               objectPosition: placement.objectPosition,
@@ -302,7 +418,7 @@ function PlacementControls({
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <span className="text-xs font-medium text-muted-foreground">
-              Position
+              Framing
             </span>
             {activeIndex !== undefined ? (
               <p className="mt-0.5 text-[11px] text-muted-foreground">
@@ -331,6 +447,9 @@ function PlacementControls({
               onClick={onReset}
             >
               <RotateCcw className="size-3" />
+            </ToolButton>
+            <ToolButton label="Close framing" disabled={disabled} onClick={onClose}>
+              <X className="size-3" />
             </ToolButton>
           </div>
         </div>
@@ -399,7 +518,7 @@ function buildPreviewData(
   return data;
 }
 
-export function CurateImagesPicker({
+export function SelectImagesPicker({
   runId,
   resumeToken,
   selected,
@@ -435,9 +554,10 @@ export function CurateImagesPicker({
   const [placements, setPlacements] = useState<Record<string, ImagePlacement>>(
     {},
   );
-  const [activePlacementUrl, setActivePlacementUrl] = useState(
-    () => selectedUrls[0] ?? "",
-  );
+  const [framingUrl, setFramingUrl] = useState("");
+  const [draggingUrl, setDraggingUrl] = useState("");
+  const [dragOverUrl, setDragOverUrl] = useState("");
+  const [visibleAlternates, setVisibleAlternates] = useState(ALTERNATES_BATCH);
   const [submitting, setSubmitting] = useState(false);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const previewUrlsRef = useRef<string[]>([]);
@@ -467,16 +587,14 @@ export function CurateImagesPicker({
   const alternateImages = allImages.filter(
     (image) => !selectedUrls.includes(image.url),
   );
-  const effectiveActivePlacementUrl = selectedUrls.includes(activePlacementUrl)
-    ? activePlacementUrl
-    : (selectedUrls[0] ?? "");
-  const activePlacement =
-    effectiveActivePlacementUrl
-      ? placementFor(placements, effectiveActivePlacementUrl)
-      : null;
-  const activePlacementIndex = selectedUrls.indexOf(
-    effectiveActivePlacementUrl,
-  );
+  const shownAlternates = alternateImages.slice(0, visibleAlternates);
+  const atSelectionLimit = selectedUrls.length >= selectionCount;
+
+  const effectiveFramingUrl = selectedUrls.includes(framingUrl) ? framingUrl : "";
+  const activePlacement = effectiveFramingUrl
+    ? placementFor(placements, effectiveFramingUrl)
+    : null;
+  const framingIndex = selectedUrls.indexOf(effectiveFramingUrl);
   const activePreviewUrl =
     previewUrls[activePreviewPage] ?? previewUrls[0] ?? null;
 
@@ -497,6 +615,7 @@ export function CurateImagesPicker({
       delete next[url];
       return next;
     });
+    if (framingUrl === url) setFramingUrl("");
   }
 
   function move(url: string, direction: -1 | 1) {
@@ -513,13 +632,18 @@ export function CurateImagesPicker({
   }
 
   function add(url: string) {
-    if (!selectedUrls.includes(url) && selectedUrls.length < selectionCount) {
-      setActivePlacementUrl(url);
-    }
     setSelectedUrls((current) => {
       if (current.includes(url) || current.length >= selectionCount) return current;
       return [...current, url];
     });
+  }
+
+  function handleDrop(targetUrl: string) {
+    if (draggingUrl && draggingUrl !== targetUrl) {
+      setSelectedUrls((current) => reorderUrls(current, draggingUrl, targetUrl));
+    }
+    setDraggingUrl("");
+    setDragOverUrl("");
   }
 
   function updatePlacement(url: string, patch: Partial<ImagePlacement>) {
@@ -643,81 +767,121 @@ export function CurateImagesPicker({
         </div>
 
         <section>
-          <h3 className="mb-2 text-xs font-medium text-muted-foreground">
-            Selected
-          </h3>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            {selectedImages.map((image, index) => (
-              <ImageTile
-                key={image.url}
-                image={image}
-                action={() => remove(image.url)}
-                label="Remove"
-                disabled={submitting}
-                className={cn(
-                  effectiveActivePlacementUrl === image.url &&
-                    "border-primary/70 ring-2 ring-primary/35",
-                )}
-              >
-                <span className="absolute left-2 top-2 inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-background/85 px-1.5 text-[11px] font-medium text-foreground shadow-sm backdrop-blur">
-                  {index + 1}
-                </span>
-                <ToolButton
-                  label="Frame image"
-                  active={effectiveActivePlacementUrl === image.url}
-                  disabled={submitting}
-                  onClick={() => setActivePlacementUrl(image.url)}
-                  className={cn(
-                    "absolute bottom-2 right-2 shadow-sm opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100",
-                    effectiveActivePlacementUrl === image.url && "opacity-100",
-                  )}
-                >
-                  <Crosshair className="size-3" />
-                </ToolButton>
-              </ImageTile>
-            ))}
+          <div className="mb-2 flex items-baseline justify-between gap-3">
+            <h3 className="text-xs font-medium text-muted-foreground">
+              Selected
+            </h3>
+            {selectedImages.length > 1 ? (
+              <span className="text-[11px] text-muted-foreground">
+                Drag to reorder
+              </span>
+            ) : null}
           </div>
+          {selectedImages.length === 0 ? (
+            <p className="rounded-md border border-dashed p-6 text-center text-xs text-muted-foreground">
+              Add images from the alternates below to build your set.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+              {selectedImages.map((image, index) => (
+                <SelectedTile
+                  key={image.url}
+                  image={image}
+                  index={index}
+                  active={effectiveFramingUrl === image.url}
+                  dragging={draggingUrl === image.url}
+                  dropTarget={
+                    dragOverUrl === image.url && draggingUrl !== image.url
+                  }
+                  disabled={submitting}
+                  onRemove={() => remove(image.url)}
+                  onFrame={() =>
+                    setFramingUrl((current) =>
+                      current === image.url ? "" : image.url,
+                    )
+                  }
+                  onDragStart={() => {
+                    setDraggingUrl(image.url);
+                    setDragOverUrl(image.url);
+                  }}
+                  onDragEnter={() => setDragOverUrl(image.url)}
+                  onDrop={() => handleDrop(image.url)}
+                  onDragEnd={() => {
+                    setDraggingUrl("");
+                    setDragOverUrl("");
+                  }}
+                />
+              ))}
+            </div>
+          )}
           {activePlacement ? (
-            <PlacementControls
-              image={byUrl.get(effectiveActivePlacementUrl)}
+            <FramingPanel
+              image={byUrl.get(effectiveFramingUrl)}
               placement={activePlacement}
               disabled={submitting}
+              activeIndex={framingIndex >= 0 ? framingIndex : undefined}
+              canMoveEarlier={framingIndex > 0}
+              canMoveLater={
+                framingIndex >= 0 && framingIndex < selectedImages.length - 1
+              }
               onPositionChange={(objectPosition) =>
-                updatePlacement(effectiveActivePlacementUrl, { objectPosition })
+                updatePlacement(effectiveFramingUrl, { objectPosition })
               }
               onScaleChange={(scale) =>
-                updatePlacement(effectiveActivePlacementUrl, { scale })
+                updatePlacement(effectiveFramingUrl, { scale })
               }
-              onReset={() => resetPlacement(effectiveActivePlacementUrl)}
-              onMoveEarlier={() => move(effectiveActivePlacementUrl, -1)}
-              onMoveLater={() => move(effectiveActivePlacementUrl, 1)}
-              activeIndex={
-                activePlacementIndex >= 0 ? activePlacementIndex : undefined
-              }
-              canMoveEarlier={activePlacementIndex > 0}
-              canMoveLater={
-                activePlacementIndex >= 0 &&
-                activePlacementIndex < selectedImages.length - 1
-              }
+              onReset={() => resetPlacement(effectiveFramingUrl)}
+              onMoveEarlier={() => move(effectiveFramingUrl, -1)}
+              onMoveLater={() => move(effectiveFramingUrl, 1)}
+              onClose={() => setFramingUrl("")}
             />
           ) : null}
         </section>
 
         <section>
-          <h3 className="mb-2 text-xs font-medium text-muted-foreground">
-            Alternates
-          </h3>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            {alternateImages.map((image) => (
-              <ImageTile
-                key={image.url}
-                image={image}
-                action={() => add(image.url)}
-                label="Add"
-                disabled={submitting || selectedImages.length >= selectionCount}
-              />
-            ))}
+          <div className="mb-2 flex items-baseline justify-between gap-3">
+            <h3 className="text-xs font-medium text-muted-foreground">
+              Alternates
+            </h3>
+            {alternateImages.length > 0 ? (
+              <span className="text-[11px] text-muted-foreground">
+                {Math.min(visibleAlternates, alternateImages.length)} of{" "}
+                {alternateImages.length}
+              </span>
+            ) : null}
           </div>
+          {alternateImages.length === 0 ? (
+            <p className="rounded-md border border-dashed p-6 text-center text-xs text-muted-foreground">
+              No more images to add.
+            </p>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                {shownAlternates.map((image) => (
+                  <AlternateTile
+                    key={image.url}
+                    image={image}
+                    disabled={submitting || atSelectionLimit}
+                    onAdd={() => add(image.url)}
+                  />
+                ))}
+              </div>
+              {visibleAlternates < alternateImages.length ? (
+                <div className="mt-3 flex justify-center">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      setVisibleAlternates((count) => count + ALTERNATES_BATCH)
+                    }
+                  >
+                    Show more
+                  </Button>
+                </div>
+              ) : null}
+            </>
+          )}
         </section>
       </div>
 

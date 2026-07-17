@@ -8,7 +8,7 @@ import { browserPreviewUrlForImageUrl } from "@/lib/nodes/image-input";
 import { formatRelativeTime } from "@/lib/format";
 import type { WorkflowGraph } from "@/lib/workflows/types";
 import { RunStatusBadge } from "@/components/workflow/run-status-badge";
-import { CurateImagesPicker } from "@/plugins/core/nodes/curate-images/picker";
+import { SelectImagesPicker } from "@/plugins/core/nodes/select-images/picker";
 import { ManualReviewPicker } from "@/plugins/core/nodes/manual-review/picker";
 import { PreviewDesignImagePicker } from "@/plugins/core/nodes/preview-design-image/picker";
 import { Button } from "@/components/ui/button";
@@ -346,12 +346,12 @@ export default async function RunDetailPage({
 
       {run.status === "waiting" && run.resumeToken && reviewKind === "image-set" ? (
         <section className="mt-6">
-          <h2 className="text-sm font-semibold">Curate image set</h2>
+          <h2 className="text-sm font-semibold">Select image set</h2>
           <p className="mb-3 mt-0.5 text-xs text-muted-foreground">
-            Remove similar images from the selected set, then add replacements from
-            alternates.
+            Pick the images for the next render and drag them into the order you
+            want.
           </p>
-          <CurateImagesPicker
+          <SelectImagesPicker
             runId={run.id}
             resumeToken={run.resumeToken}
             selected={waitingSelected}

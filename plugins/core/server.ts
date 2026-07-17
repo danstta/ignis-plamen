@@ -4,7 +4,7 @@ import { webhookNode } from "./nodes/webhook";
 import { routerNode } from "./nodes/router";
 import { rehostImageNode } from "./nodes/rehost-image";
 import { manualReviewNode } from "./nodes/manual-review";
-import { curateImagesNode } from "./nodes/curate-images";
+import { selectImagesNode } from "./nodes/select-images";
 import { renderTemplateNode } from "./nodes/render-template";
 import { renderTemplateBatchNode } from "./nodes/render-template-batch";
 import { previewDesignImageNode } from "./nodes/preview-design-image";
@@ -18,7 +18,7 @@ export const corePluginServer: PluginServer = {
     routerNode as unknown as NodeDefinition,
     rehostImageNode as unknown as NodeDefinition,
     manualReviewNode as unknown as NodeDefinition,
-    curateImagesNode as unknown as NodeDefinition,
+    selectImagesNode as unknown as NodeDefinition,
     renderTemplateNode as unknown as NodeDefinition,
     renderTemplateBatchNode as unknown as NodeDefinition,
     previewDesignImageNode as unknown as NodeDefinition,

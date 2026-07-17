@@ -9,12 +9,16 @@ import type { NodeDefinition } from "./types";
  */
 const definitions: NodeDefinition[] = pluginServers.flatMap((p) => p.nodes);
 
-const byId = new Map(definitions.map((d) => [d.id, d]));
+const byId = new Map<string, NodeDefinition>();
+for (const def of definitions) {
+  for (const id of [def.id, ...(def.aliases ?? [])]) byId.set(id, def);
+}
 
 export function listNodeTypes(): NodeDefinition[] {
   return definitions;
 }
 
+/** Resolves the id or a legacy alias (see NodeMeta.aliases). */
 export function getNodeType(id: string): NodeDefinition | undefined {
   return byId.get(id);
 }

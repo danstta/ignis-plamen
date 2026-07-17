@@ -1,9 +1,9 @@
 import { z } from "zod";
 import type { NodeMeta } from "@/lib/nodes/types";
 
-export const CURATE_IMAGES_TYPE_ID = "curate-images";
+export const SELECT_IMAGES_TYPE_ID = "select-images";
 
-export const curateImagesConfigSchema = z.object({
+export const selectImagesConfigSchema = z.object({
   mode: z.enum(["manual", "auto"]).default("manual"),
   selectionCount: z.coerce.number().int().min(1).max(50).default(10),
   alternateCount: z.coerce.number().int().min(1).max(50).default(15),
@@ -11,13 +11,14 @@ export const curateImagesConfigSchema = z.object({
   placeholders: z.record(z.string(), z.unknown()).default({}),
 });
 
-export type CurateImagesConfig = z.infer<typeof curateImagesConfigSchema>;
+export type SelectImagesConfig = z.infer<typeof selectImagesConfigSchema>;
 
-export const curateImagesMeta: NodeMeta<CurateImagesConfig> = {
-  id: CURATE_IMAGES_TYPE_ID,
-  label: "Curate Images",
+export const selectImagesMeta: NodeMeta<SelectImagesConfig> = {
+  id: SELECT_IMAGES_TYPE_ID,
+  aliases: ["curate-images"],
+  label: "Select Images",
   description:
-    "Pauses so you can swap similar images with alternates before continuing.",
+    "Pauses so you can pick and order the images used by the next template render.",
   category: "control",
   group: "media",
   inputs: [{ id: "ranked", label: "Images", kind: "data" }],
@@ -31,10 +32,10 @@ export const curateImagesMeta: NodeMeta<CurateImagesConfig> = {
   configFields: [
     {
       name: "mode",
-      label: "Curation mode",
+      label: "Selection mode",
       type: "select",
       options: [
-        { value: "manual", label: "Manual - pause and let me curate" },
+        { value: "manual", label: "Manual - pause and let me select" },
         { value: "auto", label: "Auto - use the top ranked images" },
       ],
     },
@@ -54,8 +55,8 @@ export const curateImagesMeta: NodeMeta<CurateImagesConfig> = {
       name: "templateId",
       label: "Template preview",
       type: "template",
-      help: "Optional. Shows how the curated images will look in this template.",
+      help: "Optional. Shows how the selected images will look in this template.",
     },
   ],
-  configSchema: curateImagesConfigSchema,
+  configSchema: selectImagesConfigSchema,
 };

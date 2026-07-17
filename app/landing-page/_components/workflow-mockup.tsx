@@ -1,108 +1,152 @@
 import {
-  Plus,
-  Webhook,
-  MapPin,
-  ScanEye,
-  Images,
-  LayoutTemplate,
+  Braces,
+  ChevronDown,
+  ChevronUp,
   FlaskConical,
   ListChecks,
+  Maximize,
+  Minus,
+  Plus,
   Save,
-  FileUp,
-  Sparkles,
-  Type as TypeIcon,
+  Trash2,
 } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
+import { AppFrame } from "./app-frame";
+import { MockSelect } from "./mock-ui";
+
 /**
- * Static, non-interactive mockup of the Ignis workflow editor. Recreates the
- * three-panel layout (node palette, canvas with connected nodes, config panel)
- * purely for visual showcase on the landing page. No buttons do anything.
+ * The Ignis workflow editor, reproduced 1:1 from components/workflow/*:
+ * node palette (node-palette.tsx) with the real catalog labels/descriptions,
+ * React Flow canvas with step cards and insert-step buttons on the connectors
+ * (workflow-node.tsx / workflow-canvas.tsx), and the config panel for the
+ * selected Render Template step (node-config-panel.tsx). Nothing is wired up.
  */
 
-function TrafficLights() {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="size-3 rounded-full bg-[#ff5f57]" />
-      <span className="size-3 rounded-full bg-[#febc2e]" />
-      <span className="size-3 rounded-full bg-[#28c840]" />
-    </div>
-  );
-}
-
-const PALETTE_GROUPS: {
-  label: string;
-  count: number;
-  items: { label: string; desc: string }[];
+const PALETTE: {
+  group: string;
+  items: { label: string; desc: string; disabled?: boolean }[];
 }[] = [
   {
-    label: "Trigger",
-    count: 1,
+    group: "Media",
     items: [
-      { label: "Webhook", desc: "Starts from an inbound HTTP webhook" },
+      {
+        label: "Find Location Images",
+        desc: "Searches free/open image sources for real, reusable photos near the location.",
+      },
+      {
+        label: "Curate Images",
+        desc: "Pauses so you can swap similar images with alternates before continuing.",
+      },
+      {
+        label: "Rehost Image",
+        desc: "Copies an image from an expiring URL (e.g. a Notion file) into permanent storage.",
+      },
     ],
   },
   {
-    label: "Media",
-    count: 3,
+    group: "AI",
     items: [
-      { label: "Find Location Images", desc: "Searches free image sources near a location" },
-      { label: "Curate Images", desc: "Swap ranked images with alternates" },
-      { label: "Rehost Image", desc: "Copies an image into permanent storage" },
+      {
+        label: "Rank Images",
+        desc: "Rates supported public image URLs with vision and returns them sorted best-first.",
+      },
+      {
+        label: "Categorize Images",
+        desc: "Assigns each image to one of your categories with vision.",
+      },
+      {
+        label: "LLM Prompt",
+        desc: "Calls an AI model with a custom prompt and returns generated text.",
+      },
     ],
   },
   {
-    label: "AI",
-    count: 2,
+    group: "Design",
     items: [
-      { label: "Rank Images", desc: "Ranks photos with GPT vision" },
-      { label: "LLM Prompt", desc: "Calls an AI model with a custom prompt" },
+      {
+        label: "Render Template",
+        desc: "Fills a template's placeholders and renders the final PNG.",
+      },
+      {
+        label: "Render Template Batch",
+        desc: "Renders several template versions from an input image list.",
+      },
+      {
+        label: "Preview Design Image",
+        desc: "Pauses so you can preview candidate images inside a selected design.",
+      },
+      {
+        label: "Review Designs",
+        desc: "Pauses the workflow so you can pick one generated design.",
+      },
     ],
   },
   {
-    label: "Design",
-    count: 3,
+    group: "Flow",
     items: [
-      { label: "Render Template", desc: "Fills placeholders and renders a PNG" },
-      { label: "Render Template Batch", desc: "Renders several versions at once" },
-      { label: "Review Designs", desc: "Pause and pick a generated design" },
+      {
+        label: "Manual Review",
+        desc: "Choose the final image — automatically or by pausing for a human pick.",
+      },
+      {
+        label: "Router",
+        desc: "Routes the workflow down one of several branches based on conditions.",
+      },
     ],
   },
   {
-    label: "Flow",
-    count: 2,
+    group: "Google Drive",
     items: [
-      { label: "Manual Review", desc: "Pauses for a human to pick" },
-      { label: "Router", desc: "Routes down conditional branches" },
+      {
+        label: "List Drive Images",
+        desc: "Lists image files inside a Google Drive folder and its subfolders.",
+      },
+      {
+        label: "Upload Drive Files",
+        desc: "Uploads one or more files to a Google Drive folder from file URLs.",
+      },
+    ],
+  },
+  {
+    group: "Notion",
+    items: [
+      {
+        label: "Update Notion Page",
+        desc: "Updates selected Notion page properties from webhook or step data.",
+      },
     ],
   },
 ];
 
-function PaletteItem({
+function PaletteButton({
   label,
   desc,
-  highlight,
+  disabled,
 }: {
   label: string;
   desc: string;
-  highlight?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <div
       className={cn(
-        "flex min-h-9 w-full items-center gap-2 rounded-md border border-transparent px-2 py-1.5 text-left",
-        highlight
-          ? "border-foreground/15 bg-accent/70"
-          : "bg-muted/25",
+        "flex min-h-10 w-full items-center gap-2 rounded-md border border-transparent bg-muted/25 px-2 py-1.5 text-left text-sm",
+        disabled && "opacity-50",
       )}
     >
-      <Plus className="size-3 shrink-0 text-muted-foreground" />
+      <Plus className="size-3.5 shrink-0 text-muted-foreground" />
       <span className="min-w-0">
-        <span className="block truncate text-[11px] font-medium leading-4">
+        <span className="block truncate text-[13px] font-medium leading-4">
           {label}
         </span>
-        <span className="block truncate text-[10px] leading-4 text-muted-foreground">
+        <span className="block truncate text-[11px] leading-4 text-muted-foreground">
           {desc}
         </span>
       </span>
@@ -110,293 +154,293 @@ function PaletteItem({
   );
 }
 
-function PaletteGroup({
-  label,
-  count,
-  items,
-}: {
-  label: string;
-  count: number;
-  items: { label: string; desc: string }[];
-}) {
+function PaletteGroupHeader({ label, count }: { label: string; count: number }) {
   return (
-    <section className="flex flex-col gap-1">
-      <div className="flex items-center justify-between px-1">
-        <span className="text-[10px] font-medium text-muted-foreground">
-          {label}
-        </span>
-        <span className="text-[9px] tabular-nums text-muted-foreground/70">
-          {count}
-        </span>
-      </div>
-      {items.map((item) => (
-        <PaletteItem key={item.label} {...item} />
-      ))}
-    </section>
+    <div className="flex items-center justify-between px-1">
+      <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
+      <span className="text-[10px] tabular-nums text-muted-foreground/70">
+        {count}
+      </span>
+    </div>
   );
 }
 
-/** A workflow node card matching the real WorkflowNode styling. */
-function WfNode({
+/** A step card matching workflow-node.tsx exactly (badge + name, no icons). */
+function StepCard({
   step,
   label,
   isTrigger,
-  isSelected,
-  icon,
+  selected,
 }: {
   step: string;
   label: string;
   isTrigger?: boolean;
-  isSelected?: boolean;
-  icon?: React.ReactNode;
+  selected?: boolean;
 }) {
   return (
-    <div
-      className={cn(
-        "flex w-52 items-center gap-2.5 rounded-lg border bg-background px-3 py-2.5 shadow-sm",
-        isSelected
-          ? "border-foreground/40 ring-1 ring-foreground/20"
-          : "border-border",
-      )}
-    >
-      <span
+    <div className="relative">
+      <div
         className={cn(
-          "flex h-6 min-w-8 shrink-0 items-center justify-center rounded-md px-1.5 text-[11px] font-semibold tabular-nums",
-          isTrigger
-            ? "bg-amber-500/15 text-amber-600"
-            : "bg-muted text-muted-foreground",
+          "w-56 rounded-lg border bg-background px-3 py-2.5 shadow-sm",
+          selected
+            ? "border-foreground/40 ring-1 ring-foreground/20"
+            : "border-border",
         )}
       >
-        {step}
-      </span>
-      <div className="flex min-w-0 items-center gap-1.5">
-        {icon}
-        <div className="min-w-0">
-          <span className="block truncate text-sm font-medium">{label}</span>
-          {isTrigger ? (
-            <span className="block text-[10px] text-muted-foreground">
-              Trigger
-            </span>
-          ) : null}
+        <div className="flex items-center gap-2.5">
+          <span
+            className={cn(
+              "flex h-6 min-w-8 shrink-0 items-center justify-center rounded-md px-1.5 text-[11px] font-semibold tabular-nums",
+              isTrigger
+                ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                : "bg-muted text-muted-foreground",
+            )}
+          >
+            {step}
+          </span>
+          <div className="min-w-0">
+            <span className="block truncate text-sm font-medium">{label}</span>
+            {isTrigger ? (
+              <span className="block truncate text-[11px] text-muted-foreground">
+                Trigger
+              </span>
+            ) : null}
+          </div>
         </div>
+      </div>
+
+      {/* Per-node toolbar shown next to the selected step. */}
+      {selected ? (
+        <div className="absolute left-full top-1/2 ml-2 flex -translate-y-1/2 items-center gap-0.5 rounded-md border bg-background p-0.5 shadow-sm">
+          <span className="flex size-6 items-center justify-center rounded text-muted-foreground">
+            <ChevronUp className="size-4" />
+          </span>
+          <span className="flex size-6 items-center justify-center rounded text-muted-foreground">
+            <ChevronDown className="size-4" />
+          </span>
+          <span className="flex size-6 items-center justify-center rounded">
+            <Trash2 className="size-4 text-destructive" />
+          </span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Connector edge with the insert-step "+" button the real canvas shows. */
+function EdgeConnector() {
+  return (
+    <div className="relative flex h-10 justify-center">
+      <div className="w-[1.5px] bg-border" />
+      <span className="absolute top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full border bg-background text-muted-foreground shadow-sm">
+        <Plus className="size-3.5" />
+      </span>
+    </div>
+  );
+}
+
+function KindBadge({ kind }: { kind: "text" | "image" }) {
+  return (
+    <span
+      className={cn(
+        "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase",
+        kind === "image"
+          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+          : "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+      )}
+    >
+      {kind}
+    </span>
+  );
+}
+
+function BindingRow({
+  name,
+  kind,
+  token,
+  placeholder,
+}: {
+  name: string;
+  kind: "text" | "image";
+  token?: string;
+  placeholder?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-2">
+        <Label>{name}</Label>
+        <KindBadge kind={kind} />
+      </div>
+      <div className="flex items-start gap-1.5">
+        <Input readOnly value={token ?? ""} placeholder={placeholder} />
+        <Button variant="outline" size="sm" className="h-9 shrink-0 gap-1 px-2 text-xs">
+          <Braces className="size-3.5" /> Data
+        </Button>
       </div>
     </div>
   );
 }
 
-/** The vertical connector between nodes. */
-function NodeConnector() {
-  return (
-    <div className="ml-[calc(2rem-0.5px)] h-4 w-px bg-border" />
-  );
-}
-
-function ConfigField({
-  label,
-  value,
-  type = "input",
-}: {
-  label: string;
-  value: string;
-  type?: "input" | "select" | "textarea";
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-[10px] text-muted-foreground">{label}</span>
-      {type === "textarea" ? (
-        <div className="rounded-md border border-border bg-background p-2 text-[11px] leading-relaxed text-muted-foreground">
-          {value}
-        </div>
-      ) : (
-        <div className="flex h-7 items-center justify-between rounded-md border border-border bg-background px-2 text-[11px]">
-          <span className="truncate">{value}</span>
-          {type === "select" ? (
-            <span className="text-muted-foreground/60">⌄</span>
-          ) : null}
-        </div>
-      )}
-    </div>
-  );
-}
+const STEPS = [
+  { step: "S1", label: "Webhook", isTrigger: true },
+  { step: "S2", label: "Find Location Images" },
+  { step: "S3", label: "Rank Images" },
+  { step: "S4", label: "Curate Images" },
+  { step: "S5", label: "Render Template", selected: true },
+  { step: "S6", label: "Upload Drive Files" },
+];
 
 export function WorkflowMockup() {
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-background shadow-2xl shadow-black/20">
-      {/* Title bar */}
-      <div className="flex items-center gap-3 border-b border-border bg-muted/50 px-4 py-2.5">
-        <TrafficLights />
-        <span className="text-xs font-medium text-muted-foreground">
-          Ignis — Workflow Editor
-        </span>
-      </div>
-
-      {/* Editor body — three panels */}
-      <div className="flex h-[460px]">
-        {/* Node palette (left) */}
-        <aside className="w-48 shrink-0 overflow-hidden border-r border-border bg-sidebar p-2.5">
-          <div className="flex flex-col gap-2.5">
-            {PALETTE_GROUPS.map((group) => (
-              <PaletteGroup key={group.label} {...group} />
-            ))}
+    <AppFrame path="/workflows/lisbon-pipeline">
+      <div className="flex h-[560px]">
+        {/* Node palette — node-palette.tsx */}
+        <aside className="scrollbar-thin-muted hidden w-56 shrink-0 overflow-y-auto border-r bg-sidebar p-3 md:block">
+          <div className="flex flex-col gap-3">
+            <section className="flex flex-col gap-1">
+              <PaletteGroupHeader label="Trigger" count={1} />
+              <PaletteButton
+                label="Webhook"
+                desc="A workflow can have only one trigger"
+                disabled
+              />
+            </section>
+            <section className="flex flex-col gap-2.5">
+              <p className="px-1 text-[11px] font-medium text-muted-foreground">
+                Steps
+              </p>
+              {PALETTE.map(({ group, items }) => (
+                <section key={group} className="flex flex-col gap-1">
+                  <PaletteGroupHeader label={group} count={items.length} />
+                  <div className="flex flex-col gap-1">
+                    {items.map((item) => (
+                      <PaletteButton key={item.label} {...item} />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </section>
           </div>
         </aside>
 
-        {/* Canvas (center) */}
-        <div className="relative min-w-0 flex-1 bg-muted/30">
-          {/* Dotted background */}
+        {/* Canvas — workflow-canvas.tsx (React Flow) */}
+        <div className="relative min-w-0 flex-1 overflow-hidden">
+          {/* React Flow's default dotted background. */}
           <div
-            className="absolute inset-0 opacity-60"
+            aria-hidden
+            className="absolute inset-0"
             style={{
               backgroundImage:
-                "radial-gradient(circle, var(--border) 1px, transparent 1px)",
-              backgroundSize: "16px 16px",
+                "radial-gradient(circle, color-mix(in oklch, var(--foreground), transparent 82%) 1px, transparent 1px)",
+              backgroundSize: "20px 20px",
             }}
           />
 
-          {/* Nodes */}
-          <div className="relative flex h-full flex-col items-center justify-center gap-0 py-4">
-            <WfNode
-              step="S1"
-              label="Webhook"
-              isTrigger
-              icon={<Webhook className="size-3.5 shrink-0 text-muted-foreground" />}
-            />
-            <NodeConnector />
-            <WfNode
-              step="S2"
-              label="Find Location Images"
-              icon={<MapPin className="size-3.5 shrink-0 text-muted-foreground" />}
-            />
-            <NodeConnector />
-            <WfNode
-              step="S3"
-              label="Rank Images"
-              icon={<ScanEye className="size-3.5 shrink-0 text-muted-foreground" />}
-            />
-            <NodeConnector />
-            <WfNode
-              step="S4"
-              label="Curate Images"
-              icon={<Images className="size-3.5 shrink-0 text-muted-foreground" />}
-            />
-            <NodeConnector />
-            <WfNode
-              step="S5"
-              label="Render Template"
-              isSelected
-              icon={<LayoutTemplate className="size-3.5 shrink-0 text-muted-foreground" />}
-            />
-            <NodeConnector />
-            <WfNode
-              step="S6"
-              label="Upload Drive Files"
-              icon={<FileUp className="size-3.5 shrink-0 text-muted-foreground" />}
-            />
+          <div className="relative flex h-full flex-col items-center justify-center">
+            {STEPS.map((s, i) => (
+              <div key={s.step} className="flex flex-col items-center">
+                {i > 0 ? <EdgeConnector /> : null}
+                <StepCard {...s} />
+              </div>
+            ))}
+          </div>
+
+          {/* React Flow controls (bottom-left). */}
+          <div className="absolute bottom-4 left-4 flex flex-col overflow-hidden rounded-md border bg-background shadow-sm">
+            <span className="flex size-7 items-center justify-center border-b text-muted-foreground">
+              <Plus className="size-3.5" />
+            </span>
+            <span className="flex size-7 items-center justify-center border-b text-muted-foreground">
+              <Minus className="size-3.5" />
+            </span>
+            <span className="flex size-7 items-center justify-center text-muted-foreground">
+              <Maximize className="size-3.5" />
+            </span>
           </div>
         </div>
 
-        {/* Config panel (right) */}
-        <aside className="flex w-72 shrink-0 flex-col overflow-hidden border-l border-border bg-background">
-          {/* Panel header */}
-          <div className="shrink-0 border-b border-border bg-background/95 p-3">
+        {/* Config panel — workflow-editor.tsx + node-config-panel.tsx */}
+        <aside className="hidden w-[26rem] shrink-0 flex-col overflow-hidden border-l bg-background lg:flex">
+          <div className="shrink-0 border-b bg-background/95 p-3">
             <div className="flex items-center gap-2">
-              <div className="flex h-8 min-w-0 flex-1 items-center rounded-md border border-border bg-background px-2.5 text-xs font-medium">
-                Location Poster Generator
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="flex h-4 w-7 items-center rounded-full bg-foreground p-0.5">
-                  <div className="ml-auto size-3 rounded-full bg-background" />
-                </div>
-                <span className="text-[10px] text-muted-foreground">Active</span>
-              </div>
-              <div className="flex size-7 items-center justify-center rounded-md border border-border text-muted-foreground">
-                <FlaskConical className="size-3.5" />
-              </div>
-              <div className="flex size-7 items-center justify-center rounded-md border border-border text-muted-foreground">
-                <ListChecks className="size-3.5" />
-              </div>
-              <div className="flex size-7 items-center justify-center rounded-md border border-emerald-500/15 bg-emerald-500/[0.08] text-emerald-600">
-                <Save className="size-3.5" />
-              </div>
+              <Input
+                readOnly
+                aria-label="Workflow name"
+                value="Lisbon Poster Pipeline"
+                className="h-8 min-w-0 flex-1 rounded-md font-medium"
+              />
+              <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                <Switch size="sm" defaultChecked aria-label="Workflow active" />
+                <span>Active</span>
+              </label>
+              <Button variant="outline" size="icon-sm" aria-label="Test workflow">
+                <FlaskConical className="size-4" />
+              </Button>
+              <Button variant="outline" size="icon-sm" aria-label="Runs">
+                <ListChecks className="size-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                aria-label="All changes saved"
+                className="border-emerald-500/15 bg-emerald-500/[0.08] text-emerald-700 hover:bg-emerald-500/[0.12] dark:text-emerald-300"
+              >
+                <Save className="size-4" />
+              </Button>
             </div>
           </div>
 
-          {/* Config content */}
-          <div className="scrollbar-thin-muted min-h-0 flex-1 overflow-hidden p-3">
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-2">
-                <span className="flex h-6 min-w-8 items-center justify-center rounded-md bg-muted px-1.5 text-[11px] font-semibold tabular-nums">
-                  S5
-                </span>
-                <span className="text-sm font-medium">Render Template</span>
-                <LayoutTemplate className="size-3.5 text-muted-foreground" />
+          <div className="scrollbar-thin-muted min-h-0 flex-1 overflow-y-auto">
+            <div className="flex flex-col gap-4 p-4">
+              <div>
+                <Input
+                  readOnly
+                  value=""
+                  placeholder="Render Template"
+                  aria-label="Step name"
+                  className="h-8 font-semibold"
+                />
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  Render Template — Fills a template&apos;s placeholders and
+                  renders the final PNG.
+                </p>
               </div>
 
-              <p className="text-[11px] text-muted-foreground">
-                Fills a template&apos;s placeholders and renders the final PNG.
-              </p>
+              <Tabs defaultValue="config" className="min-w-0 gap-4">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="config">Config</TabsTrigger>
+                  <TabsTrigger value="test">Test</TabsTrigger>
+                </TabsList>
+              </Tabs>
 
-              <div className="h-px bg-border" />
-
-              <ConfigField
-                label="Template"
-                value="Brand Template — Instagram Post"
-                type="select"
-              />
-
-              <div className="rounded-md border border-border p-2.5">
-                <span className="text-[10px] font-medium text-muted-foreground">
-                  Placeholder bindings
-                </span>
-                <div className="mt-2 flex flex-col gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="flex items-center gap-1 rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">
-                      <TypeIcon className="size-2.5" /> title
-                    </span>
-                    <span className="text-muted-foreground/40">→</span>
-                    <div className="min-w-0 flex-1 truncate rounded border border-border bg-background px-1.5 py-1 font-mono text-[10px]">
-                      {"{{S3.best.title}}"}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="flex items-center gap-1 rounded bg-purple-500/10 px-1.5 py-0.5 text-[10px] font-medium text-purple-600">
-                      <Images className="size-2.5" /> background
-                    </span>
-                    <span className="text-muted-foreground/40">→</span>
-                    <div className="min-w-0 flex-1 truncate rounded border border-border bg-background px-1.5 py-1 font-mono text-[10px]">
-                      {"{{S4.best.url}}"}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="flex items-center gap-1 rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">
-                      <TypeIcon className="size-2.5" /> location
-                    </span>
-                    <span className="text-muted-foreground/40">→</span>
-                    <div className="min-w-0 flex-1 truncate rounded border border-border bg-background px-1.5 py-1 font-mono text-[10px]">
-                      {"{{S1.body.city}}"}
-                    </div>
-                  </div>
-                </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Template</Label>
+                <MockSelect value="Lisbon Poster" />
+                <p className="text-xs text-muted-foreground">
+                  The design to render.
+                </p>
               </div>
 
-              <div className="flex items-center gap-2 rounded-md bg-muted/40 p-2">
-                <Sparkles className="size-3.5 shrink-0 text-muted-foreground" />
-                <span className="text-[10px] text-muted-foreground">
-                  Outputs: Render URL, Render URLs (all pages)
-                </span>
+              <div className="flex flex-col gap-3">
+                <p className="text-xs font-medium tracking-wide text-muted-foreground/70">
+                  Placeholders
+                </p>
+                <BindingRow name="title" kind="text" token="{{S1.body.city}}" />
+                <BindingRow name="subtitle" kind="text" token="{{S3.best.title}}" />
+                <BindingRow name="background" kind="image" token="{{S4.best.url}}" />
               </div>
 
-              <div className="h-px bg-border" />
-
-              <ConfigField
-                label="Ranking criteria"
-                value="Prefer polished travel photos: wide landscape views, recognizable landmarks, waterfronts, blue sky, vivid color…"
-                type="textarea"
-              />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="self-start text-destructive hover:text-destructive"
+              >
+                <Trash2 className="size-4" /> Delete node
+              </Button>
             </div>
           </div>
         </aside>
       </div>
-    </div>
+    </AppFrame>
   );
 }

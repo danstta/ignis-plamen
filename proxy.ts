@@ -24,9 +24,9 @@ export const config = {
   // (api/hooks), the Inngest serve endpoint (api/inngest — Cloud/the dev server
   // POST/PUT here with no session cookie and verify their own signing key),
   // the Link Hub Notion webhook (api/link-hub), the
-  // login page, Next internals, and any path with a file extension (static
-  // assets, /uploads/*.png).
+  // login page, the public landing page, Next internals, and any path with a
+  // file extension (static assets, /uploads/*.png).
   matcher: [
-    "/((?!api/auth|api/editor-fonts|api/location-images|api/drive-images|api/hooks|api/inngest|api/link-hub|login|_next|.*\\..*).*)",
+    "/((?!api/auth|api/editor-fonts|api/location-images|api/drive-images|api/hooks|api/inngest|api/link-hub|login|landing-page|_next|.*\\..*).*)",
   ],
 };

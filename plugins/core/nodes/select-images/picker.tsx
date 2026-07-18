@@ -67,6 +67,8 @@ const DEFAULT_PLACEMENT: ImagePlacement = {
 const ALTERNATES_PAGE_SIZE = 6;
 /** Pixel size requested from Google's CDN thumbnail for grid tiles. */
 const TILE_THUMBNAIL_SIZE = 400;
+/** Alternate pages warmed ahead of the current one so paging never waits on loads. */
+const ALTERNATES_PRELOAD_PAGES = 2;
 
 const POSITION_PRESETS = [
   { value: "left top", label: "Top left", icon: ArrowUp },
@@ -573,6 +575,7 @@ export function SelectImagesPicker({
   const [submitting, setSubmitting] = useState(false);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const previewUrlsRef = useRef<string[]>([]);
+  const preloadedThumbnailsRef = useRef(new Set<string>());
   const [activePreviewPage, setActivePreviewPage] = useState(0);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -685,6 +688,26 @@ export function SelectImagesPicker({
       return next;
     });
   }
+
+  // Warm the thumbnails around the current alternates page (ahead and one page
+  // back) so Next/Previous swap in already-cached images instead of loading.
+  useEffect(() => {
+    const aheadEnd =
+      alternatePageStart + ALTERNATES_PAGE_SIZE * (1 + ALTERNATES_PRELOAD_PAGES);
+    const behindStart = Math.max(0, alternatePageStart - ALTERNATES_PAGE_SIZE);
+    const toWarm = [
+      ...alternateImages.slice(alternatePageStart + ALTERNATES_PAGE_SIZE, aheadEnd),
+      ...alternateImages.slice(behindStart, alternatePageStart),
+    ];
+    for (const image of toWarm) {
+      const src = imageThumbnailSrc(image, TILE_THUMBNAIL_SIZE);
+      if (preloadedThumbnailsRef.current.has(src)) continue;
+      preloadedThumbnailsRef.current.add(src);
+      const preload = new Image();
+      preload.decoding = "async";
+      preload.src = src;
+    }
+  }, [alternateImages, alternatePageStart]);
 
   useEffect(() => {
     if (!previewTemplateId || selectedUrls.length === 0) {

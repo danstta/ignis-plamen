@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isImageContentType } from "@/lib/images/content-types";
+import { readResponseWithLimit } from "@/lib/images/fetch";
 import { normalizeImageForPreview } from "@/lib/images/normalize";
 
 export const runtime = "nodejs";
@@ -11,51 +12,6 @@ const MAX_UPSTREAM_BYTES = 10 * 1024 * 1024; // 10 MiB
 
 function driveDirectLink(fileId: string): string {
   return `https://drive.google.com/uc?export=view&id=${encodeURIComponent(fileId)}`;
-}
-
-/**
- * Read the upstream body up to `maxBytes`, bailing out mid-stream so an
- * oversized file is never fully buffered. Local to this route: drive-images
- * streams through a different path and webhook-ingest is webhook-scoped.
- */
-async function readResponseWithLimit(
-  res: Response,
-  maxBytes: number,
-): Promise<{ ok: true; bytes: Uint8Array } | { ok: false }> {
-  const declared = Number(res.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > maxBytes) {
-    // Cancel instead of abandoning the stream — an unread upstream body keeps
-    // pulling bandwidth and holds a connection-pool slot until GC.
-    await res.body?.cancel();
-    return { ok: false };
-  }
-
-  const reader = res.body?.getReader();
-  if (!reader) return { ok: true, bytes: new Uint8Array(0) };
-
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > maxBytes) {
-        await reader.cancel();
-        return { ok: false };
-      }
-      chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return { ok: true, bytes };
 }
 
 export async function GET(

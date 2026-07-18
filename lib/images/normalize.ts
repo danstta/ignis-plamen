@@ -266,3 +266,69 @@ export async function normalizeImageForPreview(input: {
 }): Promise<{ bytes: Buffer; contentType: string; converted: boolean }> {
   return normalizeHeicImageForPreview(input);
 }
+
+/** Longest edge kept when baking images into server renders. */
+const RENDER_MAX_DIMENSION = 2560;
+
+/**
+ * Normalize bytes for the server render pipeline (Satori). Browsers apply EXIF
+ * orientation when displaying an image; Satori draws the raw pixels, so camera
+ * photos with an orientation tag must be re-encoded upright or they render
+ * rotated. HEIC (which Satori can't decode) is converted, and oversized photos
+ * are capped at {@link RENDER_MAX_DIMENSION} to keep render times bounded.
+ * Images with transparency keep an alpha-capable format.
+ */
+export async function normalizeImageForRender(input: {
+  bytes: ImageBytes;
+  contentType?: string | null;
+  name?: string;
+}): Promise<{ bytes: Buffer; contentType: string }> {
+  const bytes = toBuffer(input.bytes);
+  const contentType =
+    inferImageContentType({ ...input, bytes }) || "application/octet-stream";
+
+  if (isHeicLikeImage({ ...input, bytes })) {
+    return {
+      bytes: await convertImageToJpeg(bytes, {
+        maxDimension: RENDER_MAX_DIMENSION,
+      }),
+      contentType: JPEG_CONTENT_TYPE,
+    };
+  }
+
+  let orientation = 1;
+  let hasAlpha = false;
+  let longestEdge = 0;
+  try {
+    const sharp = (await import("sharp")).default;
+    const metadata = await sharp(bytes, { failOn: "none" }).metadata();
+    orientation = metadata.orientation ?? 1;
+    hasAlpha = metadata.hasAlpha ?? false;
+    longestEdge = Math.max(metadata.width ?? 0, metadata.height ?? 0);
+  } catch {
+    // Not decodable by sharp — hand the original bytes to the renderer as-is.
+    return { bytes, contentType };
+  }
+
+  const needsOrient = orientation > 1;
+  // Only JPEGs are downscaled for size: re-encoding PNG/GIF/WebP risks losing
+  // transparency or animation for a marginal render-time win.
+  const oversized =
+    contentType === JPEG_CONTENT_TYPE && longestEdge > RENDER_MAX_DIMENSION;
+  if (!needsOrient && !oversized) return { bytes, contentType };
+
+  if (needsOrient && hasAlpha) {
+    const sharp = (await import("sharp")).default;
+    return {
+      bytes: await sharp(bytes, { failOn: "none" }).autoOrient().png().toBuffer(),
+      contentType: "image/png",
+    };
+  }
+
+  return {
+    bytes: await convertImageToJpeg(bytes, {
+      maxDimension: RENDER_MAX_DIMENSION,
+    }),
+    contentType: JPEG_CONTENT_TYPE,
+  };
+}

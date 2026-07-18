@@ -7,6 +7,7 @@ import {
 } from "@/lib/editor/types";
 import { TemplateRenderer } from "@/components/render/template-renderer";
 import { loadFontsForCanvas } from "./fonts";
+import { inlineCanvasImages } from "./images";
 import { resolveAutoFitCanvas } from "./measure-server";
 
 export type RenderInput = {
@@ -26,12 +27,15 @@ export interface Renderer {
  */
 class SatoriRenderer implements Renderer {
   async render({ canvas, data }: RenderInput): Promise<ArrayBuffer> {
+    // Satori draws raw image bytes (no EXIF orientation, no HEIC), so remote
+    // images are fetched, normalized upright, and inlined as data URIs first.
+    const inlined = await inlineCanvasImages(canvas, data);
     // Auto-fit text needs a concrete font size before Satori lays it out (Satori
     // can't size text to a box itself); resolve it against the real data first.
-    const resolved = await resolveAutoFitCanvas(canvas, data);
-    const fonts = await loadFontsForCanvas(resolved, data);
+    const resolved = await resolveAutoFitCanvas(inlined.canvas, inlined.data);
+    const fonts = await loadFontsForCanvas(resolved, inlined.data);
     const image = new ImageResponse(
-      <TemplateRenderer canvas={resolved} data={data} />,
+      <TemplateRenderer canvas={resolved} data={inlined.data} />,
       {
         width: resolved.width,
         height: resolved.height,

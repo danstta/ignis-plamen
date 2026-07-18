@@ -63,8 +63,8 @@ const DEFAULT_PLACEMENT: ImagePlacement = {
   scale: 1,
 };
 
-/** Alternates are paged so at most this many tiles are mounted at once (2 rows of 3). */
-const ALTERNATES_PAGE_SIZE = 6;
+/** Alternates are paged so at most this many tiles are mounted at once (a 3x3 grid). */
+const ALTERNATES_PAGE_SIZE = 9;
 /** Pixel size requested from Google's CDN thumbnail for grid tiles. */
 const TILE_THUMBNAIL_SIZE = 400;
 /** Alternate pages warmed ahead of the current one so paging never waits on loads. */
@@ -181,16 +181,30 @@ function valueForTextPlaceholder(value: unknown): string {
 }
 
 function TileImage({ image }: { image: Candidate }) {
+  // Tiles fade in over a pulsing skeleton instead of popping out of an empty
+  // (near-black in dark mode) box while the thumbnail downloads.
+  const [loaded, setLoaded] = useState(false);
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={imageThumbnailSrc(image, TILE_THUMBNAIL_SIZE)}
-      alt=""
-      loading="lazy"
-      decoding="async"
-      draggable={false}
-      className="aspect-square w-full object-cover"
-    />
+    <div className={cn("aspect-square w-full", !loaded && "animate-pulse bg-muted/60")}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={imageThumbnailSrc(image, TILE_THUMBNAIL_SIZE)}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        draggable={false}
+        onLoad={() => setLoaded(true)}
+        onError={() => setLoaded(true)}
+        ref={(img) => {
+          // Cached images can complete before onLoad is attached.
+          if (img?.complete) setLoaded(true);
+        }}
+        className={cn(
+          "h-full w-full object-cover transition-opacity duration-200",
+          loaded ? "opacity-100" : "opacity-0",
+        )}
+      />
+    </div>
   );
 }
 

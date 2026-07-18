@@ -1,10 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import { inferImageContentType, isHeicLikeImage } from "./normalize";
+import sharp from "sharp";
+import {
+  inferImageContentType,
+  isHeicLikeImage,
+  normalizeImageForRender,
+} from "./normalize";
 
 /**
- * Characterization tests for the pure detection half of image normalization:
- * magic-byte sniffing and HEIC-likeness. The conversion paths (sharp /
- * heic-convert) are deliberately not exercised here.
+ * Tests for the pure detection half of image normalization (magic-byte
+ * sniffing, HEIC-likeness) plus the render normalization path, which is
+ * exercised with tiny sharp-generated fixtures. The HEIC conversion path
+ * (heic-convert) is deliberately not exercised here.
  */
 
 /**
@@ -119,6 +125,57 @@ describe("inferImageContentType — declared type and extension", () => {
 
   test("nothing to go on yields empty string", () => {
     expect(inferImageContentType({})).toBe("");
+  });
+});
+
+describe("normalizeImageForRender", () => {
+  test("bakes EXIF orientation into the pixels", async () => {
+    // Orientation 6 = "rotate 90° clockwise to display": a 40x20 JPEG shows as
+    // 20x40 in browsers, so the render copy must be physically 20x40.
+    const tagged = await sharp({
+      create: {
+        width: 40,
+        height: 20,
+        channels: 3,
+        background: { r: 200, g: 40, b: 40 },
+      },
+    })
+      .jpeg()
+      .withMetadata({ orientation: 6 })
+      .toBuffer();
+
+    const result = await normalizeImageForRender({
+      bytes: tagged,
+      contentType: "image/jpeg",
+    });
+    const meta = await sharp(result.bytes).metadata();
+    expect(result.contentType).toBe("image/jpeg");
+    expect(meta.orientation ?? 1).toBe(1);
+    expect(meta.width).toBe(20);
+    expect(meta.height).toBe(40);
+  });
+
+  test("passes an untagged image through byte-for-byte", async () => {
+    const png = await sharp({
+      create: {
+        width: 10,
+        height: 10,
+        channels: 4,
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      },
+    })
+      .png()
+      .toBuffer();
+
+    const result = await normalizeImageForRender({ bytes: png });
+    expect(result.contentType).toBe("image/png");
+    expect(Buffer.compare(result.bytes, png)).toBe(0);
+  });
+
+  test("undecodable bytes fall through unchanged", async () => {
+    const bytes = Buffer.from("definitely not an image", "ascii");
+    const result = await normalizeImageForRender({ bytes });
+    expect(Buffer.compare(result.bytes, bytes)).toBe(0);
   });
 });
 

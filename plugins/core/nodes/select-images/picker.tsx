@@ -9,6 +9,8 @@ import {
   ArrowRight,
   ArrowUp,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Crop,
   Crosshair,
   GripVertical,
@@ -61,8 +63,8 @@ const DEFAULT_PLACEMENT: ImagePlacement = {
   scale: 1,
 };
 
-/** Alternates reveal this many tiles per "Show more" so a big pool never mounts at once. */
-const ALTERNATES_BATCH = 10;
+/** Alternates are paged so at most this many tiles are mounted at once. */
+const ALTERNATES_PAGE_SIZE = 10;
 /** Pixel size requested from Google's CDN thumbnail for grid tiles. */
 const TILE_THUMBNAIL_SIZE = 400;
 
@@ -561,7 +563,7 @@ export function SelectImagesPicker({
   const [framingUrl, setFramingUrl] = useState("");
   const [draggingUrl, setDraggingUrl] = useState("");
   const [dragOverUrl, setDragOverUrl] = useState("");
-  const [visibleAlternates, setVisibleAlternates] = useState(ALTERNATES_BATCH);
+  const [alternatePage, setAlternatePage] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const previewUrlsRef = useRef<string[]>([]);
@@ -591,7 +593,19 @@ export function SelectImagesPicker({
   const alternateImages = allImages.filter(
     (image) => !selectedUrls.includes(image.url),
   );
-  const shownAlternates = alternateImages.slice(0, visibleAlternates);
+  const alternatePageCount = Math.ceil(
+    alternateImages.length / ALTERNATES_PAGE_SIZE,
+  );
+  // Adding/removing images resizes the pool, so clamp instead of trusting state.
+  const currentAlternatePage = Math.min(
+    alternatePage,
+    Math.max(0, alternatePageCount - 1),
+  );
+  const alternatePageStart = currentAlternatePage * ALTERNATES_PAGE_SIZE;
+  const shownAlternates = alternateImages.slice(
+    alternatePageStart,
+    alternatePageStart + ALTERNATES_PAGE_SIZE,
+  );
   const atSelectionLimit = selectedUrls.length >= selectionCount;
 
   const effectiveFramingUrl = selectedUrls.includes(framingUrl) ? framingUrl : "";
@@ -849,7 +863,8 @@ export function SelectImagesPicker({
             </h3>
             {alternateImages.length > 0 ? (
               <span className="text-[11px] text-muted-foreground">
-                {Math.min(visibleAlternates, alternateImages.length)} of{" "}
+                {alternatePageStart + 1}-
+                {alternatePageStart + shownAlternates.length} of{" "}
                 {alternateImages.length}
               </span>
             ) : null}
@@ -870,17 +885,36 @@ export function SelectImagesPicker({
                   />
                 ))}
               </div>
-              {visibleAlternates < alternateImages.length ? (
-                <div className="mt-3 flex justify-center">
+              {alternatePageCount > 1 ? (
+                <div className="mt-3 flex items-center justify-center gap-3">
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
+                    disabled={currentAlternatePage === 0}
                     onClick={() =>
-                      setVisibleAlternates((count) => count + ALTERNATES_BATCH)
+                      setAlternatePage(Math.max(0, currentAlternatePage - 1))
                     }
                   >
-                    Show more
+                    <ChevronLeft className="size-4" />
+                    Previous
+                  </Button>
+                  <span className="text-[11px] tabular-nums text-muted-foreground">
+                    Page {currentAlternatePage + 1} of {alternatePageCount}
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={currentAlternatePage >= alternatePageCount - 1}
+                    onClick={() =>
+                      setAlternatePage(
+                        Math.min(alternatePageCount - 1, currentAlternatePage + 1),
+                      )
+                    }
+                  >
+                    Next
+                    <ChevronRight className="size-4" />
                   </Button>
                 </div>
               ) : null}

@@ -9,8 +9,9 @@
  */
 
 import type { ShapeKind } from "./shapes";
+import type { ListIconName } from "./icons";
 
-export type ElementType = "text" | "image" | "shape";
+export type ElementType = "text" | "image" | "shape" | "list";
 
 /** A single color stop along a gradient. */
 export interface GradientStop {
@@ -164,7 +165,60 @@ export interface ShapeElement extends BaseElement, Bordered {
   borderRadius?: number;
 }
 
-export type TemplateElement = TextElement | ImageElement | ShapeElement;
+/** How a list's rows distribute across its (fixed) box height. */
+export type ListDistribute = "top" | "middle" | "bottom" | "space-between";
+
+/**
+ * A vertical list that fits an ARRAY placeholder value into a fixed box — the
+ * list counterpart of {@link TextElement.autoFit}. Each bound item renders as
+ * one single-line row (optional bullet icon + text); the font size is computed
+ * on every render path so all N rows fit the box, within
+ * [{@link minFontSize}, {@link maxFontSize}]. See `resolveListFontSize` in
+ * `lib/render/fit-text.ts`. The stored {@link fontSize} is only the working
+ * value the resolvers overwrite (and the SSR fallback before measurement).
+ *
+ * Icon size and icon–text gap are fixed em ratios (see `lib/editor/icons.ts`),
+ * and {@link itemGap} is in em too, so the whole row layout scales with the one
+ * fitted font size — that single-scalar property is what lets the editor
+ * preview, the Satori PNG, and exported code share one fit algorithm.
+ */
+export interface ListElement extends BaseElement {
+  type: "list";
+  /** When set, this element is a LIST placeholder filled by connection data. */
+  placeholderKey?: string;
+  /** Sample rows shown while designing; also the fallback when nothing is bound. */
+  items: string[];
+  fontFamily: string;
+  /** Working/fitted font size (px); recomputed from resolved items per render. */
+  fontSize: number;
+  fontWeight?: number;
+  fontStyle?: "normal" | "italic";
+  color: string;
+  textAlign?: "left" | "center" | "right";
+  lineHeight?: number;
+  letterSpacing?: number;
+  /** Lower bound (px) for the fitted font size. Defaults to FIT_MIN_FONT_SIZE. */
+  minFontSize?: number;
+  /** Upper bound (px) for the fitted font size. Defaults to LIST_MAX_FONT_SIZE. */
+  maxFontSize?: number;
+  /**
+   * Minimum gap between rows, in em (× the fitted font size). The fit reserves
+   * it; "space-between" then stretches the actual gaps to fill the box.
+   */
+  itemGap?: number;
+  /** Row distribution across the box height. Defaults to "space-between". */
+  distribute?: ListDistribute;
+  /** Bullet icon drawn before each row; omit for plain text rows. */
+  icon?: ListIconName;
+  /** Icon fill color. Defaults to the text {@link color}. */
+  iconColor?: string;
+}
+
+export type TemplateElement =
+  | TextElement
+  | ImageElement
+  | ShapeElement
+  | ListElement;
 
 /**
  * A partial update accepted by the editor store. Intersecting the partials keeps
@@ -173,7 +227,8 @@ export type TemplateElement = TextElement | ImageElement | ShapeElement;
  */
 export type ElementPatch = Partial<TextElement> &
   Partial<ImageElement> &
-  Partial<ShapeElement>;
+  Partial<ShapeElement> &
+  Partial<ListElement>;
 
 /**
  * A single page within a design. Holds its own background and elements; the page
@@ -245,8 +300,8 @@ export interface PlaceholderImageValue {
   scale?: number;
 }
 
-/** Resolved values that fill placeholders at render time. */
-export type PlaceholderValue = string | PlaceholderImageValue;
+/** Resolved values that fill placeholders at render time. Lists are string[]. */
+export type PlaceholderValue = string | PlaceholderImageValue | string[];
 export type PlaceholderData = Record<string, PlaceholderValue>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -263,7 +318,43 @@ export function placeholderValueToText(
   value: PlaceholderValue | undefined,
 ): string {
   if (value === undefined) return "";
+  if (Array.isArray(value)) return value.join("\n");
   return isPlaceholderImageValue(value) ? value.url : value;
+}
+
+function itemToText(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (isPlaceholderImageValue(value)) return value.url;
+  return JSON.stringify(value);
+}
+
+/**
+ * Normalize any bound value to LIST items (the single chokepoint every list
+ * consumer parses through). Arrays keep one item per entry; strings split on
+ * newlines — and a single line shaped like "a, b, c" splits on commas, the form
+ * comma-joined upstream values (e.g. Notion multi-selects, `valueToText`)
+ * arrive in. Blank entries are dropped, so an unbound/empty value yields [].
+ */
+export function toListItems(value: unknown): string[] {
+  if (value === null || value === undefined) return [];
+  if (Array.isArray(value)) {
+    return value.map(itemToText).filter((item) => item !== "");
+  }
+  const lines = itemToText(value)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length === 1 && lines[0].includes(", ")) {
+    return lines[0]
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return lines;
 }
 
 /** A fresh empty page with the given background. */
@@ -304,14 +395,23 @@ export function migrateDoc(raw: TemplateDoc | TemplateDocV1): TemplateDoc {
   };
 }
 
+/** The kinds of placeholder a template can declare. */
+export type PlaceholderKind = "text" | "image" | "list";
+
+export interface PlaceholderDescriptor {
+  key: string;
+  kind: PlaceholderKind;
+}
+
 /** Collect the placeholder keys declared by a template, with their kind. */
-export function collectPlaceholders(
-  doc: TemplateDoc,
-): { key: string; kind: "text" | "image" }[] {
-  const seen = new Map<string, "text" | "image">();
+export function collectPlaceholders(doc: TemplateDoc): PlaceholderDescriptor[] {
+  const seen = new Map<string, PlaceholderKind>();
   for (const page of doc.pages) {
     for (const el of page.elements) {
-      if ((el.type === "text" || el.type === "image") && el.placeholderKey) {
+      if (
+        (el.type === "text" || el.type === "image" || el.type === "list") &&
+        el.placeholderKey
+      ) {
         if (!seen.has(el.placeholderKey)) {
           seen.set(el.placeholderKey, el.type);
         }

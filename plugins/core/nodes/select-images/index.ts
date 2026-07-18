@@ -2,7 +2,9 @@ import {
   collectPlaceholders,
   isPlaceholderImageValue,
   placeholderValueToText,
+  toListItems,
   type PlaceholderData,
+  type PlaceholderDescriptor,
   type PlaceholderValue,
 } from "@/lib/editor/types";
 import { getTemplate } from "@/lib/templates/service";
@@ -14,7 +16,7 @@ import { selectImagesMeta, type SelectImagesConfig } from "./meta";
 function outputsFromSelection(
   ranked: ImageCandidate[],
   selected: ImageCandidate[],
-  previewPlaceholders: { key: string; kind: "text" | "image" }[] = [],
+  previewPlaceholders: PlaceholderDescriptor[] = [],
   bindings: Record<string, unknown> = {},
 ) {
   const selectedUrls = new Set(selected.map((candidate) => candidate.url));
@@ -38,7 +40,7 @@ function outputsFromSelection(
 }
 
 function buildTemplateData(
-  placeholders: { key: string; kind: "text" | "image" }[],
+  placeholders: PlaceholderDescriptor[],
   bindings: Record<string, unknown>,
   selectedUrls: string[],
 ): PlaceholderData {
@@ -50,6 +52,8 @@ function buildTemplateData(
       const value = valueForImagePlaceholder(bound);
       data[placeholder.key] = value || selectedUrls[imageIndex] || "";
       imageIndex += 1;
+    } else if (placeholder.kind === "list") {
+      data[placeholder.key] = toListItems(bound);
     } else {
       data[placeholder.key] = valueForTextPlaceholder(bound);
     }

@@ -1,9 +1,11 @@
-import type { TextElement } from "@/lib/editor/types";
+import type { ListElement, TextElement } from "@/lib/editor/types";
+import { LIST_ICON_GAP_EM, LIST_ICON_SIZE_EM } from "@/lib/editor/icons";
 
 /**
  * Shared "fit text to box" algorithm. Given a fixed box and a way to measure one
  * line of text, it finds the largest font size at which the (wrapping) text fits
- * the box's width AND height — the engine behind {@link TextElement.autoFit}.
+ * the box's width AND height — the engine behind {@link TextElement.autoFit}
+ * and the intrinsic fit of {@link ListElement}.
  *
  * This module is intentionally pure: no DOM, no Node, no font bytes. The caller
  * supplies a {@link LineMeasurer} sourced from its environment (canvas
@@ -16,6 +18,8 @@ import type { TextElement } from "@/lib/editor/types";
 export const FIT_MIN_FONT_SIZE = 8;
 /** Default upper bound for an auto-fit font size (px). */
 export const FIT_MAX_FONT_SIZE = 400;
+/** Default minimum gap between list rows (em, × the fitted font size). */
+export const LIST_DEFAULT_ITEM_GAP_EM = 0.4;
 
 /**
  * Fraction of the box the fitted text is allowed to occupy. The small margin
@@ -152,6 +156,107 @@ export function fitFontSize(opts: FitOptions, measure: LineMeasurer): number {
  * `text` is the already-resolved string (placeholder value or fallback), so the
  * size always reflects what will actually be drawn.
  */
+export interface ListFitOptions {
+  /** Resolved list items — one single-line row each. Must be non-empty. */
+  items: string[];
+  /** Inner box width available to the rows (px). */
+  maxWidth: number;
+  /** Inner box height available to the rows (px). */
+  maxHeight: number;
+  lineHeight: number;
+  letterSpacing?: number;
+  /** Leading width reserved per row for the bullet (em); 0 for plain rows. */
+  rowPrefixEm?: number;
+  /** Minimum gap between rows (em). */
+  itemGapEm?: number;
+  /** Smallest font size to consider (px). */
+  min: number;
+  /** Largest font size to consider (px). */
+  max: number;
+}
+
+/**
+ * Largest integer font size in `[min, max]` at which every list row fits the
+ * box width on ONE line and all rows (plus the minimum gaps) fit the height.
+ * Because the bullet and gaps are expressed in em, the entire row layout scales
+ * with the single font-size scalar being searched — the same monotonic-fit
+ * shape as {@link fitFontSize}. Falls back to `min` when nothing fits.
+ */
+export function fitListFontSize(
+  opts: ListFitOptions,
+  measure: LineMeasurer,
+): number {
+  const items = opts.items.length ? opts.items : [" "];
+  const letterSpacing = opts.letterSpacing ?? 0;
+  const rowPrefixEm = opts.rowPrefixEm ?? 0;
+  const itemGapEm = opts.itemGapEm ?? 0;
+  const maxWidth = Math.max(1, opts.maxWidth);
+  const maxHeight = Math.max(1, opts.maxHeight);
+  const min = Math.max(1, Math.floor(opts.min));
+  const max = Math.max(min, Math.floor(opts.max));
+  const rows = items.length;
+
+  const fits = (fontSize: number): boolean => {
+    const totalHeight =
+      rows * fontSize * opts.lineHeight + (rows - 1) * itemGapEm * fontSize;
+    if (totalHeight > maxHeight) return false;
+    for (const item of items) {
+      const width =
+        rowPrefixEm * fontSize +
+        measure(item, fontSize) +
+        letterSpacing * Math.max(0, [...item].length - 1);
+      if (width > maxWidth) return false;
+    }
+    return true;
+  };
+
+  let lo = min;
+  let hi = max;
+  let best = min;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (fits(mid)) {
+      best = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return best;
+}
+
+/** Width (em) a list row reserves ahead of its text: icon + icon–text gap. */
+export function listRowPrefixEm(el: Pick<ListElement, "icon">): number {
+  return el.icon ? LIST_ICON_SIZE_EM + LIST_ICON_GAP_EM : 0;
+}
+
+/**
+ * Resolve the concrete font size a list element renders at, for its resolved
+ * `items` — the list counterpart of {@link resolveFontSize}. With no items the
+ * stored working size is kept (nothing will be drawn anyway).
+ */
+export function resolveListFontSize(
+  el: ListElement,
+  items: string[],
+  measure: LineMeasurer,
+): number {
+  if (items.length === 0) return el.fontSize;
+  return fitListFontSize(
+    {
+      items,
+      maxWidth: el.width * FIT_SAFETY,
+      maxHeight: el.height * FIT_SAFETY,
+      lineHeight: el.lineHeight ?? 1.2,
+      letterSpacing: el.letterSpacing ?? 0,
+      rowPrefixEm: listRowPrefixEm(el),
+      itemGapEm: el.itemGap ?? LIST_DEFAULT_ITEM_GAP_EM,
+      min: el.minFontSize ?? FIT_MIN_FONT_SIZE,
+      max: el.maxFontSize ?? FIT_MAX_FONT_SIZE,
+    },
+    measure,
+  );
+}
+
 export function resolveFontSize(
   el: TextElement,
   text: string,

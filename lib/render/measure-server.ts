@@ -3,11 +3,16 @@
 import { type Font, parse } from "opentype.js";
 import type {
   CanvasView,
+  ListElement,
   PlaceholderData,
   TextElement,
 } from "@/lib/editor/types";
-import { resolveText } from "./element-style";
-import { type LineMeasurer, resolveFontSize } from "./fit-text";
+import { resolveListItems, resolveText } from "./element-style";
+import {
+  type LineMeasurer,
+  resolveFontSize,
+  resolveListFontSize,
+} from "./fit-text";
 import { loadFontFaceBytes } from "./fonts";
 
 /**
@@ -100,16 +105,18 @@ function measurerFor(faces: Font[]): LineMeasurer {
 }
 
 /**
- * Resolve every auto-fit text element on a canvas to a concrete `fontSize` for
- * the given data. Canvases with no auto-fit text are returned untouched (no font
- * parsing), keeping the common path free of extra work.
+ * Resolve every fitting element on a canvas — auto-fit text, plus lists (whose
+ * fit is intrinsic) — to a concrete `fontSize` for the given data. Canvases
+ * with no fitting elements are returned untouched (no font parsing), keeping
+ * the common path free of extra work.
  */
 export async function resolveAutoFitCanvas(
   canvas: CanvasView,
   data?: PlaceholderData,
 ): Promise<CanvasView> {
   const fitting = canvas.elements.filter(
-    (el): el is TextElement => el.type === "text" && !!el.autoFit,
+    (el): el is TextElement | ListElement =>
+      (el.type === "text" && !!el.autoFit) || el.type === "list",
   );
   if (fitting.length === 0) return canvas;
 
@@ -119,13 +126,12 @@ export async function resolveAutoFitCanvas(
   );
 
   const elements = canvas.elements.map((el) => {
-    if (el.type !== "text" || !el.autoFit) return el;
+    if (el.type !== "list" && (el.type !== "text" || !el.autoFit)) return el;
     const faces = faceCache.get(cacheKey(el.fontFamily, el.fontWeight ?? 400)) ?? [];
-    const fontSize = resolveFontSize(
-      el,
-      resolveText(el, data),
-      measurerFor(faces),
-    );
+    const fontSize =
+      el.type === "list"
+        ? resolveListFontSize(el, resolveListItems(el, data), measurerFor(faces))
+        : resolveFontSize(el, resolveText(el, data), measurerFor(faces));
     return fontSize === el.fontSize ? el : { ...el, fontSize };
   });
   return { ...canvas, elements };

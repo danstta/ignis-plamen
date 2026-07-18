@@ -24,6 +24,10 @@ import {
   nodeDisplayLabel,
 } from "@/lib/nodes/catalog";
 import type { NodeConfigField } from "@/lib/nodes/types";
+import type {
+  PlaceholderDescriptor,
+  PlaceholderKind,
+} from "@/lib/editor/types";
 import type { WorkflowGraph } from "@/lib/workflows/types";
 import type { TestNodeResult, WorkflowTestResult } from "@/lib/workflows/test-runner";
 import {
@@ -80,7 +84,7 @@ type ConnectionOption = {
 };
 type Option = { id: string; name: string };
 type TemplateOption = Option & {
-  placeholders: { key: string; kind: "text" | "image" }[];
+  placeholders: PlaceholderDescriptor[];
 };
 type FieldEl = HTMLInputElement | HTMLTextAreaElement | null;
 
@@ -221,14 +225,16 @@ function TokenBindingInput({
 }
 
 /** Small pill marking a placeholder's kind. */
-function KindBadge({ kind }: { kind: "text" | "image" }) {
+function KindBadge({ kind }: { kind: PlaceholderKind }) {
   return (
     <span
       className={cn(
         "rounded px-1.5 py-0.5 text-[10px] font-medium uppercase",
         kind === "image"
           ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-          : "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+          : kind === "list"
+            ? "bg-sky-500/10 text-sky-600 dark:text-sky-400"
+            : "bg-amber-500/10 text-amber-600 dark:text-amber-400",
       )}
     >
       {kind}
@@ -1157,7 +1163,9 @@ function RenderTemplatePlaceholders({
               placeholder={
                 ph.kind === "image"
                   ? "Image URL — or insert data"
-                  : "Text — or insert data"
+                  : ph.kind === "list"
+                    ? "List items — insert array data or one per line"
+                    : "Text — or insert data"
               }
             />
           </div>

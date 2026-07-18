@@ -11,17 +11,29 @@ import type { TemplateDoc } from "@/lib/editor/types";
  * dependency-free while still sizing to whatever data fills the placeholder.
  */
 
-/** True if any text element in the document uses fit-to-box. */
+/** True if any element re-fits at render time: auto-fit text, or any list. */
 export function docHasAutoFit(doc: TemplateDoc): boolean {
   return doc.pages.some((page) =>
-    page.elements.some((el) => el.type === "text" && el.autoFit),
+    page.elements.some(
+      (el) => (el.type === "text" && el.autoFit) || el.type === "list",
+    ),
+  );
+}
+
+/** True if the document contains a list element (needs the items helper). */
+export function docHasList(doc: TemplateDoc): boolean {
+  return doc.pages.some((page) =>
+    page.elements.some((el) => el.type === "list"),
   );
 }
 
 /**
  * Source for a `<FitText>` React component (emitted into exported `.tsx` files).
- * Binary-searches `font-size` in `[min, max]` so the text fits the box after
- * layout. Depends only on `React`, already imported by the generated file.
+ * Binary-searches `font-size` in `[min, max]` so the content fits the box after
+ * layout. Text passes a `contentStyle` for its inner flow wrapper; lists omit it
+ * (the fitted box IS their flex column — their gaps/icons are in em, so they
+ * scale with the searched font size). Depends only on `React`, already imported
+ * by the generated file.
  */
 export const FIT_TEXT_COMPONENT_SOURCE = `function FitText({
   children,
@@ -32,7 +44,7 @@ export const FIT_TEXT_COMPONENT_SOURCE = `function FitText({
 }: {
   children: React.ReactNode;
   style: React.CSSProperties;
-  contentStyle: React.CSSProperties;
+  contentStyle?: React.CSSProperties;
   min: number;
   max: number;
 }) {
@@ -59,9 +71,27 @@ export const FIT_TEXT_COMPONENT_SOURCE = `function FitText({
   });
   return (
     <div ref={ref} style={style}>
-      <div style={contentStyle}>{children}</div>
+      {contentStyle ? <div style={contentStyle}>{children}</div> : children}
     </div>
   );
+}`;
+
+/**
+ * Source for the list-items normalizer emitted alongside components that render
+ * list elements: arrays pass through, strings split on newlines, blanks drop —
+ * the exported mirror of `toListItems` (lib/editor/types.ts).
+ */
+export const LIST_ITEMS_HELPER_SOURCE = `function listItems(
+  value: string | string[] | undefined,
+  fallback: string[],
+): string[] {
+  const items =
+    value === undefined
+      ? fallback
+      : Array.isArray(value)
+        ? value
+        : value.split(/\\r?\\n/);
+  return items.map((item) => item.trim()).filter(Boolean);
 }`;
 
 /**

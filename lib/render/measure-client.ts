@@ -1,6 +1,10 @@
 import type { PlaceholderData, TemplateElement } from "@/lib/editor/types";
-import { resolveText } from "./element-style";
-import { type LineMeasurer, resolveFontSize } from "./fit-text";
+import { resolveListItems, resolveText } from "./element-style";
+import {
+  type LineMeasurer,
+  resolveFontSize,
+  resolveListFontSize,
+} from "./fit-text";
 
 /**
  * Browser-side text measurement for {@link TemplateElement.autoFit}. Uses the
@@ -45,16 +49,25 @@ export function canvasLineMeasurer(font: {
 }
 
 /**
- * Replace each auto-fit text element with a copy whose `fontSize` is the size
- * that fills its box for the resolved text. Other elements pass through by
- * reference, so a canvas with no auto-fit text returns an equal-by-identity array
- * for cheap memoization. `measureText` is synchronous, so this is render-safe.
+ * Replace each auto-fit text element — and each list element, whose fit is
+ * intrinsic — with a copy whose `fontSize` is the size that fills its box for
+ * the resolved content. Other elements pass through by reference, so a canvas
+ * with no fitting elements returns an equal-by-identity array for cheap
+ * memoization. `measureText` is synchronous, so this is render-safe.
  */
 export function resolveAutoFitElements(
   elements: TemplateElement[],
   data?: PlaceholderData,
 ): TemplateElement[] {
   return elements.map((el) => {
+    if (el.type === "list") {
+      const fontSize = resolveListFontSize(
+        el,
+        resolveListItems(el, data),
+        canvasLineMeasurer(el),
+      );
+      return fontSize === el.fontSize ? el : { ...el, fontSize };
+    }
     if (el.type !== "text" || !el.autoFit) return el;
     const fontSize = resolveFontSize(
       el,

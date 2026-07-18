@@ -6,6 +6,7 @@ import { getWorkflow } from "@/lib/workflows/service";
 import { nodeDisplayLabel } from "@/lib/nodes/catalog";
 import { browserPreviewUrlForImageUrl } from "@/lib/nodes/image-input";
 import { formatRelativeTime } from "@/lib/format";
+import type { PlaceholderDescriptor } from "@/lib/editor/types";
 import type { WorkflowGraph } from "@/lib/workflows/types";
 import { RunStatusBadge } from "@/components/workflow/run-status-badge";
 import { SelectImagesPicker } from "@/plugins/core/nodes/select-images/picker";
@@ -229,10 +230,8 @@ export default async function RunDetailPage({
       : "";
   const previewPlaceholders =
     run.status === "waiting" && run.waitingNodeId
-      ? ((run.nodeOutputs[run.waitingNodeId]?.previewPlaceholders ?? []) as {
-          key: string;
-          kind: "text" | "image";
-        }[])
+      ? ((run.nodeOutputs[run.waitingNodeId]?.previewPlaceholders ??
+          []) as PlaceholderDescriptor[])
       : [];
   const previewBindings =
     run.status === "waiting" && run.waitingNodeId

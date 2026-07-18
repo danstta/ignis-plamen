@@ -153,7 +153,7 @@ export async function loadFontsForCanvas(
 
   const fallback = FONTS[FALLBACK_FAMILY];
   for (const el of canvas.elements) {
-    if (el.type === "text") {
+    if (el.type === "text" || el.type === "list") {
       const rawWeight = el.fontWeight ?? 400;
       request(el.fontFamily, rawWeight);
       fallbackWeights.add(normalizeWeight(fallback, rawWeight));

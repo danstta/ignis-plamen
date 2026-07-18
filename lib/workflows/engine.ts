@@ -23,7 +23,9 @@ import { resolveReferences, validateLockedPaths } from "./references";
 import {
   isPlaceholderImageValue,
   placeholderValueToText,
+  toListItems,
   type PlaceholderData,
+  type PlaceholderDescriptor,
   type PlaceholderImageValue,
   type PlaceholderValue,
 } from "@/lib/editor/types";
@@ -488,16 +490,14 @@ type SelectedImageChoice = {
   scale?: number;
 };
 
-function isPlaceholderRecord(
-  value: unknown,
-): value is { key: string; kind: "text" | "image" } {
+function isPlaceholderRecord(value: unknown): value is PlaceholderDescriptor {
   return (
     value !== null &&
     typeof value === "object" &&
     "key" in value &&
     typeof value.key === "string" &&
     "kind" in value &&
-    (value.kind === "text" || value.kind === "image")
+    (value.kind === "text" || value.kind === "image" || value.kind === "list")
   );
 }
 
@@ -569,6 +569,8 @@ function templateDataForCuratedImages(
       data[placeholder.key] =
         value || imageChoiceToPlaceholderValue(selectedImages[imageIndex]);
       imageIndex += 1;
+    } else if (placeholder.kind === "list") {
+      data[placeholder.key] = toListItems(bound);
     } else {
       data[placeholder.key] = valueForTextPlaceholder(bound);
     }

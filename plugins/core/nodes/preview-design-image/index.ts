@@ -1,4 +1,9 @@
-import { collectPlaceholders, type PlaceholderData } from "@/lib/editor/types";
+import {
+  collectPlaceholders,
+  toListItems,
+  type PlaceholderData,
+  type PlaceholderDescriptor,
+} from "@/lib/editor/types";
 import { getTemplate } from "@/lib/templates/service";
 import { valueToText } from "@/lib/workflows/references";
 import type { ImageCandidate, NodeDefinition } from "@/lib/nodes/types";
@@ -8,7 +13,7 @@ import {
   type PreviewDesignImageConfig,
 } from "./meta";
 
-type PreviewPlaceholder = { key: string; kind: "text" | "image" };
+type PreviewPlaceholder = PlaceholderDescriptor;
 
 function dynamicPlaceholderKey(
   placeholders: PreviewPlaceholder[],
@@ -47,9 +52,11 @@ function buildTemplateData({
     data[placeholder.key] =
       placeholder.key === dynamicKey
         ? imageUrl
-        : bound !== undefined && bound !== ""
-          ? valueToText(bound)
-          : "";
+        : placeholder.kind === "list"
+          ? toListItems(bound)
+          : bound !== undefined && bound !== ""
+            ? valueToText(bound)
+            : "";
   }
   return data;
 }

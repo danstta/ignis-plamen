@@ -32,7 +32,9 @@ import {
 import {
   isPlaceholderImageValue,
   placeholderValueToText,
+  toListItems,
   type PlaceholderData,
+  type PlaceholderDescriptor,
   type PlaceholderValue,
 } from "@/lib/editor/types";
 import { normalizeImageCandidates } from "@/lib/nodes/image-input";
@@ -50,7 +52,7 @@ type Candidate = {
   categoryReason?: string;
   categorized?: boolean;
 };
-type PreviewPlaceholder = { key: string; kind: "text" | "image" };
+type PreviewPlaceholder = PlaceholderDescriptor;
 type ImagePlacement = { objectPosition: string; scale: number };
 type SelectedImageValue = { url: string } & ImagePlacement;
 
@@ -510,6 +512,8 @@ function buildPreviewData(
       data[placeholder.key] =
         value || imagePlaceholderValue(selectedImages[imageIndex]);
       imageIndex += 1;
+    } else if (placeholder.kind === "list") {
+      data[placeholder.key] = toListItems(bound);
     } else {
       data[placeholder.key] = valueForTextPlaceholder(bound);
     }

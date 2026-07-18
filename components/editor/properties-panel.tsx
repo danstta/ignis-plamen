@@ -8,6 +8,7 @@ import {
   AlignVerticalJustifyStart,
   AlignVerticalJustifyCenter,
   AlignVerticalJustifyEnd,
+  AlignVerticalSpaceBetween,
   Bold,
   Copy,
   Trash2,
@@ -28,6 +29,8 @@ import {
   type Gradient,
   type GradientStop,
   type ImageElement,
+  type ListDistribute,
+  type ListElement,
   type ShapeElement,
   type TemplateElement,
   type TextElement,
@@ -36,8 +39,17 @@ import {
   toSolid,
 } from "@/lib/editor/types";
 import { isPolygonShape } from "@/lib/editor/shapes";
+import {
+  LIST_ICON_NAMES,
+  LIST_ICONS,
+  type ListIconName,
+} from "@/lib/editor/icons";
 import { fillToStyle } from "@/lib/render/element-style";
-import { FIT_MAX_FONT_SIZE, FIT_MIN_FONT_SIZE } from "@/lib/render/fit-text";
+import {
+  FIT_MAX_FONT_SIZE,
+  FIT_MIN_FONT_SIZE,
+  LIST_DEFAULT_ITEM_GAP_EM,
+} from "@/lib/render/fit-text";
 import {
   FONT_FAMILIES,
   FONTS,
@@ -542,6 +554,8 @@ function ElementPanel({ element }: { element: TemplateElement }) {
         <TextProps element={element} />
       ) : element.type === "image" ? (
         <ImageProps element={element} />
+      ) : element.type === "list" ? (
+        <ListProps element={element} />
       ) : (
         <ShapeProps element={element} />
       )}
@@ -559,7 +573,17 @@ function ElementPanel({ element }: { element: TemplateElement }) {
   );
 }
 
-function TextProps({ element }: { element: TextElement }) {
+/**
+ * Font family + weight selects (registry fonts, brand fonts, weight
+ * normalization). Shared by text and list elements — both carry the same
+ * `fontFamily`/`fontWeight` fields. Renders two <Field>s, so callers place it
+ * inside their settings grid; the custom-font warning lives here too.
+ */
+function FontFields({
+  element,
+}: {
+  element: Pick<TextElement | ListElement, "id" | "fontFamily" | "fontWeight">;
+}) {
   const update = useEditor((s) => s.updateElement);
   const brandFonts = useEditor((s) => activeBrand(s)?.fonts ?? NO_FONTS);
   const id = element.id;
@@ -568,7 +592,6 @@ function TextProps({ element }: { element: TextElement }) {
     ? normalizeWeight(fontDef, element.fontWeight ?? NORMAL_FONT_WEIGHT)
     : (element.fontWeight ?? NORMAL_FONT_WEIGHT);
   const fontWeightOptions = fontDef?.weights ?? FONT_WEIGHT_OPTIONS;
-  const bold = isBoldWeight(effectiveFontWeight);
 
   useEffect(() => {
     if (fontDef && (element.fontWeight ?? NORMAL_FONT_WEIGHT) !== effectiveFontWeight) {
@@ -588,7 +611,89 @@ function TextProps({ element }: { element: TextElement }) {
     ],
     [brandFonts, element.fontFamily],
   );
-  const customFont = !FONTS[element.fontFamily];
+
+  return (
+    <>
+      <Field label="Font">
+        <Select
+          value={element.fontFamily}
+          onValueChange={(v) => {
+            if (!v) return;
+            const nextDef = FONTS[v];
+            snapshot();
+            update(
+              id,
+              nextDef
+                ? {
+                    fontFamily: v,
+                    fontWeight: normalizeWeight(
+                      nextDef,
+                      element.fontWeight ?? NORMAL_FONT_WEIGHT,
+                    ),
+                  }
+                : { fontFamily: v },
+            );
+          }}
+        >
+          <SelectTrigger
+            size="sm"
+            className="w-full"
+            style={{ fontFamily: cssFontFamily(element.fontFamily) }}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {fontOptions.map((f) => (
+              <SelectItem
+                key={f}
+                value={f}
+                style={{ fontFamily: cssFontFamily(f) }}
+              >
+                {f}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label="Weight">
+        <Select
+          value={String(effectiveFontWeight)}
+          onValueChange={(v) => {
+            if (!v) return;
+            snapshot();
+            update(id, { fontWeight: Number(v) });
+          }}
+        >
+          <SelectTrigger size="sm" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {fontWeightOptions.map((w) => (
+              <SelectItem key={w} value={String(w)}>
+                {w}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+    </>
+  );
+}
+
+function CustomFontNote({ family }: { family: string }) {
+  if (FONTS[family]) return null;
+  return (
+    <p className="text-xs text-muted-foreground">
+      Custom fonts preview here but render as Inter in the exported PNG until a
+      font file is registered.
+    </p>
+  );
+}
+
+function TextProps({ element }: { element: TextElement }) {
+  const update = useEditor((s) => s.updateElement);
+  const id = element.id;
+  const bold = isBoldWeight(element.fontWeight);
 
   return (
     <>
@@ -612,47 +717,7 @@ function TextProps({ element }: { element: TextElement }) {
         />
       </Field>
       <div className="grid grid-cols-2 gap-2">
-        <Field label="Font">
-          <Select
-            value={element.fontFamily}
-            onValueChange={(v) => {
-              if (!v) return;
-              const nextDef = FONTS[v];
-              snapshot();
-              update(
-                id,
-                nextDef
-                  ? {
-                      fontFamily: v,
-                      fontWeight: normalizeWeight(
-                        nextDef,
-                        element.fontWeight ?? NORMAL_FONT_WEIGHT,
-                      ),
-                    }
-                  : { fontFamily: v },
-              );
-            }}
-          >
-            <SelectTrigger
-              size="sm"
-              className="w-full"
-              style={{ fontFamily: cssFontFamily(element.fontFamily) }}
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {fontOptions.map((f) => (
-                <SelectItem
-                  key={f}
-                  value={f}
-                  style={{ fontFamily: cssFontFamily(f) }}
-                >
-                  {f}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
+        <FontFields element={element} />
         <Field label="Size">
           {element.autoFit ? (
             <Input value="Auto" disabled className="h-8" aria-label="Size (auto-fit)" />
@@ -682,27 +747,6 @@ function TextProps({ element }: { element: TextElement }) {
             Bold
           </Toggle>
         </Field>
-        <Field label="Weight">
-          <Select
-            value={String(effectiveFontWeight)}
-            onValueChange={(v) => {
-              if (!v) return;
-              snapshot();
-              update(id, { fontWeight: Number(v) });
-            }}
-          >
-            <SelectTrigger size="sm" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {fontWeightOptions.map((w) => (
-                <SelectItem key={w} value={String(w)}>
-                  {w}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
         <Field label="Line height">
           <NumberInput
             value={element.lineHeight ?? 1.2}
@@ -711,12 +755,7 @@ function TextProps({ element }: { element: TextElement }) {
           />
         </Field>
       </div>
-      {customFont ? (
-        <p className="text-xs text-muted-foreground">
-          Custom fonts preview here but render as Inter in the exported PNG until a
-          font file is registered.
-        </p>
-      ) : null}
+      <CustomFontNote family={element.fontFamily} />
       <Field label="Align">
         <ToggleGroup
           value={[element.textAlign ?? "left"]}
@@ -880,6 +919,165 @@ function TextProps({ element }: { element: TextElement }) {
           />
         </Field>
       </div>
+    </>
+  );
+}
+
+/** One-per-line editor for a list's sample items; blank lines are dropped at render. */
+function ListProps({ element }: { element: ListElement }) {
+  const update = useEditor((s) => s.updateElement);
+  const id = element.id;
+
+  return (
+    <>
+      <Field label="Placeholder key (leave empty for a fixed list)">
+        <Input
+          value={element.placeholderKey ?? ""}
+          className="h-8"
+          placeholder="e.g. participants"
+          onFocus={snapshot}
+          onChange={(e) =>
+            update(id, { placeholderKey: e.target.value || undefined })
+          }
+        />
+      </Field>
+      <Field
+        label={
+          element.placeholderKey ? "Sample items (one per line)" : "Items (one per line)"
+        }
+      >
+        <Textarea
+          value={element.items.join("\n")}
+          rows={4}
+          onFocus={snapshot}
+          onChange={(e) => update(id, { items: e.target.value.split("\n") })}
+        />
+      </Field>
+      {element.placeholderKey ? (
+        <p className="text-xs text-muted-foreground">
+          Bound array data replaces these samples. Text shrinks or grows so every
+          row fits this box; when the data is empty, nothing is drawn.
+        </p>
+      ) : null}
+      <div className="grid grid-cols-2 gap-2">
+        <FontFields element={element} />
+        <Field label="Min size">
+          <NumberInput
+            value={element.minFontSize ?? FIT_MIN_FONT_SIZE}
+            onChange={(minFontSize) => update(id, { minFontSize })}
+          />
+        </Field>
+        <Field label="Max size">
+          <NumberInput
+            value={element.maxFontSize ?? FIT_MAX_FONT_SIZE}
+            onChange={(maxFontSize) => update(id, { maxFontSize })}
+          />
+        </Field>
+        <Field label="Line height">
+          <NumberInput
+            value={element.lineHeight ?? 1.2}
+            step={0.1}
+            onChange={(lineHeight) => update(id, { lineHeight })}
+          />
+        </Field>
+        <Field label="Row gap (em)">
+          <NumberInput
+            value={element.itemGap ?? LIST_DEFAULT_ITEM_GAP_EM}
+            step={0.1}
+            onChange={(itemGap) => update(id, { itemGap })}
+          />
+        </Field>
+      </div>
+      <CustomFontNote family={element.fontFamily} />
+      <Field label="Align">
+        <ToggleGroup
+          value={[element.textAlign ?? "left"]}
+          onValueChange={(value) => {
+            const v = value[0] as ListElement["textAlign"];
+            if (!v) return;
+            snapshot();
+            update(id, { textAlign: v });
+          }}
+          variant="outline"
+          className="w-full"
+        >
+          <ToggleGroupItem value="left" aria-label="Align left" className="flex-1">
+            <AlignLeft className="size-4" />
+          </ToggleGroupItem>
+          <ToggleGroupItem value="center" aria-label="Align center" className="flex-1">
+            <AlignCenter className="size-4" />
+          </ToggleGroupItem>
+          <ToggleGroupItem value="right" aria-label="Align right" className="flex-1">
+            <AlignRight className="size-4" />
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </Field>
+      <Field label="Row distribution">
+        <ToggleGroup
+          value={[element.distribute ?? "space-between"]}
+          onValueChange={(value) => {
+            const v = value[0] as ListDistribute;
+            if (!v) return;
+            snapshot();
+            update(id, { distribute: v });
+          }}
+          variant="outline"
+          className="w-full"
+        >
+          <ToggleGroupItem value="top" aria-label="Anchor top" className="flex-1">
+            <AlignVerticalJustifyStart className="size-4" />
+          </ToggleGroupItem>
+          <ToggleGroupItem value="middle" aria-label="Anchor middle" className="flex-1">
+            <AlignVerticalJustifyCenter className="size-4" />
+          </ToggleGroupItem>
+          <ToggleGroupItem value="bottom" aria-label="Anchor bottom" className="flex-1">
+            <AlignVerticalJustifyEnd className="size-4" />
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="space-between"
+            aria-label="Distribute evenly"
+            className="flex-1"
+          >
+            <AlignVerticalSpaceBetween className="size-4" />
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </Field>
+      <Field label="Color">
+        <ColorInput value={element.color} onChange={(color) => update(id, { color })} />
+      </Field>
+
+      <Separator />
+      <SectionTitle>Icon</SectionTitle>
+      <Field label="Bullet icon">
+        <Select
+          value={element.icon ?? "none"}
+          onValueChange={(v) => {
+            if (!v) return;
+            snapshot();
+            update(id, { icon: v === "none" ? undefined : (v as ListIconName) });
+          }}
+        >
+          <SelectTrigger size="sm" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">None</SelectItem>
+            {LIST_ICON_NAMES.map((name) => (
+              <SelectItem key={name} value={name}>
+                {LIST_ICONS[name].label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+      {element.icon ? (
+        <Field label="Icon color">
+          <ColorInput
+            value={element.iconColor ?? element.color}
+            onChange={(iconColor) => update(id, { iconColor })}
+          />
+        </Field>
+      ) : null}
     </>
   );
 }

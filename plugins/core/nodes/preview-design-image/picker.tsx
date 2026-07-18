@@ -6,6 +6,7 @@ import { Check, ImageIcon, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { imagePreviewSrc } from "@/lib/nodes/image-preview";
+import type { PlaceholderDescriptor } from "@/lib/editor/types";
 import { cn } from "@/lib/utils";
 
 type Candidate = {
@@ -20,7 +21,7 @@ type Candidate = {
   locationQuery?: string;
   locationQueryIndex?: number;
 };
-type PreviewPlaceholder = { key: string; kind: "text" | "image" };
+type PreviewPlaceholder = PlaceholderDescriptor;
 type CandidateGroup = {
   key: string;
   label: string;

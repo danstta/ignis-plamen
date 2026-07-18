@@ -1,8 +1,15 @@
 import type { Page, TemplateDoc, TemplateElement } from "@/lib/editor/types";
 import {
+  LIST_ICON_SIZE_EM,
+  LIST_ICON_VIEWBOX,
+  LIST_ICONS,
+} from "@/lib/editor/icons";
+import {
   baseStyle,
   fillToStyle,
   imageContainerStyle,
+  listContainerStyle,
+  listRowStyle,
   shapeStyle,
   textContentStyle,
   textStyle,
@@ -10,7 +17,9 @@ import {
 import { FIT_MAX_FONT_SIZE, FIT_MIN_FONT_SIZE } from "@/lib/render/fit-text";
 import {
   FIT_TEXT_COMPONENT_SOURCE,
+  LIST_ITEMS_HELPER_SOURCE,
   docHasAutoFit,
+  docHasList,
 } from "./fit-runtime";
 import { styleToObjectLiteral, toComponentName } from "./serialize";
 
@@ -36,6 +45,27 @@ function elementJsx(el: TemplateElement): string {
     return `<div style={${style}}><div style={${contentStyle}}>${content}</div></div>`;
   }
 
+  if (el.type === "list") {
+    // Container + rows are sized in em so the runtime <FitText> can re-fit the
+    // whole layout for the data it receives by changing font-size alone.
+    const style = styleToObjectLiteral({
+      ...baseStyle(el),
+      ...listContainerStyle(el, "em"),
+    });
+    const rowStyle = styleToObjectLiteral(listRowStyle(el, "em"));
+    const min = el.minFontSize ?? FIT_MIN_FONT_SIZE;
+    const max = el.maxFontSize ?? FIT_MAX_FONT_SIZE;
+    const icon = el.icon
+      ? `<svg viewBox=${JSON.stringify(LIST_ICON_VIEWBOX)} style={{ width: "${LIST_ICON_SIZE_EM}em", height: "${LIST_ICON_SIZE_EM}em", flexShrink: 0 }}><path d=${JSON.stringify(LIST_ICONS[el.icon].path)} fill=${JSON.stringify(el.iconColor ?? el.color)} /></svg>`
+      : "";
+    const itemsExpr = `listItems(${
+      el.placeholderKey
+        ? `data[${JSON.stringify(el.placeholderKey)}]`
+        : "undefined"
+    }, ${JSON.stringify(el.items)})`;
+    return `<FitText style={${style}} min={${min}} max={${max}}>{${itemsExpr}.map((item, i) => (<div key={i} style={${rowStyle}}>${icon}<div>{item}</div></div>))}</FitText>`;
+  }
+
   if (el.type === "image") {
     const containerStyle = styleToObjectLiteral({
       ...baseStyle(el),
@@ -47,8 +77,9 @@ function elementJsx(el: TemplateElement): string {
       objectFit: el.objectFit ?? "cover",
       display: "block",
     });
+    // typeof guard: `data` values may be string[] (lists) — images want strings.
     const srcExpr = el.placeholderKey
-      ? `data[${JSON.stringify(el.placeholderKey)}] ?? ${JSON.stringify(el.src ?? "")}`
+      ? `typeof data[${JSON.stringify(el.placeholderKey)}] === "string" ? (data[${JSON.stringify(el.placeholderKey)}] as string) : ${JSON.stringify(el.src ?? "")}`
       : JSON.stringify(el.src ?? "");
     return `<div style={${containerStyle}}><img alt="" src={${srcExpr}} style={${imgStyle}} /></div>`;
   }
@@ -88,15 +119,21 @@ export function generateReactComponent(
 ${doc.pages.map((p) => `      ${pageJsx(doc, p, "      ")}`).join("\n")}
     </div>`;
 
-  // Fit-to-box text needs a runtime <FitText> (a client component, so the file
-  // opts into "use client"); plain designs stay server-renderable as before.
+  // Fit-to-box text and lists need a runtime <FitText> (a client component, so
+  // the file opts into "use client"); plain designs stay server-renderable.
   const hasAutoFit = docHasAutoFit(doc);
+  const hasList = docHasList(doc);
   const directive = hasAutoFit ? `"use client";\n\n` : "";
-  const helper = hasAutoFit ? `\n${FIT_TEXT_COMPONENT_SOURCE}\n` : "";
+  const helper = [
+    ...(hasAutoFit ? [FIT_TEXT_COMPONENT_SOURCE] : []),
+    ...(hasList ? [LIST_ITEMS_HELPER_SOURCE] : []),
+  ]
+    .map((source) => `\n${source}\n`)
+    .join("");
 
   return `${directive}import React from "react";
 
-export type TemplateData = Record<string, string>;
+export type TemplateData = Record<string, string | string[]>;
 ${helper}
 export function ${componentName}({ data = {} }: { data?: TemplateData }) {
   return (

@@ -16,6 +16,7 @@ import {
   Shapes as ShapesIcon,
   Braces,
   Tag,
+  List,
   Sparkles,
   Undo2,
   Redo2,
@@ -26,6 +27,7 @@ import { activeBrand, useEditor } from "@/lib/editor/store";
 import {
   createImage,
   createLine,
+  createList,
   createShape,
   createText,
   createTextChip,
@@ -87,6 +89,14 @@ export function EditorToolbar() {
         ? createText(d, { placeholderKey: key })
         : createImage(d, { placeholderKey: key }),
     );
+  }
+
+  function addList() {
+    const key = window.prompt(
+      'Name the list placeholder (e.g. "participants") - leave blank for a fixed list',
+    );
+    if (key === null) return;
+    insert((d) => createList(d, { placeholderKey: key || undefined }));
   }
 
   return (
@@ -154,6 +164,9 @@ export function EditorToolbar() {
             </DropdownMenuItem>
             <DropdownMenuItem onClick={addTextChip}>
               <Tag className="size-4" /> Text chip (auto width)
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={addList}>
+              <List className="size-4" /> List (fits array data)
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -1,5 +1,6 @@
 import type {
   ImageElement,
+  ListElement,
   ShapeElement,
   TemplateDoc,
   TextElement,
@@ -69,6 +70,38 @@ export function createTextChip(
     paddingX: 28,
     paddingY: 14,
     borderRadius: 999,
+  };
+}
+
+/**
+ * A list placeholder: N single-line rows (bullet icon + text) fitted into a
+ * fixed box — see {@link ListElement}. The sample items stand in until real
+ * array data fills the placeholder. `maxFontSize` starts at a modest cap so a
+ * short list distributes its slack as spacing instead of ballooning the text.
+ */
+export function createList(
+  doc: TemplateDoc,
+  opts?: { placeholderKey?: string },
+): ListElement {
+  const width = Math.round(doc.width * 0.45);
+  const height = Math.round(doc.height * 0.3);
+  return {
+    id: crypto.randomUUID(),
+    type: "list",
+    ...center(doc, width, height),
+    width,
+    height,
+    placeholderKey: opts?.placeholderKey,
+    items: ["First item", "Second item", "Third item"],
+    fontFamily: DEFAULT_FONT,
+    fontSize: 36,
+    fontWeight: 500,
+    color: "#111111",
+    textAlign: "left",
+    lineHeight: 1.2,
+    maxFontSize: 48,
+    distribute: "space-between",
+    icon: "person",
   };
 }
 

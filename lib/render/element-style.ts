@@ -4,6 +4,7 @@ import {
   type Fill,
   type Gradient,
   type ImageElement,
+  type ListElement,
   type PlaceholderData,
   type ShapeElement,
   type TemplateElement,
@@ -11,8 +12,11 @@ import {
   isGradient,
   isPlaceholderImageValue,
   placeholderValueToText,
+  toListItems,
 } from "@/lib/editor/types";
 import { shapeGeometryStyle } from "@/lib/editor/shapes";
+import { LIST_ICON_GAP_EM, LIST_ICON_SIZE_EM } from "@/lib/editor/icons";
+import { LIST_DEFAULT_ITEM_GAP_EM } from "./fit-text";
 import { FALLBACK_FAMILY, FONTS, type FontDef } from "./font-registry";
 import { fontSourceSubsetFamily } from "./font-assets";
 
@@ -139,6 +143,90 @@ export function textContentStyle(el: TextElement): CSSProperties {
     whiteSpace: el.autoWidth ? "nowrap" : "pre-wrap",
     wordBreak: "break-word",
   };
+}
+
+/**
+ * Sizing mode for list styles. "px" bakes font-size-relative lengths to pixels
+ * from the element's (already fitted) `fontSize` — required by Satori and used
+ * by the live renderer. "em" keeps them relative so exported code can re-fit by
+ * changing `font-size` alone and have the gaps/icon scale along.
+ */
+export type ListUnitMode = "px" | "em";
+
+function listEmLength(em: number, fontSize: number, mode: ListUnitMode) {
+  return mode === "em" ? `${em}em` : em * fontSize;
+}
+
+/** Outer flex column of a list element: typography + row distribution. */
+export function listContainerStyle(
+  el: ListElement,
+  mode: ListUnitMode = "px",
+): CSSProperties {
+  const distribute = el.distribute ?? "space-between";
+  return {
+    display: "flex",
+    flexDirection: "column",
+    justifyContent:
+      distribute === "space-between"
+        ? "space-between"
+        : distribute === "middle"
+          ? "center"
+          : distribute === "bottom"
+            ? "flex-end"
+            : "flex-start",
+    alignItems:
+      el.textAlign === "center"
+        ? "center"
+        : el.textAlign === "right"
+          ? "flex-end"
+          : "flex-start",
+    // The minimum row gap the fit reserved; space-between stretches beyond it.
+    gap: listEmLength(el.itemGap ?? LIST_DEFAULT_ITEM_GAP_EM, el.fontSize, mode),
+    fontFamily: fontFamilyStack(el.fontFamily),
+    fontSize: el.fontSize,
+    fontWeight: el.fontWeight ?? 400,
+    fontStyle: el.fontStyle ?? "normal",
+    color: el.color,
+    lineHeight: el.lineHeight ?? 1.2,
+    letterSpacing: el.letterSpacing ?? 0,
+    overflow: "hidden",
+  };
+}
+
+/** One list row: bullet icon + single-line text. */
+export function listRowStyle(
+  el: ListElement,
+  mode: ListUnitMode = "px",
+): CSSProperties {
+  const style: CSSProperties = {
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "center",
+    whiteSpace: "nowrap",
+    maxWidth: "100%",
+  };
+  if (el.icon) style.gap = listEmLength(LIST_ICON_GAP_EM, el.fontSize, mode);
+  return style;
+}
+
+/** Rendered icon edge length for a list row, in px (from the fitted size). */
+export function listIconSizePx(el: ListElement): number {
+  return LIST_ICON_SIZE_EM * el.fontSize;
+}
+
+/**
+ * Resolve the rows a list element renders. A bound key present in `data` wins
+ * (even when it resolves to zero rows — real empty data renders nothing); the
+ * element's sample items fill in everywhere else, e.g. the editor canvas.
+ */
+export function resolveListItems(
+  el: ListElement,
+  data?: PlaceholderData,
+): string[] {
+  if (el.placeholderKey && data && el.placeholderKey in data) {
+    return toListItems(data[el.placeholderKey]);
+  }
+  return toListItems(el.items);
 }
 
 /**

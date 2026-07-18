@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { FlaskConical, ListChecks, Save } from "lucide-react";
 import { useWorkflowEditor } from "@/lib/workflows/store";
 import { useAutosave } from "@/lib/hooks/use-autosave";
+import type { PlaceholderDescriptor } from "@/lib/editor/types";
 import type { WorkflowGraph } from "@/lib/workflows/types";
 import { NodePalette } from "./node-palette";
 import { NodeConfigPanel } from "./node-config-panel";
@@ -32,7 +33,7 @@ type ConnectionOption = {
 type TemplateOption = {
   id: string;
   name: string;
-  placeholders: { key: string; kind: "text" | "image" }[];
+  placeholders: PlaceholderDescriptor[];
 };
 
 export type WorkflowEditorInput = {

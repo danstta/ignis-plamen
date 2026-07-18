@@ -5,12 +5,20 @@ import type {
   TemplateElement,
 } from "@/lib/editor/types";
 import {
+  LIST_ICON_SIZE_EM,
+  LIST_ICON_VIEWBOX,
+  LIST_ICONS,
+} from "@/lib/editor/icons";
+import {
   baseStyle,
   fillToStyle,
   imageContainerStyle,
   imageContentStyle,
   imagePlacementContainerStyle,
+  listContainerStyle,
+  listRowStyle,
   resolveImage,
+  resolveListItems,
   resolveText,
   shapeStyle,
   textContentStyle,
@@ -37,6 +45,28 @@ function elementHtml(el: TemplateElement, data?: PlaceholderData): string {
       return `<div style="${style}" data-fit data-fit-min="${min}" data-fit-max="${max}"><div style="${contentStyle}">${content}</div></div>`;
     }
     return `<div style="${style}"><div style="${contentStyle}">${content}</div></div>`;
+  }
+
+  if (el.type === "list") {
+    // Rows are baked from the export-time data; em-based gaps/icons let the
+    // runtime fitter (FIT_HTML_SCRIPT) rescale the whole layout via font-size.
+    const items = resolveListItems(el, data);
+    const containerStyle = styleToInlineCss({
+      ...baseStyle(el),
+      ...listContainerStyle(el, "em"),
+    });
+    const rowStyle = styleToInlineCss(listRowStyle(el, "em"));
+    const min = el.minFontSize ?? FIT_MIN_FONT_SIZE;
+    const max = el.maxFontSize ?? FIT_MAX_FONT_SIZE;
+    const icon = el.icon
+      ? `<svg viewBox="${LIST_ICON_VIEWBOX}" style="width: ${LIST_ICON_SIZE_EM}em; height: ${LIST_ICON_SIZE_EM}em; flex-shrink: 0"><path d="${LIST_ICONS[el.icon].path}" fill="${escapeHtml(el.iconColor ?? el.color)}"></path></svg>`
+      : "";
+    const rows = items
+      .map(
+        (item) => `<div style="${rowStyle}">${icon}<div>${escapeHtml(item)}</div></div>`,
+      )
+      .join("");
+    return `<div style="${containerStyle}" data-fit data-fit-min="${min}" data-fit-max="${max}">${rows}</div>`;
   }
 
   if (el.type === "image") {

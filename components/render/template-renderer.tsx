@@ -4,13 +4,19 @@ import type {
   PlaceholderData,
   TemplateElement,
 } from "@/lib/editor/types";
+import type { ListElement } from "@/lib/editor/types";
+import { LIST_ICON_VIEWBOX, LIST_ICONS } from "@/lib/editor/icons";
 import {
   baseStyle,
   fillToStyle,
   imageContainerStyle,
   imageContentStyle,
   imagePlacementContainerStyle,
+  listContainerStyle,
+  listIconSizePx,
+  listRowStyle,
   resolveImage,
+  resolveListItems,
   resolveText,
   shapeStyle,
   textContentStyle,
@@ -45,6 +51,26 @@ export function ElementView({
     );
   }
 
+  if (el.type === "list") {
+    const items = resolveListItems(el, data);
+    // In the editor, an unbound key with no sample rows still needs a visible,
+    // selectable hint; real renders with empty data draw nothing.
+    const rows =
+      items.length === 0 && interactive && el.placeholderKey
+        ? [`{${el.placeholderKey}}`]
+        : items;
+    return (
+      <div style={{ ...style, ...listContainerStyle(el) }} {...hook}>
+        {rows.map((item, i) => (
+          <div key={i} style={listRowStyle(el)}>
+            {el.icon ? <ListRowIcon el={el} /> : null}
+            <div style={{ whiteSpace: "nowrap" }}>{item}</div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   if (el.type === "image") {
     const image = resolveImage(el, data);
     return (
@@ -73,6 +99,22 @@ export function ElementView({
   }
 
   return <div style={{ ...style, ...shapeStyle(el) }} {...hook} />;
+}
+
+/** Bullet icon for one list row — inline SVG so Satori draws it identically. */
+function ListRowIcon({ el }: { el: ListElement }) {
+  if (!el.icon) return null;
+  const size = listIconSizePx(el);
+  return (
+    <svg
+      viewBox={LIST_ICON_VIEWBOX}
+      width={size}
+      height={size}
+      style={{ flexShrink: 0 }}
+    >
+      <path d={LIST_ICONS[el.icon].path} fill={el.iconColor ?? el.color} />
+    </svg>
+  );
 }
 
 function ImagePlaceholderBox({ label }: { label?: string }) {

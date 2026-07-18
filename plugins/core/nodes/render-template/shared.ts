@@ -6,6 +6,7 @@ import {
   collectPlaceholders,
   isPlaceholderImageValue,
   placeholderValueToText,
+  toListItems,
   type PlaceholderData,
   type PlaceholderValue,
 } from "@/lib/editor/types";
@@ -37,6 +38,16 @@ export function buildPlaceholderData({
           : bound !== undefined && bound !== ""
             ? valueToText(bound)
             : (fallbackFields[ph.key] ?? ""));
+    } else if (ph.kind === "list") {
+      // Arrays pass through one-item-per-entry; strings are split by toListItems.
+      // An empty result stays empty — the list then renders nothing by design.
+      data[ph.key] = toListItems(
+        hasOverride
+          ? override
+          : bound !== undefined && bound !== ""
+            ? bound
+            : (fallbackFields[ph.key] ?? ""),
+      );
     } else {
       data[ph.key] =
         override !== undefined
@@ -45,7 +56,7 @@ export function buildPlaceholderData({
             ? valueToText(bound)
             : (fallbackFields[ph.key] ?? "");
     }
-    const preview = placeholderValueToText(data[ph.key]);
+    const preview = placeholderValueToText(data[ph.key]).replaceAll("\n", ", ");
     log?.(`placeholder "${ph.key}" (${ph.kind}) = ${preview || "(empty)"}`);
   }
   return data;

@@ -86,6 +86,19 @@ export const FONTS: Record<string, FontDef> = {
     subsets: SUBSETS,
     weights: [300, 400, 500, 600, 700, 800],
   },
+  // Thin hand-printed face with full Cyrillic — the closest free match to
+  // Canva's "Adult Notepad", which is Canva-exclusive and has no obtainable
+  // font file. Fontsource ships only latin + cyrillic at weight 400: Serbian
+  // Cyrillic (ђ/љ/њ/ћ/џ) renders natively, Latin diacritics (č/ć/š/ž/đ) fall
+  // back to Inter, and bold snaps to 400 in exports.
+  Neucha: {
+    family: "Neucha",
+    kind: "fontsource",
+    pkg: "@fontsource/neucha@5.2.8",
+    slug: "neucha",
+    subsets: ["latin", "cyrillic"],
+    weights: [400],
+  },
   // Licensed faces — supply the files in public/fonts/ (see the README there).
   // Adjust the weights to match the files you actually drop in.
   Garet: {

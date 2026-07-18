@@ -13,15 +13,11 @@ import {
   Square,
   Terminal,
 } from "lucide-react";
-import { imagePreviewSrc } from "@/lib/nodes/image-preview";
 import { cn } from "@/lib/utils";
 import type { NodeRunState, RunLogEntry } from "@/lib/workflows/types";
 
-type ImagePreview = {
+type ImageLink = {
   url: string;
-  previewUrl?: string;
-  thumbnailLink?: string;
-  mimeType?: string;
   name?: string;
   title?: string;
   source?: string;
@@ -31,7 +27,7 @@ type ImagePreview = {
 
 type ImageQueryGroup = {
   query: string;
-  candidates: ImagePreview[];
+  candidates: ImageLink[];
 };
 
 const STATE_TONE: Record<
@@ -95,7 +91,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function toImagePreview(value: unknown): ImagePreview | undefined {
+function toImageLink(value: unknown): ImageLink | undefined {
   if (typeof value === "string" && value.trim()) {
     return { url: value.trim() };
   }
@@ -104,11 +100,6 @@ function toImagePreview(value: unknown): ImagePreview | undefined {
   }
   return {
     url: value.url.trim(),
-    previewUrl:
-      typeof value.previewUrl === "string" ? value.previewUrl : undefined,
-    thumbnailLink:
-      typeof value.thumbnailLink === "string" ? value.thumbnailLink : undefined,
-    mimeType: typeof value.mimeType === "string" ? value.mimeType : undefined,
     name: typeof value.name === "string" ? value.name : undefined,
     title: typeof value.title === "string" ? value.title : undefined,
     source: typeof value.source === "string" ? value.source : undefined,
@@ -126,7 +117,7 @@ function imageQueryGroups(outputs: Record<string, unknown>): ImageQueryGroup[] {
       if (!isRecord(group) || typeof group.query !== "string") return [];
       const candidates = Array.isArray(group.candidates)
         ? group.candidates.flatMap((candidate) => {
-            const image = toImagePreview(candidate);
+            const image = toImageLink(candidate);
             return image ? [image] : [];
           })
         : [];
@@ -137,9 +128,9 @@ function imageQueryGroups(outputs: Record<string, unknown>): ImageQueryGroup[] {
   }
 
   const candidates = Array.isArray(outputs.candidates) ? outputs.candidates : [];
-  const byQuery = new Map<string, ImagePreview[]>();
+  const byQuery = new Map<string, ImageLink[]>();
   for (const candidate of candidates) {
-    const image = toImagePreview(candidate);
+    const image = toImageLink(candidate);
     if (!image) continue;
     const query = image.locationQuery || "Location query";
     byQuery.set(query, [...(byQuery.get(query) ?? []), image]);
@@ -150,7 +141,8 @@ function imageQueryGroups(outputs: Record<string, unknown>): ImageQueryGroup[] {
   }));
 }
 
-function ImageGroupsPreview({ outputs }: { outputs: Record<string, unknown> }) {
+/** Candidate images as plain links — thumbnails here made big runs sluggish. */
+function ImageGroupLinks({ outputs }: { outputs: Record<string, unknown> }) {
   const groups = imageQueryGroups(outputs);
   const total = groups.reduce((sum, group) => sum + group.candidates.length, 0);
   if (groups.length === 0) return null;
@@ -165,10 +157,10 @@ function ImageGroupsPreview({ outputs }: { outputs: Record<string, unknown> }) {
           {total} total
         </span>
       </div>
-      <div className="max-h-96 space-y-3 overflow-auto pr-1">
+      <div className="max-h-64 space-y-3 overflow-auto pr-1">
         {groups.map((group, groupIndex) => (
           <section key={`${group.query}-${groupIndex}`} className="min-w-0">
-            <div className="mb-1.5 flex items-center justify-between gap-2">
+            <div className="mb-1 flex items-center justify-between gap-2">
               <h4 className="min-w-0 truncate text-xs font-medium">
                 {group.query}
               </h4>
@@ -176,34 +168,24 @@ function ImageGroupsPreview({ outputs }: { outputs: Record<string, unknown> }) {
                 {group.candidates.length}
               </span>
             </div>
-            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-5">
+            <ol className="space-y-0.5">
               {group.candidates.map((image, index) => (
-                <a
-                  key={`${image.url}-${index}`}
-                  href={image.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="group min-w-0 rounded-md border bg-background outline-none transition hover:border-foreground/25 focus-visible:ring-2 focus-visible:ring-ring/50"
-                  title={
-                    image.title ??
-                    image.source ??
-                    image.attribution ??
-                    image.url
-                  }
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={imagePreviewSrc(image)}
-                    alt={image.title ?? `${group.query} candidate ${index + 1}`}
-                    loading="lazy"
-                    className="aspect-square w-full rounded-t-[calc(var(--radius)-1px)] object-cover"
-                  />
-                  <div className="truncate px-1.5 py-1 text-[10px] text-muted-foreground">
-                    {image.source ?? image.title ?? `Image ${index + 1}`}
-                  </div>
-                </a>
+                <li key={`${image.url}-${index}`} className="min-w-0">
+                  <a
+                    href={image.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={image.attribution ?? image.url}
+                    className="block truncate text-[11px] text-muted-foreground underline-offset-4 outline-none transition hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring/50"
+                  >
+                    {image.name ??
+                      image.title ??
+                      image.source ??
+                      `Image ${index + 1}`}
+                  </a>
+                </li>
               ))}
-            </div>
+            </ol>
           </section>
         ))}
       </div>
@@ -322,7 +304,7 @@ export function RunNodeCard({
 
           {outputs ? (
             <div className="border-t">
-              <ImageGroupsPreview outputs={outputs} />
+              <ImageGroupLinks outputs={outputs} />
               <div className="px-3 pt-2 text-[11px] font-medium text-muted-foreground">
                 {isLlmNode ? "LLM output" : "Output"}
               </div>

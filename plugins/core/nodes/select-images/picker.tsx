@@ -63,8 +63,8 @@ const DEFAULT_PLACEMENT: ImagePlacement = {
   scale: 1,
 };
 
-/** Alternates are paged so at most this many tiles are mounted at once. */
-const ALTERNATES_PAGE_SIZE = 10;
+/** Alternates are paged so at most this many tiles are mounted at once (2 rows of 3). */
+const ALTERNATES_PAGE_SIZE = 6;
 /** Pixel size requested from Google's CDN thumbnail for grid tiles. */
 const TILE_THUMBNAIL_SIZE = 400;
 
@@ -344,6 +344,14 @@ function SelectedTile({
   );
 }
 
+function EmptySlot({ index }: { index: number }) {
+  return (
+    <div className="flex aspect-square items-center justify-center rounded-md border border-dashed bg-muted/10 text-sm font-medium text-muted-foreground/50">
+      {index + 1}
+    </div>
+  );
+}
+
 function AlternateTile({
   image,
   disabled,
@@ -552,11 +560,9 @@ export function SelectImagesPicker({
     () => normalizeImageCandidates(alternates),
     [alternates],
   );
-  const [selectedUrls, setSelectedUrls] = useState(() =>
-    uniqueByUrl(normalizedSelected)
-      .slice(0, selectionCount)
-      .map((image) => image.url),
-  );
+  // Selection starts empty on purpose: every slot is a blank the user fills by
+  // clicking images below, rather than unpicking a server-made preselection.
+  const [selectedUrls, setSelectedUrls] = useState<string[]>([]);
   const [placements, setPlacements] = useState<Record<string, ImagePlacement>>(
     {},
   );
@@ -789,19 +795,19 @@ export function SelectImagesPicker({
             <h3 className="text-xs font-medium text-muted-foreground">
               Selected
             </h3>
-            {selectedImages.length > 1 ? (
-              <span className="text-[11px] text-muted-foreground">
-                Drag to reorder
-              </span>
-            ) : null}
+            <span className="text-[11px] text-muted-foreground">
+              {selectedImages.length === 0
+                ? "Click images below to fill the slots"
+                : selectedImages.length > 1
+                  ? "Drag to reorder"
+                  : null}
+            </span>
           </div>
-          {selectedImages.length === 0 ? (
-            <p className="rounded-md border border-dashed p-6 text-center text-xs text-muted-foreground">
-              Add images from the alternates below to build your set.
-            </p>
-          ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-              {selectedImages.map((image, index) => (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            {Array.from({ length: selectionCount }, (_, index) => {
+              const image = selectedImages[index];
+              if (!image) return <EmptySlot key={`slot-${index}`} index={index} />;
+              return (
                 <SelectedTile
                   key={image.url}
                   image={image}
@@ -829,9 +835,9 @@ export function SelectImagesPicker({
                     setDragOverUrl("");
                   }}
                 />
-              ))}
-            </div>
-          )}
+              );
+            })}
+          </div>
           {activePlacement ? (
             <FramingPanel
               image={byUrl.get(effectiveFramingUrl)}
@@ -875,7 +881,7 @@ export function SelectImagesPicker({
             </p>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+              <div className="grid grid-cols-3 gap-3">
                 {shownAlternates.map((image) => (
                   <AlternateTile
                     key={image.url}

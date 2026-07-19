@@ -14,6 +14,7 @@ export const NODE_GROUP_LABELS: Record<NodeGroup, string> = {
   flow: "Flow",
   "google-drive": "Google Drive",
   notion: "Notion",
+  tally: "Tally",
   utility: "Utility",
 };
 
@@ -23,6 +24,7 @@ export const STEP_GROUP_ORDER: NodeGroup[] = [
   "design",
   "google-drive",
   "notion",
+  "tally",
   "flow",
   "utility",
 ];

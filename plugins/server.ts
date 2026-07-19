@@ -2,6 +2,7 @@ import type { PluginServer } from "@/lib/plugins/types";
 import { corePluginServer } from "./core/server";
 import { aiPluginServer } from "./ai/server";
 import { notionPluginServer } from "./notion/server";
+import { tallyPluginServer } from "./tally/server";
 import { googleDrivePluginServer } from "./google-drive/server";
 import { locationImageFinderPluginServer } from "./location-image-finder/server";
 
@@ -15,6 +16,7 @@ export const pluginServers: PluginServer[] = [
   corePluginServer,
   aiPluginServer,
   notionPluginServer,
+  tallyPluginServer,
   googleDrivePluginServer,
   locationImageFinderPluginServer,
 ];

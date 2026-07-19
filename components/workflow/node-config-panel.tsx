@@ -48,6 +48,10 @@ import {
   type NotionPropertyType,
   type NotionPropertyUpdate,
 } from "@/plugins/notion/nodes/notion-update-page/meta";
+import {
+  TALLY_CREATE_FORM_TYPE_ID,
+  type TallyReplacement,
+} from "@/plugins/tally/nodes/tally-create-form/meta";
 import { SELECT_IMAGES_TYPE_ID } from "@/plugins/core/nodes/select-images/meta";
 import { PREVIEW_DESIGN_IMAGE_TYPE_ID } from "@/plugins/core/nodes/preview-design-image/meta";
 import { RENDER_TEMPLATE_BATCH_TYPE_ID } from "@/plugins/core/nodes/render-template-batch/meta";
@@ -823,6 +827,14 @@ export function NodeConfigPanel({
         />
       ) : null}
 
+      {node.type === TALLY_CREATE_FORM_TYPE_ID ? (
+        <TallyReplacementsEditor
+          replacements={(config.replacements ?? []) as TallyReplacement[]}
+          fields={upstreamFields}
+          onChange={(next) => set("replacements", next)}
+        />
+      ) : null}
+
       <Button
         type="button"
         variant="ghost"
@@ -1105,6 +1117,98 @@ function NotionPropertiesEditor({
             <TokenBindingInput
               value={String(row.value ?? "")}
               onChange={(value) => updateProperty(row.id, { value })}
+              fields={fields}
+              multiline
+              placeholder="Value - or insert data"
+            />
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+/** Placeholder → value rows for the Create Tally Form node. */
+function TallyReplacementsEditor({
+  replacements,
+  fields,
+  onChange,
+}: {
+  replacements: TallyReplacement[];
+  fields: FieldRef[];
+  onChange: (next: TallyReplacement[]) => void;
+}) {
+  const addReplacement = () =>
+    onChange([...replacements, { id: crypto.randomUUID(), token: "", value: "" }]);
+
+  const updateReplacement = (
+    id: string,
+    patch: Partial<Omit<TallyReplacement, "id">>,
+  ) => {
+    onChange(
+      replacements.map((row) => (row.id === id ? { ...row, ...patch } : row)),
+    );
+  };
+
+  const removeReplacement = (id: string) => {
+    onChange(replacements.filter((row) => row.id !== id));
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium tracking-wide text-muted-foreground/70">
+            Placeholders
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Write tokens like {"{{description}}"} in your Tally template, then
+            map each one to a value here.
+          </p>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          className="h-7 shrink-0 gap-1 px-2 text-xs"
+          onClick={addReplacement}
+        >
+          <Plus className="size-3.5" /> Add
+        </Button>
+      </div>
+
+      {replacements.length === 0 ? (
+        <button
+          type="button"
+          className="rounded-md border border-dashed p-3 text-left text-xs text-muted-foreground hover:border-foreground/20 hover:bg-accent"
+          onClick={addReplacement}
+        >
+          Add a placeholder, then insert webhook or previous-step data as its
+          value.
+        </button>
+      ) : (
+        replacements.map((row) => (
+          <div key={row.id} className="flex flex-col gap-2 rounded-md border p-3">
+            <div className="flex items-center gap-1.5">
+              <Input
+                value={row.token}
+                placeholder="Token, e.g. description"
+                onChange={(e) => updateReplacement(row.id, { token: e.target.value })}
+              />
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
+                title="Remove placeholder"
+                onClick={() => removeReplacement(row.id)}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </div>
+            <TokenBindingInput
+              value={String(row.value ?? "")}
+              onChange={(value) => updateReplacement(row.id, { value })}
               fields={fields}
               multiline
               placeholder="Value - or insert data"

@@ -2,6 +2,7 @@ import type { PluginManifest } from "@/lib/plugins/types";
 import { corePlugin } from "./core/plugin";
 import { aiPlugin } from "./ai/plugin";
 import { notionPlugin } from "./notion/plugin";
+import { tallyPlugin } from "./tally/plugin";
 import { googleDrivePlugin } from "./google-drive/plugin";
 import { locationImageFinderPlugin } from "./location-image-finder/plugin";
 
@@ -16,6 +17,7 @@ export const pluginManifests: PluginManifest[] = [
   corePlugin,
   aiPlugin,
   notionPlugin,
+  tallyPlugin,
   googleDrivePlugin,
   locationImageFinderPlugin,
 ];

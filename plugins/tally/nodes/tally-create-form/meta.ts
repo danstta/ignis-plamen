@@ -54,7 +54,7 @@ export const tallyCreateFormMeta: NodeMeta<TallyCreateFormConfig> = {
       label: "Form title",
       type: "text",
       placeholder: "New form name — or insert data",
-      help: "Names the created form in Tally. Leave empty to keep the template's title.",
+      help: "Names the created form and its visible title heading. Leave empty to keep the template's title.",
     },
     {
       name: "publish",

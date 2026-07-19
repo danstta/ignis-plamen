@@ -5,6 +5,7 @@
  */
 
 const TALLY_API_BASE = "https://api.tally.so";
+const TALLY_TIMEOUT_MS = 30_000;
 
 export interface TallyBlock {
   uuid: string;
@@ -20,6 +21,7 @@ export interface TallyForm {
   workspaceId?: string;
   status?: string;
   blocks?: TallyBlock[];
+  settings?: Record<string, unknown>;
   [key: string]: unknown;
 }
 
@@ -35,14 +37,25 @@ async function tallyRequest<T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
-  const res = await fetch(`${TALLY_API_BASE}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      ...init?.headers,
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${TALLY_API_BASE}${path}`, {
+      ...init,
+      signal: init?.signal ?? AbortSignal.timeout(TALLY_TIMEOUT_MS),
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        ...init?.headers,
+      },
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "TimeoutError") {
+      throw new Error(
+        `Tally API request timed out after ${TALLY_TIMEOUT_MS / 1000}s`,
+      );
+    }
+    throw error;
+  }
 
   const body = (await res.json().catch(() => null)) as Record<
     string,

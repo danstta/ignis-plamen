@@ -16,15 +16,22 @@ import { tallyCreateFormMeta, type TallyCreateFormConfig } from "./meta";
  * those references must follow the same mapping.
  */
 function cloneBlocksWithFreshUuids(blocks: TallyBlock[]): TallyBlock[] {
-  const ids = new Set<string>();
+  const mapping = new Map<string, string>();
   for (const block of blocks) {
-    if (block.uuid) ids.add(block.uuid);
-    if (block.groupUuid) ids.add(block.groupUuid);
+    if (block.uuid) mapping.set(block.uuid, crypto.randomUUID());
+    if (block.groupUuid) mapping.set(block.groupUuid, crypto.randomUUID());
   }
-  let json = JSON.stringify(blocks);
-  for (const id of ids) {
-    json = json.split(id).join(crypto.randomUUID());
-  }
+  if (mapping.size === 0) return structuredClone(blocks);
+  // Single pass so a freshly generated uuid can never collide with a
+  // not-yet-replaced template uuid and get remapped twice.
+  const pattern = new RegExp(
+    [...mapping.keys()].map(escapeRegExp).join("|"),
+    "g",
+  );
+  const json = JSON.stringify(blocks).replace(
+    pattern,
+    (match) => mapping.get(match) as string,
+  );
   return JSON.parse(json) as TallyBlock[];
 }
 
@@ -87,16 +94,17 @@ export const tallyCreateFormNode: NodeDefinition<TallyCreateFormConfig> = {
 
     const blocks = cloneBlocksWithFreshUuids(template.blocks);
 
-    const patterns = ctx.config.replacements.flatMap((row) => {
+    // Deduped by token (last row wins) — otherwise the first row's regex
+    // consumes every occurrence and later duplicates silently do nothing.
+    const byToken = new Map<string, string>();
+    for (const row of ctx.config.replacements) {
       const token = normalizeToken(row.token);
-      if (!token) return [];
-      return [
-        {
-          regex: new RegExp(`\\{\\{\\s*${escapeRegExp(token)}\\s*\\}\\}`, "g"),
-          replacement: valueToText(row.value),
-        },
-      ];
-    });
+      if (token) byToken.set(token, valueToText(row.value));
+    }
+    const patterns = [...byToken].map(([token, replacement]) => ({
+      regex: new RegExp(`\\{\\{\\s*${escapeRegExp(token)}\\s*\\}\\}`, "g"),
+      replacement,
+    }));
     const counts = new Map<RegExp, number>();
     for (const block of blocks) {
       block.payload = replaceTokensDeep(block.payload, patterns, counts) as Record<
@@ -120,7 +128,9 @@ export const tallyCreateFormNode: NodeDefinition<TallyCreateFormConfig> = {
     if (formTitle) {
       const titleBlock = blocks.find((block) => block.type === "FORM_TITLE");
       if (titleBlock) {
-        titleBlock.payload = { ...titleBlock.payload, title: formTitle };
+        // `title` is the form's name; `html` is the rendered heading — Tally
+        // needs both updated for the visible title to change.
+        titleBlock.payload = { ...titleBlock.payload, title: formTitle, html: formTitle };
       } else {
         await ctx.log("warning: template has no FORM_TITLE block; form title not set");
       }
@@ -131,6 +141,7 @@ export const tallyCreateFormNode: NodeDefinition<TallyCreateFormConfig> = {
       status,
       blocks,
       workspaceId: template.workspaceId,
+      settings: template.settings,
     });
     const formId = typeof created?.id === "string" ? created.id : "";
     if (!formId) {

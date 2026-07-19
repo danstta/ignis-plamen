@@ -61,6 +61,7 @@ export type NodeGroup =
   | "flow"
   | "google-drive"
   | "notion"
+  | "tally"
   | "utility";
 
 /** What a node's run produced: resolved outputs, or a pause for human input. */

@@ -1,5 +1,6 @@
 import type { ConnectionDefinition } from "./types";
 import { notionConnection } from "./notion";
+import { tallyConnection } from "./tally";
 import { googleDriveConnection } from "./google-drive";
 import { openAIConnection } from "./openai";
 import { anthropicConnection } from "./anthropic";
@@ -16,6 +17,7 @@ const definitions: ConnectionDefinition[] = [
   anthropicConnection as unknown as ConnectionDefinition,
   azureFoundryConnection as unknown as ConnectionDefinition,
   notionConnection as unknown as ConnectionDefinition,
+  tallyConnection as unknown as ConnectionDefinition,
 ];
 
 const byId = new Map(definitions.map((d) => [d.id, d]));

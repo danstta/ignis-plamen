@@ -79,6 +79,36 @@ export function getTallyForm(apiKey: string, formId: string): Promise<TallyForm>
   return tallyRequest<TallyForm>(apiKey, `/forms/${encodeURIComponent(formId)}`);
 }
 
+/**
+ * Drops null/undefined values from every block's payload so a form copied from
+ * `GET /forms/{id}` can be re-posted to `POST /forms`.
+ *
+ * Since API v0.4.0 the create/update endpoints validate block payloads against
+ * a strict schema, but `GET` returns disabled or optional features as `null`
+ * (e.g. `maxCharacters`, `columnRatio`, `name`, or `defaultAnswer` on a
+ * TEXTAREA). Those keys are typed non-nullable in the create schema — and
+ * `defaultAnswer`'s union admits no null — so re-posting them verbatim is
+ * rejected with "Invalid block structure detected for <TYPE>". In Tally's
+ * model an unset field is equivalent to an absent one, so dropping the nulls
+ * conforms the block again.
+ *
+ * Only the payload's own keys are stripped, never nested structures: some
+ * nested fields are required yet nullable (a conditional-logic condition's
+ * `value` is null for IS_EMPTY checks), and removing those would delete a
+ * field the schema requires. No block payload has a top-level field that is
+ * both required and nullable, so stripping top-level nulls is always safe.
+ */
+export function sanitizeBlocksForCreate(blocks: TallyBlock[]): TallyBlock[] {
+  return blocks.map((block) => {
+    const payload: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(block.payload)) {
+      if (value === null || value === undefined) continue;
+      payload[key] = value;
+    }
+    return { ...block, payload };
+  });
+}
+
 export function createTallyForm(
   apiKey: string,
   input: {
@@ -90,6 +120,9 @@ export function createTallyForm(
 ): Promise<TallyForm> {
   return tallyRequest<TallyForm>(apiKey, "/forms", {
     method: "POST",
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      ...input,
+      blocks: sanitizeBlocksForCreate(input.blocks),
+    }),
   });
 }

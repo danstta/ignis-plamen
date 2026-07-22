@@ -70,7 +70,11 @@ export const runResume = inngest.createFunction(
       event.data.runId,
       event.data.resumeToken,
       event.data.choiceUrl
-        ? { choiceUrl: event.data.choiceUrl }
+        ? {
+            choiceUrl: event.data.choiceUrl,
+            objectPosition: event.data.objectPosition,
+            scale: event.data.scale,
+          }
         : event.data.selectedImages
           ? { selectedImages: event.data.selectedImages }
           : { selectedUrls: event.data.selectedUrls ?? [] },

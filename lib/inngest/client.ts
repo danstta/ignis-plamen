@@ -13,6 +13,9 @@ export type RunResumeData = {
   runId: string;
   resumeToken: string;
   choiceUrl?: string;
+  /** Crop/zoom that travels with a single locked image (preview-design-image). */
+  objectPosition?: string;
+  scale?: number;
   selectedUrls?: string[];
   selectedImages?: {
     url: string;

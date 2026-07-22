@@ -480,7 +480,7 @@ export async function startRun(
 }
 
 type ResumeChoice =
-  | { choiceUrl: string }
+  | { choiceUrl: string; objectPosition?: string; scale?: number }
   | { selectedUrls: string[] }
   | { selectedImages: SelectedImageChoice[] };
 
@@ -580,8 +580,8 @@ function templateDataForCuratedImages(
 
 function templateDataForDesignImage(
   pausedState: NodeOutputs | undefined,
-  selectedUrl: string,
-): Record<string, string> {
+  dynamicValue: PlaceholderValue,
+): PlaceholderData {
   const placeholders = Array.isArray(pausedState?.previewPlaceholders)
     ? pausedState.previewPlaceholders.filter(isPlaceholderRecord)
     : [];
@@ -595,14 +595,14 @@ function templateDataForDesignImage(
     typeof pausedState?.dynamicImagePlaceholderKey === "string"
       ? pausedState.dynamicImagePlaceholderKey
       : "";
-  const data: Record<string, string> = {};
+  const data: PlaceholderData = {};
 
   for (const placeholder of placeholders) {
     const bound = bindings[placeholder.key];
     const value =
       bound !== undefined && bound !== "" ? valueToOutputText(bound) : "";
     data[placeholder.key] =
-      placeholder.key === dynamicKey ? selectedUrl : value;
+      placeholder.key === dynamicKey ? dynamicValue : value;
   }
 
   return data;
@@ -683,11 +683,21 @@ function outputForHumanChoice(
             candidate.url === choiceUrl,
         )
       : undefined;
+    // Collapse to a bare URL when the frame is untouched, else a
+    // PlaceholderImageValue carrying the crop — the single source of truth the
+    // picker preview mirrors via `placementToPlaceholderValue`.
+    const placementValue = imageChoiceToPlaceholderValue({
+      url: choiceUrl,
+      objectPosition: choice.objectPosition,
+      scale: choice.scale,
+    });
 
     return {
       chosen: choiceUrl,
-      chosenImage: chosenImage ?? { url: choiceUrl },
-      templateData: templateDataForDesignImage(pausedState, choiceUrl),
+      chosenImage: isPlaceholderImageValue(placementValue)
+        ? { ...(chosenImage ?? {}), ...placementValue }
+        : (chosenImage ?? { url: choiceUrl }),
+      templateData: templateDataForDesignImage(pausedState, placementValue),
     };
   }
 

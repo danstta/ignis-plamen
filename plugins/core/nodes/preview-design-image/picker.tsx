@@ -390,7 +390,7 @@ export function PreviewDesignImagePicker({
             <Button
               type="button"
               size="sm"
-              variant="outline"
+              variant={framingOpen ? "secondary" : "outline"}
               onClick={() => setFramingOpen((open) => !open)}
               disabled={submitting || !selectedUrl}
               aria-pressed={framingOpen}
@@ -413,6 +413,41 @@ export function PreviewDesignImagePicker({
             </Button>
           </div>
         </div>
+
+        {framingOpen && selectedUrl ? (
+          <ImageFramingControls
+            previewSrc={selected ? imagePreviewSrc(selected) : undefined}
+            placement={activePlacement}
+            disabled={submitting}
+            onPositionChange={(objectPosition) =>
+              updatePlacement(selectedUrl, { objectPosition })
+            }
+            onScaleChange={(scale) => updatePlacement(selectedUrl, { scale })}
+            header={
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Crop &amp; zoom
+                </span>
+                <div className="flex items-center gap-1">
+                  <ToolButton
+                    label="Reset framing"
+                    disabled={submitting || !hasCustomPlacement(activePlacement)}
+                    onClick={() => resetPlacement(selectedUrl)}
+                  >
+                    <RotateCcw className="size-3" />
+                  </ToolButton>
+                  <ToolButton
+                    label="Close framing"
+                    disabled={submitting}
+                    onClick={() => setFramingOpen(false)}
+                  >
+                    <X className="size-3" />
+                  </ToolButton>
+                </div>
+              </div>
+            }
+          />
+        ) : null}
 
         <div className="space-y-2 rounded-md border bg-muted/10 p-3">
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -507,41 +542,6 @@ export function PreviewDesignImagePicker({
             </section>
           ))}
         </div>
-
-        {framingOpen && selectedUrl ? (
-          <ImageFramingControls
-            previewSrc={selected ? imagePreviewSrc(selected) : undefined}
-            placement={activePlacement}
-            disabled={submitting}
-            onPositionChange={(objectPosition) =>
-              updatePlacement(selectedUrl, { objectPosition })
-            }
-            onScaleChange={(scale) => updatePlacement(selectedUrl, { scale })}
-            header={
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-xs font-medium text-muted-foreground">
-                  Crop &amp; zoom
-                </span>
-                <div className="flex items-center gap-1">
-                  <ToolButton
-                    label="Reset framing"
-                    disabled={submitting || !hasCustomPlacement(activePlacement)}
-                    onClick={() => resetPlacement(selectedUrl)}
-                  >
-                    <RotateCcw className="size-3" />
-                  </ToolButton>
-                  <ToolButton
-                    label="Close framing"
-                    disabled={submitting}
-                    onClick={() => setFramingOpen(false)}
-                  >
-                    <X className="size-3" />
-                  </ToolButton>
-                </div>
-              </div>
-            }
-          />
-        ) : null}
       </div>
 
       <aside className="min-w-0">

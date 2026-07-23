@@ -1,18 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { DragEvent, ReactNode } from "react";
+import type { DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowDown,
-  ArrowLeft,
-  ArrowRight,
-  ArrowUp,
   Check,
   ChevronLeft,
   ChevronRight,
   Crop,
-  Crosshair,
   GripVertical,
   Loader2,
   MoveDown,
@@ -21,16 +16,9 @@ import {
   RefreshCw,
   RotateCcw,
   X,
-  ZoomIn,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import {
   isPlaceholderImageValue,
   placeholderValueToText,
@@ -41,6 +29,14 @@ import {
 } from "@/lib/editor/types";
 import { normalizeImageCandidates } from "@/lib/nodes/image-input";
 import { imagePreviewSrc, imageThumbnailSrc } from "@/lib/nodes/image-preview";
+import {
+  DEFAULT_PLACEMENT,
+  hasCustomPlacement,
+  ImageFramingControls,
+  placementToPlaceholderValue,
+  ToolButton,
+  type ImagePlacement,
+} from "@/lib/nodes/image-framing";
 import { cn } from "@/lib/utils";
 
 type Candidate = {
@@ -55,13 +51,7 @@ type Candidate = {
   categorized?: boolean;
 };
 type PreviewPlaceholder = PlaceholderDescriptor;
-type ImagePlacement = { objectPosition: string; scale: number };
 type SelectedImageValue = { url: string } & ImagePlacement;
-
-const DEFAULT_PLACEMENT: ImagePlacement = {
-  objectPosition: "center center",
-  scale: 1,
-};
 
 /** Alternates are paged so at most this many tiles are mounted at once (a 3x3 grid). */
 const ALTERNATES_PAGE_SIZE = 9;
@@ -69,18 +59,6 @@ const ALTERNATES_PAGE_SIZE = 9;
 const TILE_THUMBNAIL_SIZE = 400;
 /** Alternate pages warmed ahead of the current one so paging never waits on loads. */
 const ALTERNATES_PRELOAD_PAGES = 2;
-
-const POSITION_PRESETS = [
-  { value: "left top", label: "Top left", icon: ArrowUp },
-  { value: "center top", label: "Top", icon: ArrowUp },
-  { value: "right top", label: "Top right", icon: ArrowUp },
-  { value: "left center", label: "Left", icon: ArrowLeft },
-  { value: "center center", label: "Center", icon: Crosshair },
-  { value: "right center", label: "Right", icon: ArrowRight },
-  { value: "left bottom", label: "Bottom left", icon: ArrowDown },
-  { value: "center bottom", label: "Bottom", icon: ArrowDown },
-  { value: "right bottom", label: "Bottom right", icon: ArrowDown },
-] as const;
 
 async function renderPreviewPage(input: {
   templateId: string;
@@ -133,13 +111,6 @@ function selectedImageValue(
   return { url, ...placement };
 }
 
-function hasCustomPlacement(placement: ImagePlacement): boolean {
-  return (
-    placement.objectPosition !== DEFAULT_PLACEMENT.objectPosition ||
-    placement.scale !== DEFAULT_PLACEMENT.scale
-  );
-}
-
 /** Move `fromUrl` to sit where `toUrl` currently is, preserving the rest of the order. */
 function reorderUrls(
   urls: string[],
@@ -156,13 +127,7 @@ function reorderUrls(
 }
 
 function imagePlaceholderValue(image: SelectedImageValue | undefined): PlaceholderValue {
-  if (!image) return "";
-  if (!hasCustomPlacement(image)) return image.url;
-  return {
-    url: image.url,
-    objectPosition: image.objectPosition,
-    scale: image.scale,
-  };
+  return image ? placementToPlaceholderValue(image.url, image) : "";
 }
 
 function valueForImagePlaceholder(value: unknown): PlaceholderValue {
@@ -227,43 +192,6 @@ function CategoryBadge({ image }: { image: Candidate }) {
     >
       {category}
     </span>
-  );
-}
-
-function ToolButton({
-  label,
-  active,
-  disabled,
-  onClick,
-  children,
-  className,
-}: {
-  label: string;
-  active?: boolean;
-  disabled?: boolean;
-  onClick: () => void;
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            type="button"
-            size="icon-xs"
-            variant={active ? "default" : "secondary"}
-            aria-label={label}
-            disabled={disabled}
-            onClick={onClick}
-            className={className}
-          />
-        }
-      >
-        {children}
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
   );
 }
 
@@ -424,101 +352,58 @@ function FramingPanel({
   onClose: () => void;
 }) {
   return (
-    <div className="mt-3 grid gap-3 rounded-md border bg-card p-3 sm:grid-cols-[88px_minmax(0,1fr)]">
-      <div className="overflow-hidden rounded-md border bg-muted/20">
-        {image ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={imagePreviewSrc(image)}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            className="aspect-square w-full object-cover"
-            style={{
-              objectPosition: placement.objectPosition,
-              transform: `scale(${placement.scale})`,
-            }}
-          />
-        ) : null}
-      </div>
-
-      <div className="min-w-0 space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <span className="text-xs font-medium text-muted-foreground">
-              Framing
-            </span>
-            {activeIndex !== undefined ? (
-              <p className="mt-0.5 text-[11px] text-muted-foreground">
-                Image {activeIndex + 1}
-              </p>
-            ) : null}
-          </div>
-          <div className="flex items-center gap-1">
-            <ToolButton
-              label="Move earlier"
-              disabled={disabled || !canMoveEarlier}
-              onClick={onMoveEarlier}
-            >
-              <MoveUp className="size-3" />
-            </ToolButton>
-            <ToolButton
-              label="Move later"
-              disabled={disabled || !canMoveLater}
-              onClick={onMoveLater}
-            >
-              <MoveDown className="size-3" />
-            </ToolButton>
-            <ToolButton
-              label="Reset framing"
-              disabled={disabled || !hasCustomPlacement(placement)}
-              onClick={onReset}
-            >
-              <RotateCcw className="size-3" />
-            </ToolButton>
-            <ToolButton label="Close framing" disabled={disabled} onClick={onClose}>
-              <X className="size-3" />
-            </ToolButton>
-          </div>
-        </div>
-
-        <div className="grid w-fit grid-cols-3 gap-1">
-          {POSITION_PRESETS.map((preset) => {
-            const Icon = preset.icon;
-            return (
+    <div className="mt-3">
+      <ImageFramingControls
+        previewSrc={image ? imagePreviewSrc(image) : undefined}
+        placement={placement}
+        disabled={disabled}
+        onPositionChange={onPositionChange}
+        onScaleChange={onScaleChange}
+        header={
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <span className="text-xs font-medium text-muted-foreground">
+                Framing
+              </span>
+              {activeIndex !== undefined ? (
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  Image {activeIndex + 1}
+                </p>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-1">
               <ToolButton
-                key={preset.value}
-                label={preset.label}
-                active={placement.objectPosition === preset.value}
-                disabled={disabled}
-                onClick={() => onPositionChange(preset.value)}
+                label="Move earlier"
+                disabled={disabled || !canMoveEarlier}
+                onClick={onMoveEarlier}
               >
-                <Icon className="size-3" />
+                <MoveUp className="size-3" />
               </ToolButton>
-            );
-          })}
-        </div>
-
-        <div className="grid gap-2">
-          <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1 font-medium">
-              <ZoomIn className="size-3" />
-              Zoom
-            </span>
-            <span className="tabular-nums">{Math.round(placement.scale * 100)}%</span>
+              <ToolButton
+                label="Move later"
+                disabled={disabled || !canMoveLater}
+                onClick={onMoveLater}
+              >
+                <MoveDown className="size-3" />
+              </ToolButton>
+              <ToolButton
+                label="Reset framing"
+                disabled={disabled || !hasCustomPlacement(placement)}
+                onClick={onReset}
+              >
+                <RotateCcw className="size-3" />
+              </ToolButton>
+              <ToolButton
+                label="Close framing"
+                disabled={disabled}
+                onClick={onClose}
+              >
+                <X className="size-3" />
+              </ToolButton>
+            </div>
           </div>
-          <Slider
-            value={[placement.scale]}
-            min={1}
-            max={3}
-            step={0.05}
-            disabled={disabled}
-            onValueChange={(value) =>
-              onScaleChange(Array.isArray(value) ? (value[0] ?? 1) : value)
-            }
-          />
-        </div>
-      </div>
+        }
+      />
     </div>
   );
 }

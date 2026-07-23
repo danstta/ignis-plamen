@@ -19,6 +19,8 @@ export async function POST(
   const body = (await req.json().catch(() => null)) as {
     resumeToken?: string;
     url?: string;
+    objectPosition?: string;
+    scale?: number;
     selectedUrls?: string[];
     selectedImages?: {
       url?: string;
@@ -28,6 +30,15 @@ export async function POST(
   } | null;
 
   const hasSingleChoice = typeof body?.url === "string" && body.url.trim() !== "";
+  // Optional crop/zoom that travels with a single locked image (preview-design-image).
+  const singleObjectPosition =
+    typeof body?.objectPosition === "string" && body.objectPosition.trim()
+      ? body.objectPosition.trim()
+      : undefined;
+  const singleScale =
+    typeof body?.scale === "number" && Number.isFinite(body.scale)
+      ? Math.min(4, Math.max(1, body.scale))
+      : undefined;
   const selectedImages = Array.isArray(body?.selectedImages)
     ? body.selectedImages
         .map((image) => ({
@@ -75,7 +86,11 @@ export async function POST(
   // Dedupe on the single-use token, so a double-click (or a sender retry) enqueues
   // exactly one resume regardless of the async gap before the run leaves `waiting`.
   const choice = hasSingleChoice
-    ? { choiceUrl: body.url!.trim() }
+    ? {
+        choiceUrl: body.url!.trim(),
+        ...(singleObjectPosition ? { objectPosition: singleObjectPosition } : {}),
+        ...(singleScale !== undefined ? { scale: singleScale } : {}),
+      }
     : hasCuratedImages
       ? { selectedImages }
       : {

@@ -9,16 +9,16 @@ import {
   ChevronRight,
   Crop,
   GripVertical,
-  Loader2,
   MoveDown,
   MoveUp,
   Plus,
-  RefreshCw,
   RotateCcw,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { LiveTemplatePreview } from "@/components/render/live-template-preview";
+import { PREVIEW_THUMBNAIL_SIZE } from "@/lib/render/preview-images";
 import {
   isPlaceholderImageValue,
   placeholderValueToText,
@@ -55,38 +55,8 @@ type SelectedImageValue = { url: string } & ImagePlacement;
 
 /** Alternates are paged so at most this many tiles are mounted at once (a 3x3 grid). */
 const ALTERNATES_PAGE_SIZE = 9;
-/** Pixel size requested from Google's CDN thumbnail for grid tiles. */
-const TILE_THUMBNAIL_SIZE = 400;
 /** Alternate pages warmed ahead of the current one so paging never waits on loads. */
 const ALTERNATES_PRELOAD_PAGES = 2;
-
-async function renderPreviewPage(input: {
-  templateId: string;
-  page: number;
-  data: PlaceholderData;
-  signal: AbortSignal;
-}): Promise<{ url: string; pageCount: number }> {
-  const res = await fetch("/api/render", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      templateId: input.templateId,
-      page: input.page,
-      data: input.data,
-    }),
-    signal: input.signal,
-  });
-  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
-
-  const pageCount = Math.max(
-    1,
-    Math.trunc(Number(res.headers.get("X-Page-Count") ?? "1")),
-  );
-  return {
-    url: URL.createObjectURL(await res.blob()),
-    pageCount,
-  };
-}
 
 function uniqueByUrl(images: Candidate[]): Candidate[] {
   const seen = new Set<string>();
@@ -153,7 +123,7 @@ function TileImage({ image }: { image: Candidate }) {
     <div className={cn("aspect-square w-full", !loaded && "animate-pulse bg-muted/60")}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={imageThumbnailSrc(image, TILE_THUMBNAIL_SIZE)}
+        src={imageThumbnailSrc(image, PREVIEW_THUMBNAIL_SIZE)}
         alt=""
         loading="lazy"
         decoding="async"
@@ -472,12 +442,7 @@ export function SelectImagesPicker({
   const [dragOverUrl, setDragOverUrl] = useState("");
   const [alternatePage, setAlternatePage] = useState(0);
   const [submitting, setSubmitting] = useState(false);
-  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
-  const previewUrlsRef = useRef<string[]>([]);
   const preloadedThumbnailsRef = useRef(new Set<string>());
-  const [activePreviewPage, setActivePreviewPage] = useState(0);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const allImages = useMemo(
     () => uniqueByUrl([...normalizedSelected, ...normalizedAlternates]),
@@ -521,17 +486,10 @@ export function SelectImagesPicker({
     ? placementFor(placements, effectiveFramingUrl)
     : null;
   const framingIndex = selectedUrls.indexOf(effectiveFramingUrl);
-  const activePreviewUrl =
-    previewUrls[activePreviewPage] ?? previewUrls[0] ?? null;
-
-  function replacePreviewUrls(nextUrls: string[]) {
-    for (const url of previewUrlsRef.current) URL.revokeObjectURL(url);
-    previewUrlsRef.current = nextUrls;
-    setPreviewUrls(nextUrls);
-    setActivePreviewPage((page) =>
-      nextUrls.length === 0 ? 0 : Math.min(page, nextUrls.length - 1),
-    );
-  }
+  const previewData = useMemo(
+    () => buildPreviewData(previewPlaceholders, previewBindings, selectedImageValues),
+    [previewPlaceholders, previewBindings, selectedImageValues],
+  );
 
   function remove(url: string) {
     setSelectedUrls((current) => current.filter((item) => item !== url));
@@ -599,7 +557,7 @@ export function SelectImagesPicker({
       ...alternateImages.slice(behindStart, alternatePageStart),
     ];
     for (const image of toWarm) {
-      const src = imageThumbnailSrc(image, TILE_THUMBNAIL_SIZE);
+      const src = imageThumbnailSrc(image, PREVIEW_THUMBNAIL_SIZE);
       if (preloadedThumbnailsRef.current.has(src)) continue;
       preloadedThumbnailsRef.current.add(src);
       const preload = new Image();
@@ -607,70 +565,6 @@ export function SelectImagesPicker({
       preload.src = src;
     }
   }, [alternateImages, alternatePageStart]);
-
-  useEffect(() => {
-    if (!previewTemplateId || selectedUrls.length === 0) {
-      const clearTimer = window.setTimeout(() => replacePreviewUrls([]), 0);
-      return () => window.clearTimeout(clearTimer);
-    }
-
-    const controller = new AbortController();
-
-    const timer = window.setTimeout(() => {
-      setPreviewLoading(true);
-      setPreviewError(null);
-      const data = buildPreviewData(
-        previewPlaceholders,
-        previewBindings,
-        selectedImageValues,
-      );
-
-      void (async () => {
-        const firstPage = await renderPreviewPage({
-          templateId: previewTemplateId,
-          page: 0,
-          data,
-          signal: controller.signal,
-        });
-        const rest = await Promise.all(
-          Array.from({ length: firstPage.pageCount - 1 }, (_, index) =>
-            renderPreviewPage({
-              templateId: previewTemplateId,
-              page: index + 1,
-              data,
-              signal: controller.signal,
-            }),
-          ),
-        );
-        replacePreviewUrls([firstPage.url, ...rest.map((page) => page.url)]);
-      })()
-        .catch((err) => {
-          if (controller.signal.aborted) return;
-          setPreviewError(String(err));
-        })
-        .finally(() => {
-          if (!controller.signal.aborted) setPreviewLoading(false);
-        });
-    }, 250);
-
-    return () => {
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-  }, [
-    previewTemplateId,
-    previewPlaceholders,
-    previewBindings,
-    selectedUrls,
-    selectedImageValues,
-  ]);
-
-  useEffect(() => {
-    return () => {
-      for (const url of previewUrlsRef.current) URL.revokeObjectURL(url);
-      previewUrlsRef.current = [];
-    };
-  }, []);
 
   async function submit() {
     if (selectedUrls.length === 0) {
@@ -858,51 +752,12 @@ export function SelectImagesPicker({
               <h3 className="text-xs font-medium text-muted-foreground">
                 Template preview
               </h3>
-              {previewLoading ? (
-                <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
-              ) : (
-                <RefreshCw className="size-3.5 text-muted-foreground" />
-              )}
             </div>
-            <div className="overflow-hidden rounded-md border bg-muted/20">
-              {previewUrls.length > 1 ? (
-                <div
-                  role="tablist"
-                  aria-label="Preview pages"
-                  className="flex gap-1 border-b bg-card p-1"
-                >
-                  {previewUrls.map((url, index) => (
-                    <button
-                      key={url}
-                      type="button"
-                      role="tab"
-                      aria-selected={activePreviewPage === index}
-                      className={cn(
-                        "h-6 rounded px-2 text-[11px] font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground",
-                        activePreviewPage === index &&
-                          "bg-muted text-foreground",
-                      )}
-                      onClick={() => setActivePreviewPage(index)}
-                    >
-                      {index + 1}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-              {activePreviewUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={activePreviewUrl} alt="" className="w-full" />
-              ) : (
-                <div className="flex aspect-square items-center justify-center p-6 text-center text-xs text-muted-foreground">
-                  {selectedUrls.length === 0
-                    ? "Choose images to render a preview."
-                    : (previewError ?? "Rendering preview...")}
-                </div>
-              )}
-            </div>
-            {previewError ? (
-              <p className="mt-2 text-xs text-destructive">{previewError}</p>
-            ) : null}
+            <LiveTemplatePreview
+              templateId={previewTemplateId}
+              data={previewData}
+              images={allImages}
+            />
           </div>
         </aside>
       ) : null}

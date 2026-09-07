@@ -33,10 +33,13 @@ export function ElementView({
   el,
   data,
   interactive = false,
+  imageSources,
 }: {
   el: TemplateElement;
   data?: PlaceholderData;
   interactive?: boolean;
+  /** Optional browser preview URLs; exports keep the original image sources. */
+  imageSources?: ReadonlyMap<string, string>;
 }) {
   const hook = interactive
     ? { "data-el-id": el.id, className: "da-element" }
@@ -85,7 +88,8 @@ export function ElementView({
         {image.src ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={image.src}
+            key={imageSources?.get(image.src) ?? image.src}
+            src={imageSources?.get(image.src) ?? image.src}
             alt=""
             width={Math.round(el.width * image.scale)}
             height={Math.round(el.height * image.scale)}
@@ -140,10 +144,12 @@ export function TemplateRenderer({
   canvas,
   data,
   interactive = false,
+  imageSources,
 }: {
   canvas: CanvasView;
   data?: PlaceholderData;
   interactive?: boolean;
+  imageSources?: ReadonlyMap<string, string>;
 }) {
   return (
     <div
@@ -162,6 +168,7 @@ export function TemplateRenderer({
           el={el}
           data={data}
           interactive={interactive}
+          imageSources={imageSources}
         />
       ))}
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Check,
@@ -9,14 +9,15 @@ import {
   Link2,
   Loader2,
   Plus,
-  RefreshCw,
   RotateCcw,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { imagePreviewSrc } from "@/lib/nodes/image-preview";
+import { LiveTemplatePreview } from "@/components/render/live-template-preview";
+import { imagePreviewSrc, imageThumbnailSrc } from "@/lib/nodes/image-preview";
+import { PREVIEW_THUMBNAIL_SIZE } from "@/lib/render/preview-images";
 import { normalizeImageCandidates } from "@/lib/nodes/image-input";
 import {
   DEFAULT_PLACEMENT,
@@ -26,10 +27,12 @@ import {
   ToolButton,
   type ImagePlacement,
 } from "@/lib/nodes/image-framing";
-import type {
-  PlaceholderData,
-  PlaceholderDescriptor,
-  PlaceholderValue,
+import {
+  isPlaceholderImageValue,
+  toListItems,
+  type PlaceholderData,
+  type PlaceholderDescriptor,
+  type PlaceholderValue,
 } from "@/lib/editor/types";
 import { cn } from "@/lib/utils";
 
@@ -83,9 +86,13 @@ function buildPreviewData({
     data[placeholder.key] =
       placeholder.key === dynamicKey
         ? selectedValue
-        : bound !== undefined && bound !== ""
-          ? outputText(bound)
-          : "";
+        : placeholder.kind === "list"
+          ? toListItems(bound)
+          : isPlaceholderImageValue(bound)
+            ? bound
+            : bound !== undefined && bound !== ""
+              ? outputText(bound)
+              : "";
   }
 
   return data;
@@ -151,8 +158,10 @@ function CandidateTile({
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={imagePreviewSrc(candidate)}
+          src={imageThumbnailSrc(candidate, PREVIEW_THUMBNAIL_SIZE)}
           alt=""
+          loading="lazy"
+          decoding="async"
           className="aspect-square w-full object-cover"
         />
         <span className="absolute left-2 top-2 rounded bg-background/90 px-1.5 py-0.5 text-[10px] font-medium tabular-nums shadow-sm">
@@ -214,9 +223,6 @@ export function PreviewDesignImagePicker({
   const [placements, setPlacements] = useState<Record<string, ImagePlacement>>({});
   const [framingOpen, setFramingOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const allCandidates = useMemo(
     () => [...candidates, ...customCandidates],
@@ -276,73 +282,19 @@ export function PreviewDesignImagePicker({
     );
   }
 
-  useEffect(() => {
-    if (!previewTemplateId || !selectedUrl || !dynamicImagePlaceholderKey) {
-      return;
-    }
-
-    const controller = new AbortController();
-    const previousUrl = previewUrl;
-
-    const timer = window.setTimeout(() => {
-      setPreviewLoading(true);
-      setPreviewError(null);
-      void fetch("/api/render", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          templateId: previewTemplateId,
-          data: buildPreviewData({
-            placeholders: previewPlaceholders,
-            bindings: previewBindings,
-            dynamicKey: dynamicImagePlaceholderKey,
-            selectedValue: placementToPlaceholderValue(selectedUrl, {
-              objectPosition: activeObjectPosition,
-              scale: activeScale,
-            }),
-          }),
-        }),
-        signal: controller.signal,
-      })
-        .then(async (res) => {
-          if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
-          return res.blob();
-        })
-        .then((blob) => {
-          const nextUrl = URL.createObjectURL(blob);
-          setPreviewUrl(nextUrl);
-          if (previousUrl) URL.revokeObjectURL(previousUrl);
-        })
-        .catch((err) => {
-          if (controller.signal.aborted) return;
-          setPreviewError(err instanceof Error ? err.message : String(err));
-        })
-        .finally(() => {
-          if (!controller.signal.aborted) setPreviewLoading(false);
-        });
-    }, 180);
-
-    return () => {
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-    // previewUrl is intentionally omitted so each render captures the URL it replaces.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    previewTemplateId,
-    previewPlaceholders,
-    previewBindings,
-    dynamicImagePlaceholderKey,
-    selectedUrl,
-    activeObjectPosition,
-    activeScale,
-  ]);
-
-  useEffect(() => {
-    return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-    };
-  }, [previewUrl]);
+  const previewData = useMemo(
+    () => buildPreviewData({
+      placeholders: previewPlaceholders,
+      bindings: previewBindings,
+      dynamicKey: dynamicImagePlaceholderKey,
+      selectedValue: placementToPlaceholderValue(selectedUrl, {
+        objectPosition: activeObjectPosition,
+        scale: activeScale,
+      }),
+    }),
+    [previewPlaceholders, previewBindings, dynamicImagePlaceholderKey,
+      selectedUrl, activeObjectPosition, activeScale],
+  );
 
   async function lockImage() {
     if (!selectedUrl) {
@@ -558,28 +510,13 @@ export function PreviewDesignImagePicker({
                 </p>
               ) : null}
             </div>
-            {previewLoading ? (
-              <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
-            ) : (
-              <RefreshCw className="size-3.5 text-muted-foreground" />
-            )}
           </div>
 
-          <div className="overflow-hidden rounded-md border bg-muted/20">
-            {previewUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={previewUrl} alt="" className="w-full" />
-            ) : (
-              <div className="flex aspect-square items-center justify-center p-6 text-center text-xs text-muted-foreground">
-                {selectedUrl
-                  ? (previewError ?? "Rendering preview...")
-                  : "Choose or paste an image to render a preview."}
-              </div>
-            )}
-          </div>
-          {previewError ? (
-            <p className="mt-2 text-xs text-destructive">{previewError}</p>
-          ) : null}
+          <LiveTemplatePreview
+            templateId={previewTemplateId}
+            data={previewData}
+            images={allCandidates}
+          />
         </div>
       </aside>
     </div>

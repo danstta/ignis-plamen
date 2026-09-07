@@ -20,10 +20,12 @@ export function TemplatePreview({
   canvas,
   data,
   className,
+  imageSources,
 }: {
   canvas: CanvasView;
   data?: PlaceholderData;
   className?: string;
+  imageSources?: ReadonlyMap<string, string>;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0);
@@ -59,7 +61,7 @@ export function TemplatePreview({
   return (
     <div
       ref={containerRef}
-      className={cn("relative overflow-hidden bg-muted", className)}
+      className={cn("relative overflow-hidden bg-muted [&_img]:max-w-none", className)}
     >
       {scale > 0 && (
         <div
@@ -71,7 +73,11 @@ export function TemplatePreview({
             transform: `translate(-50%, -50%) scale(${scale})`,
           }}
         >
-          <TemplateRenderer canvas={resolved} data={data} />
+          <TemplateRenderer
+            canvas={resolved}
+            data={data}
+            imageSources={imageSources}
+          />
         </div>
       )}
     </div>

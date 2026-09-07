@@ -4,7 +4,6 @@ import { ArrowLeft, ChevronDown } from "lucide-react";
 import { getRun, getRunLogs } from "@/lib/workflows/runs-service";
 import { getWorkflow } from "@/lib/workflows/service";
 import { nodeDisplayLabel } from "@/lib/nodes/catalog";
-import { browserPreviewUrlForImageUrl } from "@/lib/nodes/image-input";
 import { formatRelativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { PlaceholderDescriptor } from "@/lib/editor/types";
@@ -20,49 +19,6 @@ import { RunNodeCard } from "./run-node-card";
 import { StopRunButton } from "./stop-run-button";
 
 export const dynamic = "force-dynamic";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function cleanUrl(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
-function imagePreviewSrc(input: {
-  url: string;
-  previewUrl?: string;
-  thumbnailLink?: string;
-}): string {
-  return (
-    input.previewUrl ??
-    input.thumbnailLink ??
-    browserPreviewUrlForImageUrl(input.url) ??
-    input.url
-  );
-}
-
-function firstImageFromList(
-  value: unknown,
-): { url: string; previewUrl?: string; thumbnailLink?: string } | undefined {
-  if (!Array.isArray(value)) return undefined;
-  for (const item of value) {
-    if (typeof item === "string") {
-      const url = cleanUrl(item);
-      if (url) return { url };
-      continue;
-    }
-    if (!isRecord(item)) continue;
-    const url = cleanUrl(item.url);
-    if (!url) continue;
-    return {
-      url,
-      previewUrl: cleanUrl(item.previewUrl),
-      thumbnailLink: cleanUrl(item.thumbnailLink),
-    };
-  }
-  return undefined;
-}
 
 function uniqueUrls(urls: string[]): string[] {
   return [...new Set(urls.filter((url) => url.trim()).map((url) => url.trim()))];
@@ -81,64 +37,6 @@ function findRenderUrls(outputs: Record<string, Record<string, unknown>>): strin
     if (typeof one === "string" && one) urls.push(one);
   }
   return uniqueUrls(urls);
-}
-
-function chosenLabel(type: string): string {
-  if (type === "review-designs") return "Chosen design";
-  if (type === "preview-design-image") return "Locked image";
-  if (type === "manual-review") return "Chosen image";
-  return "Chosen image";
-}
-
-function findChosenImage(
-  graph: WorkflowGraph,
-  outputs: Record<string, Record<string, unknown>>,
-): { url: string; src: string; label: string; source: string } | undefined {
-  let candidate:
-    | { url: string; src: string; label: string; source: string }
-    | undefined;
-
-  for (const node of graph.nodes) {
-    const out = outputs[node.id];
-    if (!out) continue;
-
-    const source = nodeDisplayLabel(node);
-    const chosen =
-      cleanUrl(out.chosen) ??
-      (isRecord(out.chosenDesign) ? cleanUrl(out.chosenDesign.url) : undefined);
-    if (chosen) {
-      candidate = {
-        url: chosen,
-        src: imagePreviewSrc({ url: chosen }),
-        label: chosenLabel(node.type),
-        source,
-      };
-      continue;
-    }
-
-    const best = cleanUrl(out.best);
-    if (best) {
-      candidate = {
-        url: best,
-        src: imagePreviewSrc({ url: best }),
-        label: "Best image",
-        source,
-      };
-      continue;
-    }
-
-    const selected = firstImageFromList(out.selectedUrls) ?? firstImageFromList(out.selected);
-    if (selected) {
-      candidate = {
-        url: selected.url,
-        src: imagePreviewSrc(selected),
-        label: "Top selected image",
-        source,
-      };
-    }
-  }
-
-  return candidate;
 }
 
 function JsonDisclosure({
@@ -177,14 +75,10 @@ export default async function RunDetailPage({
 
   const graph = workflow.graph as WorkflowGraph;
   const renderUrls = findRenderUrls(run.nodeOutputs);
-  const chosenImage = findChosenImage(graph, run.nodeOutputs);
   const renderedItems = renderUrls.map((url, index) => ({
     url,
     label: `Page ${index + 1}`,
   }));
-  const renderedGridItems = chosenImage
-    ? renderedItems.filter((item) => item.url !== chosenImage.url)
-    : renderedItems;
 
   const waitingCandidates =
     run.status === "waiting" && run.waitingNodeId
@@ -409,29 +303,7 @@ export default async function RunDetailPage({
       ) : null}
 
       <div className={readingColumn}>
-        {chosenImage ? (
-          <section className="mt-6">
-            <div className="mb-2 flex items-baseline gap-2">
-              <h2 className="text-sm font-semibold">{chosenImage.label}</h2>
-              <span className="text-xs text-muted-foreground">{chosenImage.source}</span>
-            </div>
-            <a
-              href={chosenImage.url}
-              target="_blank"
-              rel="noreferrer"
-              className="block w-fit outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={chosenImage.src}
-                alt={`${chosenImage.label} from ${chosenImage.source}`}
-                className="max-h-44 w-auto max-w-full rounded-md border bg-muted/20 object-contain"
-              />
-            </a>
-          </section>
-        ) : null}
-
-        {renderedGridItems.length > 0 ? (
+        {renderedItems.length > 0 ? (
           <section className="mt-6">
             <div className="flex items-baseline justify-between gap-3">
               <h2 className="text-sm font-semibold">
@@ -440,7 +312,7 @@ export default async function RunDetailPage({
               </h2>
             </div>
             <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-5">
-              {renderedGridItems.map((item) => (
+              {renderedItems.map((item) => (
                 <figure key={item.url} className="min-w-0">
                   <a
                     href={item.url}

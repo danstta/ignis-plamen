@@ -37,6 +37,12 @@ import {
   ToolButton,
   type ImagePlacement,
 } from "@/lib/nodes/image-framing";
+import {
+  PickerLayout,
+  PickerSection,
+  PickerToolbar,
+  TileGrid,
+} from "@/lib/nodes/picker-layout";
 import { cn } from "@/lib/utils";
 
 type Candidate = {
@@ -55,8 +61,12 @@ type Candidate = {
 type PreviewPlaceholder = PlaceholderDescriptor;
 type SelectedImageValue = { url: string } & ImagePlacement;
 
-/** Alternates are paged so at most this many tiles are mounted at once (a 3x3 grid). */
-const ALTERNATES_PAGE_SIZE = 9;
+/**
+ * Alternates are paged so at most this many tiles are mounted at once. Fifteen
+ * fills three rows of the shared tile grid at the width the run page gives the
+ * picker, and covers the node's default alternate count in a single page.
+ */
+const ALTERNATES_PAGE_SIZE = 15;
 /** Alternate pages warmed ahead of the current one so paging never waits on loads. */
 const ALTERNATES_PRELOAD_PAGES = 2;
 
@@ -152,11 +162,11 @@ function valueForTextPlaceholder(value: unknown): string {
 }
 
 function TileImage({ image }: { image: Candidate }) {
-  // Tiles fade in over a pulsing skeleton instead of popping out of an empty
-  // (near-black in dark mode) box while the thumbnail downloads.
+  // Tiles fade in over a filled box instead of popping out of an empty
+  // (near-black in dark mode) one while the thumbnail downloads.
   const [loaded, setLoaded] = useState(false);
   return (
-    <div className={cn("aspect-square w-full", !loaded && "animate-pulse bg-muted/60")}>
+    <div className={cn("aspect-square w-full", !loaded && "bg-muted/60")}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={imageThumbnailSrc(image, PREVIEW_THUMBNAIL_SIZE)}
@@ -302,6 +312,7 @@ function EmptySlot({ index }: { index: number }) {
   );
 }
 
+/** The whole tile adds the image — the section copy tells you to click images. */
 function AlternateTile({
   image,
   disabled,
@@ -312,21 +323,19 @@ function AlternateTile({
   onAdd: () => void;
 }) {
   return (
-    <div className="group relative overflow-hidden rounded-md border bg-muted/20">
+    <button
+      type="button"
+      onClick={onAdd}
+      disabled={disabled}
+      aria-label={image.name ? `Add ${image.name}` : "Add image"}
+      className="group relative block overflow-hidden rounded-md border bg-muted/20 text-left outline-none transition-colors hover:border-foreground/40 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+    >
       <TileImage image={image} />
       <CategoryBadge image={image} />
-      <Button
-        type="button"
-        size="icon-sm"
-        variant="secondary"
-        onClick={onAdd}
-        disabled={disabled}
-        aria-label="Add"
-        className="absolute right-2 top-2 opacity-[0.85] shadow-sm transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
-      >
+      <span className="pointer-events-none absolute right-2 top-2 inline-flex size-7 items-center justify-center rounded-md bg-background/85 text-foreground opacity-0 shadow-sm backdrop-blur transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
         <Plus className="size-4" />
-      </Button>
-    </div>
+      </span>
+    </button>
   );
 }
 
@@ -356,6 +365,88 @@ function FolderChip({
       <span className="truncate">{label}</span>
       <span className="tabular-nums text-muted-foreground">{count}</span>
     </Button>
+  );
+}
+
+/**
+ * Folder filter for the alternates. Sits directly above the grid it filters,
+ * with "All" first so the unfiltered pool is always one click away. Counts are
+ * the images still available to add, so a folder that reads 0 is exhausted.
+ */
+function FolderFilterBar({
+  folders,
+  activeFolderId,
+  totalCount,
+  disabled,
+  onSelect,
+}: {
+  folders: FolderOption[];
+  activeFolderId: string;
+  totalCount: number;
+  disabled?: boolean;
+  onSelect: (folderId: string) => void;
+}) {
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-1.5">
+      <FolderChip
+        label="All"
+        count={totalCount}
+        active={!activeFolderId}
+        disabled={disabled}
+        onClick={() => onSelect("")}
+      />
+      {folders.map((folder) => (
+        <FolderChip
+          key={folder.id}
+          label={folder.name}
+          count={folder.count}
+          active={activeFolderId === folder.id}
+          disabled={disabled || folder.count === 0}
+          onClick={() => onSelect(folder.id)}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Compact page stepper, sized to sit in the alternates section heading. */
+function AlternatesPager({
+  page,
+  pageCount,
+  disabled,
+  onChange,
+}: {
+  page: number;
+  pageCount: number;
+  disabled?: boolean;
+  onChange: (page: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-0.5">
+      <Button
+        type="button"
+        size="icon-xs"
+        variant="ghost"
+        aria-label="Previous page"
+        disabled={disabled || page === 0}
+        onClick={() => onChange(page - 1)}
+      >
+        <ChevronLeft className="size-3" />
+      </Button>
+      <span className="min-w-12 text-center text-[11px] tabular-nums text-muted-foreground">
+        {page + 1} / {pageCount}
+      </span>
+      <Button
+        type="button"
+        size="icon-xs"
+        variant="ghost"
+        aria-label="Next page"
+        disabled={disabled || page >= pageCount - 1}
+        onClick={() => onChange(page + 1)}
+      >
+        <ChevronRight className="size-3" />
+      </Button>
+    </div>
   );
 }
 
@@ -484,7 +575,7 @@ export function SelectImagesPicker({
   selected: Candidate[];
   alternates: Candidate[];
   selectionCount: number;
-  /** Enables the folder filter under the alternates (Select Images config). */
+  /** Enables the folder filter above the alternates (Select Images config). */
   groupByFolder?: boolean;
   previewTemplateId?: string;
   previewPlaceholders?: PreviewPlaceholder[];
@@ -676,13 +767,23 @@ export function SelectImagesPicker({
     }
   }
 
+  const selectedHint =
+    selectedImages.length === 0
+      ? "Click images below to fill the slots"
+      : selectedImages.length > 1
+        ? "Drag to reorder"
+        : undefined;
+
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
-      <div className="space-y-5">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-muted-foreground">
-            {selectedImages.length}/{selectionCount} selected
-          </p>
+    <PickerLayout
+      toolbar={
+        <PickerToolbar
+          status={
+            <span className="tabular-nums">
+              {selectedImages.length} of {selectionCount} selected
+            </span>
+          }
+        >
           <Button
             type="button"
             size="sm"
@@ -692,196 +793,138 @@ export function SelectImagesPicker({
             <Check className="size-4" />
             Continue
           </Button>
-        </div>
-
-        <section>
-          <div className="mb-2 flex items-baseline justify-between gap-3">
+        </PickerToolbar>
+      }
+      aside={
+        previewTemplateId ? (
+          <>
             <h3 className="text-xs font-medium text-muted-foreground">
-              Selected
+              Template preview
             </h3>
-            <span className="text-[11px] text-muted-foreground">
-              {selectedImages.length === 0
-                ? "Click images below to fill the slots"
-                : selectedImages.length > 1
-                  ? "Drag to reorder"
-                  : null}
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            {Array.from({ length: selectionCount }, (_, index) => {
-              const image = selectedImages[index];
-              if (!image) return <EmptySlot key={`slot-${index}`} index={index} />;
-              return (
-                <SelectedTile
-                  key={image.url}
-                  image={image}
-                  index={index}
-                  active={effectiveFramingUrl === image.url}
-                  dragging={draggingUrl === image.url}
-                  dropTarget={
-                    dragOverUrl === image.url && draggingUrl !== image.url
-                  }
-                  disabled={submitting}
-                  onRemove={() => remove(image.url)}
-                  onFrame={() =>
-                    setFramingUrl((current) =>
-                      current === image.url ? "" : image.url,
-                    )
-                  }
-                  onDragStart={() => {
-                    setDraggingUrl(image.url);
-                    setDragOverUrl(image.url);
-                  }}
-                  onDragEnter={() => setDragOverUrl(image.url)}
-                  onDrop={() => handleDrop(image.url)}
-                  onDragEnd={() => {
-                    setDraggingUrl("");
-                    setDragOverUrl("");
-                  }}
-                />
-              );
-            })}
-          </div>
-          {activePlacement ? (
-            <FramingPanel
-              image={byUrl.get(effectiveFramingUrl)}
-              placement={activePlacement}
-              disabled={submitting}
-              activeIndex={framingIndex >= 0 ? framingIndex : undefined}
-              canMoveEarlier={framingIndex > 0}
-              canMoveLater={
-                framingIndex >= 0 && framingIndex < selectedImages.length - 1
-              }
-              onPositionChange={(objectPosition) =>
-                updatePlacement(effectiveFramingUrl, { objectPosition })
-              }
-              onScaleChange={(scale) =>
-                updatePlacement(effectiveFramingUrl, { scale })
-              }
-              onReset={() => resetPlacement(effectiveFramingUrl)}
-              onMoveEarlier={() => move(effectiveFramingUrl, -1)}
-              onMoveLater={() => move(effectiveFramingUrl, 1)}
-              onClose={() => setFramingUrl("")}
-            />
-          ) : null}
-        </section>
-
-        <section>
-          <div className="mb-2 flex items-baseline justify-between gap-3">
-            <h3 className="text-xs font-medium text-muted-foreground">
-              Alternates
-            </h3>
-            {alternateImages.length > 0 ? (
-              <span className="text-[11px] text-muted-foreground">
-                {alternatePageStart + 1}-
-                {alternatePageStart + shownAlternates.length} of{" "}
-                {alternateImages.length}
-              </span>
-            ) : null}
-          </div>
-          {alternateImages.length === 0 ? (
-            <p className="rounded-md border border-dashed p-6 text-center text-xs text-muted-foreground">
-              {activeFolderId
-                ? "Every image in this folder is already selected."
-                : "No more images to add."}
-            </p>
-          ) : (
-            <>
-              <div className="grid grid-cols-3 gap-3">
-                {shownAlternates.map((image) => (
-                  <AlternateTile
-                    key={image.url}
-                    image={image}
-                    disabled={submitting || atSelectionLimit}
-                    onAdd={() => add(image.url)}
-                  />
-                ))}
-              </div>
-              {alternatePageCount > 1 ? (
-                <div className="mt-3 flex items-center justify-center gap-3">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={currentAlternatePage === 0}
-                    onClick={() =>
-                      setAlternatePage(Math.max(0, currentAlternatePage - 1))
-                    }
-                  >
-                    <ChevronLeft className="size-4" />
-                    Previous
-                  </Button>
-                  <span className="text-[11px] tabular-nums text-muted-foreground">
-                    Page {currentAlternatePage + 1} of {alternatePageCount}
-                  </span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={currentAlternatePage >= alternatePageCount - 1}
-                    onClick={() =>
-                      setAlternatePage(
-                        Math.min(alternatePageCount - 1, currentAlternatePage + 1),
-                      )
-                    }
-                  >
-                    Next
-                    <ChevronRight className="size-4" />
-                  </Button>
-                </div>
-              ) : null}
-            </>
-          )}
-          {groupByFolder && folders.length === 0 ? (
-            <p className="mt-3 text-[11px] text-muted-foreground">
-              Folder grouping is on, but these images carry no source folder.
-              Connect this node to the Drive node&apos;s Images output, not
-              Image links, and start a new run.
-            </p>
-          ) : null}
-          {showFolders ? (
-            <div className="mt-3 flex flex-wrap items-center gap-1.5">
-              <span className="mr-1 text-[11px] text-muted-foreground">
-                Folder
-              </span>
-              <FolderChip
-                label="All"
-                count={unselectedImages.length}
-                active={!activeFolderId}
-                disabled={submitting}
-                onClick={() => selectFolder("")}
-              />
-              {folders.map((folder) => (
-                <FolderChip
-                  key={folder.id}
-                  label={folder.name}
-                  count={folder.count}
-                  active={activeFolderId === folder.id}
-                  disabled={submitting || folder.count === 0}
-                  onClick={() => selectFolder(folder.id)}
-                />
-              ))}
-            </div>
-          ) : null}
-        </section>
-      </div>
-
-      {previewTemplateId ? (
-        <aside className="min-w-0">
-          <div className="sticky top-4">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <h3 className="text-xs font-medium text-muted-foreground">
-                Template preview
-              </h3>
-            </div>
             <LiveTemplatePreview
               templateId={previewTemplateId}
               data={previewData}
               images={allImages}
             />
-          </div>
-        </aside>
-      ) : null}
-    </div>
+          </>
+        ) : undefined
+      }
+    >
+      <PickerSection title="Selected" meta={selectedHint}>
+        <TileGrid>
+          {Array.from({ length: selectionCount }, (_, index) => {
+            const image = selectedImages[index];
+            if (!image) return <EmptySlot key={`slot-${index}`} index={index} />;
+            return (
+              <SelectedTile
+                key={image.url}
+                image={image}
+                index={index}
+                active={effectiveFramingUrl === image.url}
+                dragging={draggingUrl === image.url}
+                dropTarget={
+                  dragOverUrl === image.url && draggingUrl !== image.url
+                }
+                disabled={submitting}
+                onRemove={() => remove(image.url)}
+                onFrame={() =>
+                  setFramingUrl((current) =>
+                    current === image.url ? "" : image.url,
+                  )
+                }
+                onDragStart={() => {
+                  setDraggingUrl(image.url);
+                  setDragOverUrl(image.url);
+                }}
+                onDragEnter={() => setDragOverUrl(image.url)}
+                onDrop={() => handleDrop(image.url)}
+                onDragEnd={() => {
+                  setDraggingUrl("");
+                  setDragOverUrl("");
+                }}
+              />
+            );
+          })}
+        </TileGrid>
+        {activePlacement ? (
+          <FramingPanel
+            image={byUrl.get(effectiveFramingUrl)}
+            placement={activePlacement}
+            disabled={submitting}
+            activeIndex={framingIndex >= 0 ? framingIndex : undefined}
+            canMoveEarlier={framingIndex > 0}
+            canMoveLater={
+              framingIndex >= 0 && framingIndex < selectedImages.length - 1
+            }
+            onPositionChange={(objectPosition) =>
+              updatePlacement(effectiveFramingUrl, { objectPosition })
+            }
+            onScaleChange={(scale) =>
+              updatePlacement(effectiveFramingUrl, { scale })
+            }
+            onReset={() => resetPlacement(effectiveFramingUrl)}
+            onMoveEarlier={() => move(effectiveFramingUrl, -1)}
+            onMoveLater={() => move(effectiveFramingUrl, 1)}
+            onClose={() => setFramingUrl("")}
+          />
+        ) : null}
+      </PickerSection>
+
+      <PickerSection
+        title="Alternates"
+        meta={
+          alternateImages.length > 0
+            ? `${alternatePageStart + 1}-${alternatePageStart + shownAlternates.length} of ${alternateImages.length}`
+            : undefined
+        }
+        actions={
+          alternatePageCount > 1 ? (
+            <AlternatesPager
+              page={currentAlternatePage}
+              pageCount={alternatePageCount}
+              disabled={submitting}
+              onChange={setAlternatePage}
+            />
+          ) : null
+        }
+      >
+        {groupByFolder && folders.length === 0 ? (
+          <p className="mb-3 text-[11px] text-muted-foreground">
+            Folder grouping is on, but these images carry no source folder.
+            Connect this node to the Drive node&apos;s Images output, not Image
+            links, and start a new run.
+          </p>
+        ) : null}
+
+        {showFolders ? (
+          <FolderFilterBar
+            folders={folders}
+            activeFolderId={activeFolderId}
+            totalCount={unselectedImages.length}
+            disabled={submitting}
+            onSelect={selectFolder}
+          />
+        ) : null}
+
+        {alternateImages.length === 0 ? (
+          <p className="rounded-md border border-dashed p-6 text-center text-xs text-muted-foreground">
+            {activeFolderId
+              ? "Every image in this folder is already selected."
+              : "No more images to add."}
+          </p>
+        ) : (
+          <TileGrid>
+            {shownAlternates.map((image) => (
+              <AlternateTile
+                key={image.url}
+                image={image}
+                disabled={submitting || atSelectionLimit}
+                onAdd={() => add(image.url)}
+              />
+            ))}
+          </TileGrid>
+        )}
+      </PickerSection>
+    </PickerLayout>
   );
 }

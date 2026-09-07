@@ -6,6 +6,11 @@ import { Check, Grid2X2, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { imagePreviewSrc } from "@/lib/nodes/image-preview";
+import {
+  PickerLayout,
+  PickerToolbar,
+  TileGrid,
+} from "@/lib/nodes/picker-layout";
 import { cn } from "@/lib/utils";
 
 type Candidate = {
@@ -139,8 +144,91 @@ export function ManualReviewPicker({
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+    <PickerLayout
+      toolbar={
+        <PickerToolbar
+          status={
+            <span>
+              <span className="tabular-nums">{candidates.length}</span>{" "}
+              {itemLabel}
+              {candidates.length === 1 ? "" : "s"}
+              {gridPreviewEnabled
+                ? " · pick one to preview it in the grid"
+                : " · click one to finish the run"}
+            </span>
+          }
+        >
+          {gridPreviewEnabled ? (
+            <Button
+              type="button"
+              size="sm"
+              disabled={!effectiveSelectedUrl || submitting !== null}
+              onClick={() => effectiveSelectedUrl && pick(effectiveSelectedUrl)}
+            >
+              {submitting ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Check className="size-4" />
+              )}
+              {submitting ? "Selecting" : `Use selected ${itemLabel}`}
+            </Button>
+          ) : null}
+        </PickerToolbar>
+      }
+      aside={
+        gridPreviewEnabled ? (
+          <div className="rounded-lg border bg-background p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="flex items-center gap-2 text-sm font-medium">
+                  <Grid2X2 className="size-4" /> @{username}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Preview as the next post
+                </p>
+              </div>
+              {loadingPosts ? (
+                <Loader2 className="size-4 animate-spin text-muted-foreground" />
+              ) : (
+                <RefreshCw className="size-4 text-muted-foreground" />
+              )}
+            </div>
+
+            {postsError ? (
+              <p className="mt-3 rounded-md border border-dashed p-2 text-xs text-muted-foreground">
+                {postsError}
+              </p>
+            ) : null}
+
+            <div className="mt-3 grid grid-cols-3 gap-1 overflow-hidden rounded-md bg-muted p-1">
+              {previewTiles.length > 0
+                ? previewTiles.map((tile) => (
+                    <div
+                      key={tile.id}
+                      className={cn(
+                        "relative aspect-square overflow-hidden bg-background",
+                        "isSelectedDesign" in tile &&
+                          tile.isSelectedDesign &&
+                          "ring-2 ring-inset ring-emerald-500",
+                      )}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={tile.imageUrl}
+                        alt=""
+                        className="size-full object-cover"
+                      />
+                    </div>
+                  ))
+                : Array.from({ length: 9 }).map((_, index) => (
+                    <div key={index} className="aspect-square bg-background" />
+                  ))}
+            </div>
+          </div>
+        ) : undefined
+      }
+    >
+      <TileGrid>
         {candidates.map((c) => {
           const selected = effectiveSelectedUrl === c.url;
           return (
@@ -150,7 +238,7 @@ export function ManualReviewPicker({
               onClick={() => (gridPreviewEnabled ? setSelectedUrl(c.url) : pick(c.url))}
               disabled={submitting !== null}
               className={cn(
-                "group relative overflow-hidden rounded-lg border bg-muted/30 text-left transition-colors hover:border-foreground/40 disabled:opacity-60",
+                "group relative overflow-hidden rounded-lg border bg-muted/30 text-left outline-none transition-colors hover:border-foreground/40 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60",
                 selected && "border-foreground/70 ring-2 ring-foreground/10",
               )}
             >
@@ -165,7 +253,7 @@ export function ManualReviewPicker({
                   <Check className="size-3.5" />
                 </span>
               ) : null}
-              <span className="absolute inset-x-0 bottom-0 bg-black/50 px-2 py-1 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100">
+              <span className="absolute inset-x-0 bottom-0 bg-black/50 px-2 py-1 text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
                 {submitting === c.url
                   ? "Selecting..."
                   : gridPreviewEnabled
@@ -175,75 +263,7 @@ export function ManualReviewPicker({
             </button>
           );
         })}
-      </div>
-
-      {gridPreviewEnabled ? (
-        <aside className="rounded-lg border bg-background p-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="flex items-center gap-2 text-sm font-medium">
-                <Grid2X2 className="size-4" /> @{username}
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Preview as the next post
-              </p>
-            </div>
-            {loadingPosts ? (
-              <Loader2 className="size-4 animate-spin text-muted-foreground" />
-            ) : (
-              <RefreshCw className="size-4 text-muted-foreground" />
-            )}
-          </div>
-
-          {postsError ? (
-            <p className="mt-3 rounded-md border border-dashed p-2 text-xs text-muted-foreground">
-              {postsError}
-            </p>
-          ) : null}
-
-          <div className="mt-3 grid grid-cols-3 gap-1 overflow-hidden rounded-md bg-muted p-1">
-            {previewTiles.length > 0
-              ? previewTiles.map((tile) => (
-                  <div
-                    key={tile.id}
-                    className={cn(
-                      "relative aspect-square overflow-hidden bg-background",
-                      "isSelectedDesign" in tile &&
-                        tile.isSelectedDesign &&
-                        "ring-2 ring-inset ring-emerald-500",
-                    )}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={tile.imageUrl}
-                      alt=""
-                      className="size-full object-cover"
-                    />
-                  </div>
-                ))
-              : Array.from({ length: 9 }).map((_, index) => (
-                  <div
-                    key={index}
-                    className="aspect-square animate-pulse bg-background"
-                  />
-                ))}
-          </div>
-
-          <Button
-            type="button"
-            className="mt-3 w-full"
-            disabled={!effectiveSelectedUrl || submitting !== null}
-            onClick={() => effectiveSelectedUrl && pick(effectiveSelectedUrl)}
-          >
-            {submitting ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Check className="size-4" />
-            )}
-            {submitting ? "Selecting" : `Use selected ${itemLabel}`}
-          </Button>
-        </aside>
-      ) : null}
-    </div>
+      </TileGrid>
+    </PickerLayout>
   );
 }

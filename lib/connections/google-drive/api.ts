@@ -17,6 +17,9 @@ export interface GoogleDriveImageFile {
   directLink: string;
   widthPx?: number;
   heightPx?: number;
+  /** The folder the file itself sits in, not the root of the walked tree. */
+  folderId: string;
+  folderName: string;
 }
 
 export interface GoogleDriveUploadedFile {
@@ -151,6 +154,7 @@ export function parseGoogleDriveFolderId(input: string): string {
 function toImageFile(
   file: DriveFileResponse,
   connectionId: string,
+  folder: DriveFolder,
 ): GoogleDriveImageFile | undefined {
   if (!file.id || !file.mimeType?.startsWith("image/")) return undefined;
   return {
@@ -164,6 +168,8 @@ function toImageFile(
     directLink: driveDirectLink(file.id),
     widthPx: file.imageMediaMetadata?.width,
     heightPx: file.imageMediaMetadata?.height,
+    folderId: folder.id,
+    folderName: folder.name,
   };
 }
 
@@ -171,20 +177,26 @@ function isDriveFolder(file: DriveFileResponse): file is DriveFileResponse & { i
   return file.mimeType === DRIVE_FOLDER_MIME && Boolean(file.id);
 }
 
+/** A folder in the walked tree, carried so each image can name its own parent. */
+interface DriveFolder {
+  id: string;
+  name: string;
+}
+
 async function listGoogleDriveFolderChildren(input: {
   connectionId: string;
   token: string;
-  folderId: string;
+  folder: DriveFolder;
   maxImages: number;
   images: GoogleDriveImageFile[];
-}): Promise<string[]> {
+}): Promise<DriveFolder[]> {
   const q = [
-    `'${escapeDriveQueryValue(input.folderId)}' in parents`,
+    `'${escapeDriveQueryValue(input.folder.id)}' in parents`,
     "trashed = false",
     `(mimeType = '${DRIVE_FOLDER_MIME}' or mimeType contains 'image/')`,
   ].join(" and ");
 
-  const childFolderIds: string[] = [];
+  const childFolders: DriveFolder[] = [];
   let pageToken: string | undefined;
 
   do {
@@ -221,11 +233,11 @@ async function listGoogleDriveFolderChildren(input: {
 
     for (const file of body?.files ?? []) {
       if (isDriveFolder(file)) {
-        childFolderIds.push(file.id);
+        childFolders.push({ id: file.id, name: file.name ?? file.id });
         continue;
       }
 
-      const image = toImageFile(file, input.connectionId);
+      const image = toImageFile(file, input.connectionId, input.folder);
       if (!image) continue;
       input.images.push(image);
       if (input.images.length >= input.maxImages) break;
@@ -234,7 +246,31 @@ async function listGoogleDriveFolderChildren(input: {
     pageToken = input.images.length < input.maxImages ? body?.nextPageToken : undefined;
   } while (pageToken);
 
-  return childFolderIds;
+  return childFolders;
+}
+
+/**
+ * Names the folder the walk starts from. Child folder names arrive with the
+ * listing, but the root's only reaches us as an id, so it costs one lookup.
+ */
+async function fetchDriveFolderName(input: {
+  token: string;
+  folderId: string;
+}): Promise<string> {
+  const url = new URL(`${DRIVE_FILES_URL}/${encodeURIComponent(input.folderId)}`);
+  url.searchParams.set("fields", "name");
+  url.searchParams.set("supportsAllDrives", "true");
+
+  const res = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${input.token}`,
+    },
+  });
+  if (!res.ok) return input.folderId;
+
+  const body = (await res.json().catch(() => null)) as DriveFileResponse | null;
+  return body?.name ?? input.folderId;
 }
 
 export async function listGoogleDriveFolderImages(input: {
@@ -248,25 +284,27 @@ export async function listGoogleDriveFolderImages(input: {
   const token = await ensureFreshToken(input.connectionId);
   const maxImages = Math.max(1, Math.trunc(input.maxImages));
   const images: GoogleDriveImageFile[] = [];
-  const folderQueue = [folderId];
+  const folderQueue: DriveFolder[] = [
+    { id: folderId, name: await fetchDriveFolderName({ token, folderId }) },
+  ];
   const visitedFolderIds = new Set<string>();
   let folderIndex = 0;
 
   while (folderIndex < folderQueue.length && images.length < maxImages) {
-    const currentFolderId = folderQueue[folderIndex++];
-    if (!currentFolderId || visitedFolderIds.has(currentFolderId)) continue;
-    visitedFolderIds.add(currentFolderId);
+    const currentFolder = folderQueue[folderIndex++];
+    if (!currentFolder || visitedFolderIds.has(currentFolder.id)) continue;
+    visitedFolderIds.add(currentFolder.id);
 
-    const childFolderIds = await listGoogleDriveFolderChildren({
+    const childFolders = await listGoogleDriveFolderChildren({
       token,
       connectionId: input.connectionId,
-      folderId: currentFolderId,
+      folder: currentFolder,
       maxImages,
       images,
     });
 
-    for (const childFolderId of childFolderIds) {
-      if (!visitedFolderIds.has(childFolderId)) folderQueue.push(childFolderId);
+    for (const childFolder of childFolders) {
+      if (!visitedFolderIds.has(childFolder.id)) folderQueue.push(childFolder);
     }
   }
 

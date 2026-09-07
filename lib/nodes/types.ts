@@ -144,6 +144,9 @@ export interface ImageCandidate {
   originalMimeType?: string;
   originalUrl?: string;
   name?: string;
+  /** Source folder, when the image came from a folder-backed source like Drive. */
+  folderId?: string;
+  folderName?: string;
   webViewLink?: string;
   webContentLink?: string;
   directLink?: string;

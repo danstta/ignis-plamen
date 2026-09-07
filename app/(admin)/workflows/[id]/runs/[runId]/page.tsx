@@ -7,6 +7,7 @@ import { nodeDisplayLabel } from "@/lib/nodes/catalog";
 import { browserPreviewUrlForImageUrl } from "@/lib/nodes/image-input";
 import { formatRelativeTime } from "@/lib/format";
 import type { PlaceholderDescriptor } from "@/lib/editor/types";
+import type { ImageCandidate } from "@/lib/nodes/types";
 import type { WorkflowGraph } from "@/lib/workflows/types";
 import { RunStatusBadge } from "@/components/workflow/run-status-badge";
 import { SelectImagesPicker } from "@/plugins/core/nodes/select-images/picker";
@@ -202,28 +203,20 @@ export default async function RunDetailPage({
   const reviewItemLabel = reviewKind === "designs" ? "design" : "image";
   const waitingSelected =
     run.status === "waiting" && run.waitingNodeId
-      ? ((run.nodeOutputs[run.waitingNodeId]?.selected ?? []) as {
-          url: string;
-          attribution?: string;
-          category?: string;
-          categoryReason?: string;
-          categorized?: boolean;
-        }[])
+      ? ((run.nodeOutputs[run.waitingNodeId]?.selected ?? []) as ImageCandidate[])
       : [];
   const waitingAlternates =
     run.status === "waiting" && run.waitingNodeId
-      ? ((run.nodeOutputs[run.waitingNodeId]?.alternates ?? []) as {
-          url: string;
-          attribution?: string;
-          category?: string;
-          categoryReason?: string;
-          categorized?: boolean;
-        }[])
+      ? ((run.nodeOutputs[run.waitingNodeId]?.alternates ?? []) as ImageCandidate[])
       : [];
   const waitingSelectionCount =
     run.status === "waiting" && run.waitingNodeId
       ? Number(run.nodeOutputs[run.waitingNodeId]?.selectionCount ?? 10)
       : 10;
+  const waitingGroupByFolder =
+    run.status === "waiting" && run.waitingNodeId
+      ? run.nodeOutputs[run.waitingNodeId]?.groupByFolder === true
+      : false;
   const previewTemplateId =
     run.status === "waiting" && run.waitingNodeId
       ? String(run.nodeOutputs[run.waitingNodeId]?.previewTemplateId ?? "")
@@ -356,6 +349,7 @@ export default async function RunDetailPage({
             selected={waitingSelected}
             alternates={waitingAlternates}
             selectionCount={waitingSelectionCount}
+            groupByFolder={waitingGroupByFolder}
             previewTemplateId={previewTemplateId}
             previewPlaceholders={previewPlaceholders}
             previewBindings={previewBindings}

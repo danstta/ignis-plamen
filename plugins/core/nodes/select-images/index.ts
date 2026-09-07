@@ -112,6 +112,7 @@ export const selectImagesNode: NodeDefinition<SelectImagesConfig> = {
       state: {
         reviewKind: "image-set",
         selectionCount: ctx.config.selectionCount,
+        groupByFolder: ctx.config.groupByFolder,
         previewTemplateId: previewTemplate?.id ?? "",
         previewPlaceholders,
         previewBindings: ctx.config.placeholders,

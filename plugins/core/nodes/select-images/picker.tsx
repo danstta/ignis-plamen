@@ -46,6 +46,8 @@ type Candidate = {
   thumbnailLink?: string;
   mimeType?: string;
   name?: string;
+  folderId?: string;
+  folderName?: string;
   category?: string;
   categoryReason?: string;
   categorized?: boolean;
@@ -65,6 +67,40 @@ function uniqueByUrl(images: Candidate[]): Candidate[] {
     seen.add(image.url);
     return true;
   });
+}
+
+type FolderOption = { id: string; name: string; count: number };
+
+/**
+ * Folder chips for the alternates filter. The list comes from every image so
+ * the row never reflows as you select, while each count reflects only the
+ * images still available to add. An empty result means no image carries a
+ * folder at all, which the picker reports rather than hiding.
+ */
+function folderOptions(
+  all: Candidate[],
+  unselected: Candidate[],
+): FolderOption[] {
+  const remaining = new Map<string, number>();
+  for (const image of unselected) {
+    if (!image.folderId) continue;
+    remaining.set(image.folderId, (remaining.get(image.folderId) ?? 0) + 1);
+  }
+
+  const options: FolderOption[] = [];
+  const seen = new Set<string>();
+  for (const image of all) {
+    const id = image.folderId;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    options.push({
+      id,
+      name: image.folderName?.trim() || id,
+      count: remaining.get(id) ?? 0,
+    });
+  }
+
+  return options;
 }
 
 function placementFor(
@@ -294,6 +330,35 @@ function AlternateTile({
   );
 }
 
+function FolderChip({
+  label,
+  count,
+  active,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      size="xs"
+      variant={active ? "secondary" : "ghost"}
+      aria-pressed={active}
+      disabled={disabled}
+      onClick={onClick}
+      className="max-w-[14rem] font-normal"
+    >
+      <span className="truncate">{label}</span>
+      <span className="tabular-nums text-muted-foreground">{count}</span>
+    </Button>
+  );
+}
+
 function FramingPanel({
   image,
   placement,
@@ -409,6 +474,7 @@ export function SelectImagesPicker({
   selected,
   alternates,
   selectionCount,
+  groupByFolder = false,
   previewTemplateId,
   previewPlaceholders = [],
   previewBindings = {},
@@ -418,6 +484,8 @@ export function SelectImagesPicker({
   selected: Candidate[];
   alternates: Candidate[];
   selectionCount: number;
+  /** Enables the folder filter under the alternates (Select Images config). */
+  groupByFolder?: boolean;
   previewTemplateId?: string;
   previewPlaceholders?: PreviewPlaceholder[];
   previewBindings?: Record<string, unknown>;
@@ -441,6 +509,7 @@ export function SelectImagesPicker({
   const [draggingUrl, setDraggingUrl] = useState("");
   const [dragOverUrl, setDragOverUrl] = useState("");
   const [alternatePage, setAlternatePage] = useState(0);
+  const [folderFilter, setFolderFilter] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const preloadedThumbnailsRef = useRef(new Set<string>());
 
@@ -463,9 +532,22 @@ export function SelectImagesPicker({
       ),
     [placements, selectedUrls],
   );
-  const alternateImages = allImages.filter(
+  const unselectedImages = allImages.filter(
     (image) => !selectedUrls.includes(image.url),
   );
+  const folders = groupByFolder
+    ? folderOptions(allImages, unselectedImages)
+    : [];
+  // Folders can vanish between renders (all their images got selected), so
+  // never trust the stored filter without checking it still exists.
+  const showFolders = folders.length > 1;
+  const activeFolderId =
+    showFolders && folders.some((folder) => folder.id === folderFilter)
+      ? folderFilter
+      : "";
+  const alternateImages = activeFolderId
+    ? unselectedImages.filter((image) => image.folderId === activeFolderId)
+    : unselectedImages;
   const alternatePageCount = Math.ceil(
     alternateImages.length / ALTERNATES_PAGE_SIZE,
   );
@@ -520,6 +602,12 @@ export function SelectImagesPicker({
       if (current.includes(url) || current.length >= selectionCount) return current;
       return [...current, url];
     });
+  }
+
+  // Paging is per-folder, so a new filter always starts at its first page.
+  function selectFolder(folderId: string) {
+    setFolderFilter(folderId);
+    setAlternatePage(0);
   }
 
   function handleDrop(targetUrl: string) {
@@ -693,7 +781,9 @@ export function SelectImagesPicker({
           </div>
           {alternateImages.length === 0 ? (
             <p className="rounded-md border border-dashed p-6 text-center text-xs text-muted-foreground">
-              No more images to add.
+              {activeFolderId
+                ? "Every image in this folder is already selected."
+                : "No more images to add."}
             </p>
           ) : (
             <>
@@ -742,6 +832,37 @@ export function SelectImagesPicker({
               ) : null}
             </>
           )}
+          {groupByFolder && folders.length === 0 ? (
+            <p className="mt-3 text-[11px] text-muted-foreground">
+              Folder grouping is on, but these images carry no source folder.
+              Connect this node to the Drive node&apos;s Images output, not
+              Image links, and start a new run.
+            </p>
+          ) : null}
+          {showFolders ? (
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              <span className="mr-1 text-[11px] text-muted-foreground">
+                Folder
+              </span>
+              <FolderChip
+                label="All"
+                count={unselectedImages.length}
+                active={!activeFolderId}
+                disabled={submitting}
+                onClick={() => selectFolder("")}
+              />
+              {folders.map((folder) => (
+                <FolderChip
+                  key={folder.id}
+                  label={folder.name}
+                  count={folder.count}
+                  active={activeFolderId === folder.id}
+                  disabled={submitting || folder.count === 0}
+                  onClick={() => selectFolder(folder.id)}
+                />
+              ))}
+            </div>
+          ) : null}
         </section>
       </div>
 

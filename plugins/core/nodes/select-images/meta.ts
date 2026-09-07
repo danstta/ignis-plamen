@@ -8,6 +8,7 @@ export const selectImagesConfigSchema = z.object({
   selectionCount: z.coerce.number().int().min(1).max(50).default(10),
   alternateCount: z.coerce.number().int().min(1).max(50).default(15),
   templateId: z.string().default(""),
+  groupByFolder: z.coerce.boolean().default(false),
   placeholders: z.record(z.string(), z.unknown()).default({}),
 });
 
@@ -56,6 +57,13 @@ export const selectImagesMeta: NodeMeta<SelectImagesConfig> = {
       label: "Template preview",
       type: "template",
       help: "Optional. Shows how the selected images will look in this template.",
+    },
+    {
+      name: "groupByFolder",
+      label: "Offer folder grouping",
+      type: "boolean",
+      defaultValue: false,
+      help: "Adds a folder filter under the alternates in the run page. Only does something for images that carry a source folder, such as Drive images.",
     },
   ],
   configSchema: selectImagesConfigSchema,

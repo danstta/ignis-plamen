@@ -63,7 +63,7 @@ export const selectImagesMeta: NodeMeta<SelectImagesConfig> = {
       label: "Offer folder grouping",
       type: "boolean",
       defaultValue: false,
-      help: "Adds a folder filter under the alternates in the run page. Only does something for images that carry a source folder, such as Drive images.",
+      help: "Adds a folder filter above the alternates on the run page. Only does something for images that carry a source folder, such as Drive images.",
     },
   ],
   configSchema: selectImagesConfigSchema,

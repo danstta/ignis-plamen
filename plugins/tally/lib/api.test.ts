@@ -37,6 +37,71 @@ describe("sanitizeBlocksForCreate", () => {
     });
   });
 
+  test("drops a value whose hasX gate is false", () => {
+    // Turning off a long answer's minimum length in the builder leaves the
+    // number behind; POST /forms only admits it while the gate is true.
+    const [sanitized] = sanitizeBlocksForCreate([
+      {
+        uuid: "4e7ef0c2-cb82-48c5-af9c-658134ef2934",
+        type: "TEXTAREA",
+        groupUuid: "843c0f2e-f21e-48f8-b271-35988a21524b",
+        groupType: "TEXTAREA",
+        payload: {
+          isRequired: true,
+          hasMinCharacters: false,
+          minCharacters: 200,
+          placeholder: "",
+        },
+      },
+    ]);
+
+    expect(sanitized.payload).toEqual({
+      isRequired: true,
+      hasMinCharacters: false,
+      placeholder: "",
+    });
+  });
+
+  test("keeps a value whose hasX gate is true", () => {
+    const [sanitized] = sanitizeBlocksForCreate([
+      {
+        uuid: "a",
+        type: "TEXTAREA",
+        groupUuid: "b",
+        groupType: "TEXTAREA",
+        payload: { hasMinCharacters: true, minCharacters: 200 },
+      },
+    ]);
+
+    expect(sanitized.payload).toHaveProperty("minCharacters", 200);
+  });
+
+  test("only gates on hasX keys, not on every false boolean", () => {
+    // `isRequired: false` must not strip a `required` key, and a gate with no
+    // matching value leaves the rest of the payload alone.
+    const [sanitized] = sanitizeBlocksForCreate([
+      {
+        uuid: "a",
+        type: "CHECKBOX",
+        groupUuid: "b",
+        groupType: "CHECKBOXES",
+        payload: {
+          isRequired: false,
+          required: "kept",
+          hasOtherOption: false,
+          text: "Слажем се",
+        },
+      },
+    ]);
+
+    expect(sanitized.payload).toEqual({
+      isRequired: false,
+      required: "kept",
+      hasOtherOption: false,
+      text: "Слажем се",
+    });
+  });
+
   test("keeps falsy-but-valid values (false, 0, empty string)", () => {
     const [sanitized] = sanitizeBlocksForCreate([
       {

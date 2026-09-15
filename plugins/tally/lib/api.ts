@@ -80,17 +80,24 @@ export function getTallyForm(apiKey: string, formId: string): Promise<TallyForm>
 }
 
 /**
- * Drops null/undefined values from every block's payload so a form copied from
- * `GET /forms/{id}` can be re-posted to `POST /forms`.
+ * Conforms a form read from `GET /forms/{id}` to what `POST /forms` accepts.
  *
  * Since API v0.4.0 the create/update endpoints validate block payloads against
- * a strict schema, but `GET` returns disabled or optional features as `null`
- * (e.g. `maxCharacters`, `columnRatio`, `name`, or `defaultAnswer` on a
- * TEXTAREA). Those keys are typed non-nullable in the create schema — and
- * `defaultAnswer`'s union admits no null — so re-posting them verbatim is
- * rejected with "Invalid block structure detected for <TYPE>". In Tally's
- * model an unset field is equivalent to an absent one, so dropping the nulls
- * conforms the block again.
+ * a strict schema, while `GET` returns the builder's own state. Two kinds of
+ * leftovers in that state are rejected with "Invalid block structure detected
+ * for <TYPE>", and both mean the same thing in Tally's model as an absent key:
+ *
+ * 1. Disabled or optional features come back as `null` (e.g. `maxCharacters`,
+ *    `columnRatio`, `name`, or `defaultAnswer` on a TEXTAREA). Those keys are
+ *    typed non-nullable in the create schema, and `defaultAnswer`'s union
+ *    admits no null at all.
+ * 2. A value whose `hasX` gate is `false` keeps whatever it was last set to.
+ *    Turning off a long answer's 200-character minimum in the builder leaves
+ *    `{ hasMinCharacters: false, minCharacters: 200 }`, and the create schema
+ *    only admits `minCharacters` when the gate is `true`. The same pairing
+ *    covers `hasMaxCharacters`, `hasDefaultAnswer`, `hasMaxChoices` and every
+ *    other `hasX`/`x` pair, so the gate is read off the payload rather than
+ *    from a hardcoded list.
  *
  * Only the payload's own keys are stripped, never nested structures: some
  * nested fields are required yet nullable (a conditional-logic condition's
@@ -100,9 +107,16 @@ export function getTallyForm(apiKey: string, formId: string): Promise<TallyForm>
  */
 export function sanitizeBlocksForCreate(blocks: TallyBlock[]): TallyBlock[] {
   return blocks.map((block) => {
+    const gatedOff = new Set<string>();
+    for (const [key, value] of Object.entries(block.payload)) {
+      if (value === false && /^has[A-Z]/.test(key)) {
+        gatedOff.add(key[3].toLowerCase() + key.slice(4));
+      }
+    }
     const payload: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(block.payload)) {
       if (value === null || value === undefined) continue;
+      if (gatedOff.has(key)) continue;
       payload[key] = value;
     }
     return { ...block, payload };

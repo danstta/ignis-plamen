@@ -14,14 +14,25 @@ import { tallyCreateFormMeta, type TallyCreateFormConfig } from "./meta";
  * with the template. Done as a whole-JSON string replacement because payloads
  * can reference other blocks' uuids (e.g. conditional-logic jump targets) and
  * those references must follow the same mapping.
+ *
+ * Returns the reverse mapping too, so a rejected copy can be traced back to
+ * the template block it came from.
  */
-function cloneBlocksWithFreshUuids(blocks: TallyBlock[]): TallyBlock[] {
+function cloneBlocksWithFreshUuids(blocks: TallyBlock[]): {
+  blocks: TallyBlock[];
+  templateUuidByCopy: Map<string, string>;
+} {
   const mapping = new Map<string, string>();
   for (const block of blocks) {
     if (block.uuid) mapping.set(block.uuid, crypto.randomUUID());
     if (block.groupUuid) mapping.set(block.groupUuid, crypto.randomUUID());
   }
-  if (mapping.size === 0) return structuredClone(blocks);
+  const templateUuidByCopy = new Map(
+    [...mapping].map(([template, copy]) => [copy, template]),
+  );
+  if (mapping.size === 0) {
+    return { blocks: structuredClone(blocks), templateUuidByCopy };
+  }
   // Single pass so a freshly generated uuid can never collide with a
   // not-yet-replaced template uuid and get remapped twice.
   const pattern = new RegExp(
@@ -32,7 +43,32 @@ function cloneBlocksWithFreshUuids(blocks: TallyBlock[]): TallyBlock[] {
     pattern,
     (match) => mapping.get(match) as string,
   );
-  return JSON.parse(json) as TallyBlock[];
+  return { blocks: JSON.parse(json) as TallyBlock[], templateUuidByCopy };
+}
+
+const UUID_PATTERN =
+  /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+
+/**
+ * Tally rejects a bad block by uuid ("Invalid block structure detected for
+ * TEXTAREA (<uuid>)"), but the copy's uuids were minted seconds earlier and
+ * match nothing the user can open. Swap each one for the template block's
+ * position so the message points at a question they can find.
+ */
+function nameTemplateBlocks(
+  message: string,
+  template: TallyBlock[],
+  templateUuidByCopy: Map<string, string>,
+): string {
+  return message.replace(UUID_PATTERN, (uuid) => {
+    const templateUuid = templateUuidByCopy.get(uuid);
+    if (!templateUuid) return uuid;
+    const index = template.findIndex(
+      (block) => block.uuid === templateUuid || block.groupUuid === templateUuid,
+    );
+    if (index === -1) return templateUuid;
+    return `template block ${index + 1} of ${template.length}`;
+  });
 }
 
 function escapeRegExp(text: string): string {
@@ -92,7 +128,9 @@ export const tallyCreateFormNode: NodeDefinition<TallyCreateFormConfig> = {
       throw new Error(`Template form ${templateFormId} has no blocks to copy`);
     }
 
-    const blocks = cloneBlocksWithFreshUuids(template.blocks);
+    const { blocks, templateUuidByCopy } = cloneBlocksWithFreshUuids(
+      template.blocks,
+    );
 
     // Deduped by token (last row wins) — otherwise the first row's regex
     // consumes every occurrence and later duplicates silently do nothing.
@@ -137,12 +175,23 @@ export const tallyCreateFormNode: NodeDefinition<TallyCreateFormConfig> = {
     }
 
     const status = ctx.config.publish ? "PUBLISHED" : "DRAFT";
-    const created = await createTallyForm(apiKey, {
-      status,
-      blocks,
-      workspaceId: template.workspaceId,
-      settings: template.settings,
-    });
+    let created: Awaited<ReturnType<typeof createTallyForm>>;
+    try {
+      created = await createTallyForm(apiKey, {
+        status,
+        blocks,
+        workspaceId: template.workspaceId,
+        settings: template.settings,
+      });
+    } catch (error) {
+      throw new Error(
+        nameTemplateBlocks(
+          error instanceof Error ? error.message : String(error),
+          template.blocks,
+          templateUuidByCopy,
+        ),
+      );
+    }
     const formId = typeof created?.id === "string" ? created.id : "";
     if (!formId) {
       throw new Error("Tally did not return an id for the created form");

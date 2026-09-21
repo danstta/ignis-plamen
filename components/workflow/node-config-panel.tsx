@@ -458,9 +458,13 @@ export function NodeConfigPanel({
   };
 
   const renderField = (f: NodeConfigField) => {
-    const value =
+    const savedValue =
       config[f.name] ??
       (f.legacyValueField ? config[f.legacyValueField] : undefined);
+    // Falls back to the field's declared default so an unsaved config renders
+    // what the node's schema will actually run with. `legacyValueMap` fields
+    // resolve their own fallback below, from `savedValue`.
+    const value = savedValue ?? f.defaultValue;
     const str = value === undefined || value === null ? "" : String(value);
     const setRef = (el: FieldEl) => {
       fieldEls.current[f.name] = el;
@@ -506,8 +510,8 @@ export function NodeConfigPanel({
           f.legacyValueMap && typeof config[f.legacyValueMap.field] === "string"
             ? f.legacyValueMap.values[String(config[f.legacyValueMap.field])]
             : undefined;
-        const currentValues = Array.isArray(value)
-          ? value
+        const currentValues = Array.isArray(savedValue)
+          ? savedValue
           : Array.isArray(legacyValue)
             ? legacyValue
             : Array.isArray(f.defaultValue)

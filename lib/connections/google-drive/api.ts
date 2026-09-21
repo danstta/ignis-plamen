@@ -398,3 +398,231 @@ export async function uploadGoogleDriveFile(input: {
     webContentLink: responseBody.webContentLink,
   };
 }
+
+export interface GoogleDriveFolder {
+  id: string;
+  name: string;
+  webViewLink: string;
+  /** True when the folder was found by name instead of being created by this call. */
+  reused: boolean;
+}
+
+/** Link-sharing role granted to "anyone with the link". `private` skips sharing. */
+export type GoogleDriveLinkAccess = "private" | "reader" | "commenter" | "writer";
+
+export function googleDriveFolderLink(folderId: string): string {
+  return `https://drive.google.com/drive/folders/${encodeURIComponent(folderId)}`;
+}
+
+/** Finds a non-trashed folder by exact name inside a parent, if one exists. */
+async function findGoogleDriveFolderByName(input: {
+  token: string;
+  parentId: string;
+  name: string;
+}): Promise<DriveFileResponse | undefined> {
+  const q = [
+    `'${escapeDriveQueryValue(input.parentId)}' in parents`,
+    `name = '${escapeDriveQueryValue(input.name)}'`,
+    `mimeType = '${DRIVE_FOLDER_MIME}'`,
+    "trashed = false",
+  ].join(" and ");
+
+  const url = new URL(DRIVE_FILES_URL);
+  url.searchParams.set("q", q);
+  url.searchParams.set("pageSize", "1");
+  url.searchParams.set("spaces", "drive");
+  url.searchParams.set("supportsAllDrives", "true");
+  url.searchParams.set("includeItemsFromAllDrives", "true");
+  url.searchParams.set("fields", "files(id,name,webViewLink)");
+
+  const res = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${input.token}`,
+    },
+  });
+  const body = (await res.json().catch(() => null)) as DriveListResponse | null;
+  if (!res.ok) {
+    throw new Error(
+      `Google Drive folder lookup failed (${res.status}): ${
+        body?.error?.message ?? res.statusText
+      }`,
+    );
+  }
+
+  return body?.files?.[0];
+}
+
+/**
+ * Creates a folder inside `parent`. With `reuseExisting`, an existing folder of
+ * the same name is returned instead of a duplicate being created.
+ */
+export async function createGoogleDriveFolder(input: {
+  connectionId: string;
+  parent: string;
+  name: string;
+  reuseExisting: boolean;
+}): Promise<GoogleDriveFolder> {
+  const parentId = parseGoogleDriveFolderId(input.parent);
+  if (!parentId) throw new Error("Google Drive parent folder link or ID is required");
+
+  const name = input.name.trim();
+  if (!name) throw new Error("Folder name is required");
+
+  const token = await ensureFreshToken(input.connectionId);
+
+  if (input.reuseExisting) {
+    const existing = await findGoogleDriveFolderByName({ token, parentId, name });
+    if (existing?.id) {
+      return {
+        id: existing.id,
+        name: existing.name ?? name,
+        webViewLink: existing.webViewLink ?? googleDriveFolderLink(existing.id),
+        reused: true,
+      };
+    }
+  }
+
+  const url = new URL(DRIVE_FILES_URL);
+  url.searchParams.set("supportsAllDrives", "true");
+  url.searchParams.set("fields", "id,name,webViewLink");
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name,
+      mimeType: DRIVE_FOLDER_MIME,
+      parents: [parentId],
+    }),
+  });
+  const body = (await res.json().catch(() => null)) as
+    | (DriveFileResponse & DriveErrorResponse)
+    | null;
+
+  if (!res.ok) {
+    throw new Error(
+      `Google Drive folder create failed (${res.status}): ${
+        body?.error?.message ?? res.statusText
+      }`,
+    );
+  }
+
+  if (!body?.id) {
+    throw new Error("Google Drive folder create response did not include an ID");
+  }
+
+  return {
+    id: body.id,
+    name: body.name ?? name,
+    webViewLink: body.webViewLink ?? googleDriveFolderLink(body.id),
+    reused: false,
+  };
+}
+
+/** A permission entry as returned by Drive's permissions.list. */
+interface DrivePermission {
+  id?: string;
+  type?: string;
+  role?: string;
+}
+
+interface DrivePermissionListResponse {
+  permissions?: DrivePermission[];
+  error?: { message?: string };
+}
+
+async function findAnyonePermission(input: {
+  token: string;
+  fileId: string;
+}): Promise<DrivePermission | undefined> {
+  const url = new URL(
+    `${DRIVE_FILES_URL}/${encodeURIComponent(input.fileId)}/permissions`,
+  );
+  url.searchParams.set("supportsAllDrives", "true");
+  url.searchParams.set("fields", "permissions(id,type,role)");
+  url.searchParams.set("pageSize", "100");
+
+  const res = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${input.token}`,
+    },
+  });
+  const body = (await res.json().catch(() => null)) as
+    | DrivePermissionListResponse
+    | null;
+  if (!res.ok) {
+    throw new Error(
+      `Google Drive permission list failed (${res.status}): ${
+        body?.error?.message ?? res.statusText
+      }`,
+    );
+  }
+
+  return body?.permissions?.find((permission) => permission.type === "anyone");
+}
+
+async function writeAnyonePermission(input: {
+  token: string;
+  fileId: string;
+  role: Exclude<GoogleDriveLinkAccess, "private">;
+  existingId?: string;
+}): Promise<void> {
+  const base = `${DRIVE_FILES_URL}/${encodeURIComponent(input.fileId)}/permissions`;
+  const url = new URL(
+    input.existingId ? `${base}/${encodeURIComponent(input.existingId)}` : base,
+  );
+  url.searchParams.set("supportsAllDrives", "true");
+  if (!input.existingId) url.searchParams.set("sendNotificationEmail", "false");
+
+  const res = await fetch(url, {
+    method: input.existingId ? "PATCH" : "POST",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${input.token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(
+      input.existingId
+        ? { role: input.role }
+        : { type: "anyone", role: input.role },
+    ),
+  });
+  if (res.ok) return;
+
+  const body = (await res.json().catch(() => null)) as DriveErrorResponse | null;
+  throw new Error(
+    `Google Drive share failed (${res.status}): ${
+      body?.error?.message ?? res.statusText
+    }`,
+  );
+}
+
+/**
+ * Grants "anyone with the link" the given role on a file or folder. Drive keeps
+ * at most one anyone-permission per item, so an existing one is patched instead
+ * of a second being created. A `private` access is a no-op.
+ */
+export async function setGoogleDriveLinkAccess(input: {
+  connectionId: string;
+  fileId: string;
+  access: GoogleDriveLinkAccess;
+}): Promise<void> {
+  if (input.access === "private") return;
+
+  const token = await ensureFreshToken(input.connectionId);
+  const existing = await findAnyonePermission({ token, fileId: input.fileId });
+  if (existing?.role === input.access) return;
+
+  await writeAnyonePermission({
+    token,
+    fileId: input.fileId,
+    role: input.access,
+    existingId: existing?.id,
+  });
+}
